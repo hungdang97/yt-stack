@@ -1,0 +1,137 @@
+version: '3.8'
+
+services:
+  # Cloudflare WARP - SOCKS5 proxy on port 40000
+  warp:
+    image: caomingjun/warp:latest
+    container_name: warp
+    restart: always
+    cap_add:
+      - NET_ADMIN
+    sysctls:
+      - net.ipv6.conf.all.disable_ipv6=0
+      - net.ipv4.conf.all.src_valid_mark=1
+    volumes:
+      - warp_data:/var/lib/cloudflare-warp
+    environment:
+      - WARP_SLEEP=2
+    healthcheck:
+      test: ["CMD", "curl", "-fsS", "--socks5", "127.0.0.1:40000", "https://www.cloudflare.com/cdn-cgi/trace"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
+    networks:
+      - backend
+
+  # Gost - HTTP proxy with authentication
+  gost:
+    image: ginuerzh/gost:latest
+    container_name: gost
+    restart: always
+    depends_on:
+      warp:
+        condition: service_healthy
+    ports:
+      - "1111:1111"  # WARP proxy (public)
+      - "2222:2222"  # Direct proxy (public)
+    environment:
+      - WARP_USER=${WARP_USER}
+      - WARP_PASS=${WARP_PASS}
+      - DIRECT_USER=${DIRECT_USER}
+      - DIRECT_PASS=${DIRECT_PASS}
+    command: >
+      -L=http://${WARP_USER}:${WARP_PASS}@:1111?probeResist=code:400
+      -F=socks5://warp:40000
+      -L=http://${DIRECT_USER}:${DIRECT_PASS}@:2222?probeResist=code:400
+    networks:
+      - backend
+
+  # YouTube Downloader Go service
+  yt-downloader:
+    platform: linux/amd64
+    build:
+      context: ./yt-downloader
+      dockerfile: Dockerfile
+    image: yt-downloader:latest
+    container_name: yt-downloader
+    restart: always
+    expose:
+      - "5001"
+    environment:
+      - BASE_URL=${BASE_URL}
+      - PORT=5001
+    volumes:
+      - yt_storage:/app/storage
+    depends_on:
+      gost:
+        condition: service_started
+    healthcheck:
+      test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://localhost:5001/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 10s
+    networks:
+      - backend
+
+  # YouTube Extractor Python service
+  yt-extractor:
+    platform: linux/amd64
+    build:
+      context: ./yt-extractor
+      dockerfile: Dockerfile
+    image: yt-extractor:latest
+    container_name: yt-extractor
+    restart: always
+    environment:
+      - PYTHONUNBUFFERED=1
+    depends_on:
+      gost:
+        condition: service_started
+    healthcheck:
+      test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://localhost:8300/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 15s
+    networks:
+      - backend
+
+  # Nginx reverse proxy with SSL
+  nginx:
+    platform: linux/amd64
+    build:
+      context: ./nginx
+      dockerfile: Dockerfile
+    image: nginx-ssl:latest
+    container_name: nginx
+    restart: always
+    ports:
+      - "80:80"
+      - "443:443"
+    environment:
+      - DOMAIN=${DOMAIN}
+      - EMAIL=${EMAIL}
+    volumes:
+      - letsencrypt:/etc/letsencrypt
+      - certbot_webroot:/var/www/certbot
+      - nginx_logs:/var/log/nginx
+    depends_on:
+      yt-downloader:
+        condition: service_healthy
+      yt-extractor:
+        condition: service_healthy
+    networks:
+      - backend
+
+networks:
+  backend:
+    driver: bridge
+
+volumes:
+  warp_data:
+  yt_storage:
+  letsencrypt:
+  certbot_webroot:
+  nginx_logs:

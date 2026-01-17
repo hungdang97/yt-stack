@@ -1,0 +1,21 @@
+{
+  "Debug": false,
+  "Retries": 3,
+  "ServeNodes": [
+    "http://${WARP_USER}:${WARP_PASS}@:1111?probeResist=code:400&knock=www.google.com",
+    "http://${DIRECT_USER}:${DIRECT_PASS}@:2222?probeResist=code:400&knock=www.google.com"
+  ],
+  "ChainNodes": [
+    "socks5://127.0.0.1:40000"
+  ],
+  "Routes": [
+    {
+      "ServeNodes": ["0"],
+      "ChainNodes": ["0"]
+    },
+    {
+      "ServeNodes": ["1"],
+      "ChainNodes": []
+    }
+  ]
+}

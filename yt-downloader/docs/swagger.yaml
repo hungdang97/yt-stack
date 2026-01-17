@@ -1,0 +1,412 @@
+basePath: /
+definitions:
+  models.AudioConfig:
+    description: Audio configuration
+    properties:
+      bitrate:
+        enum:
+        - 64k
+        - 128k
+        - 192k
+        - 320k
+        example: 192k
+        type: string
+      trackId:
+        example: en.vss_abc123
+        type: string
+    type: object
+  models.DeleteResponse:
+    description: Delete job response
+    properties:
+      deleted:
+        example: true
+        type: boolean
+    type: object
+  models.DownloadRequest:
+    description: Download request payload
+    properties:
+      audio:
+        $ref: '#/definitions/models.AudioConfig'
+      os:
+        enum:
+        - ios
+        - android
+        - macos
+        - windows
+        - linux
+        example: windows
+        type: string
+      output:
+        $ref: '#/definitions/models.OutputConfig'
+      trim:
+        $ref: '#/definitions/models.TrimConfig'
+      url:
+        example: https://youtube.com/watch?v=dQw4w9WgXcQ
+        type: string
+    type: object
+  models.DownloadResponse:
+    description: Response after creating a download job
+    properties:
+      duration:
+        example: 213.5
+        type: number
+      statusUrl:
+        example: https://api.ytconvert.org/api/status/V1StGXR8_Z5jdHi?token=xxx&expires=xxx
+        type: string
+      needsReencode:
+        example: false
+        type: boolean
+      qualityChangeReason:
+        example: 1080p not available, using 720p
+        type: string
+      qualityChanged:
+        example: true
+        type: boolean
+      requestedQuality:
+        example: 1080p
+        type: string
+      selectedQuality:
+        example: 720p
+        type: string
+      title:
+        example: Rick Astley - Never Gonna Give You Up
+        type: string
+    type: object
+  models.HealthResponse:
+    description: Health check response
+    properties:
+      status:
+        example: ok
+        type: string
+      timestamp:
+        example: 1705123456789
+        type: integer
+    type: object
+  models.OutputConfig:
+    description: Output configuration
+    properties:
+      format:
+        enum:
+        - mp4
+        - webm
+        - mkv
+        - mp3
+        - m4a
+        - wav
+        - opus
+        - flac
+        example: mp4
+        type: string
+      quality:
+        enum:
+        - 2160p
+        - 1440p
+        - 1080p
+        - 720p
+        - 480p
+        - 360p
+        example: 1080p
+        type: string
+      type:
+        enum:
+        - video
+        - audio
+        example: video
+        type: string
+    type: object
+  models.StatusResponse:
+    description: Job status response
+    properties:
+      downloadUrl:
+        example: https://api.ytconvert.org/files/abc123/output.mp4?token=xxx&expires=123
+        type: string
+      duration:
+        example: 213.5
+        type: number
+      jobError:
+        example: 'Download failed: connection timeout'
+        type: string
+      progress:
+        example: 45
+        type: integer
+      status:
+        enum:
+        - pending
+        - completed
+        - error
+        example: pending
+        type: string
+      title:
+        example: Rick Astley - Never Gonna Give You Up
+        type: string
+    type: object
+  models.TrimConfig:
+    description: Trim configuration
+    properties:
+      accurate:
+        example: false
+        type: boolean
+      end:
+        example: 60
+        type: number
+      start:
+        example: 10
+        type: number
+    type: object
+  utils.ErrorDetail:
+    properties:
+      code:
+        type: string
+      message:
+        type: string
+    type: object
+  utils.ErrorResponse:
+    properties:
+      error:
+        $ref: '#/definitions/utils.ErrorDetail'
+    type: object
+host: api.ytconvert.org
+info:
+  contact:
+    email: support@ytconvert.org
+    name: API Support
+  description: API for downloading YouTube videos and audio
+  license:
+    name: MIT
+    url: https://opensource.org/licenses/MIT
+  termsOfService: http://swagger.io/terms/
+  title: YT Downloader API
+  version: "2.0"
+paths:
+  /api/download:
+    post:
+      consumes:
+      - application/json
+      description: Create a new download job for a YouTube video or audio
+      parameters:
+      - description: Download request
+        in: body
+        name: request
+        required: true
+        schema:
+          $ref: '#/definitions/models.DownloadRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/models.DownloadResponse'
+        "400":
+          description: Validation error
+          schema:
+            $ref: '#/definitions/utils.ErrorResponse'
+        "404":
+          description: No stream found
+          schema:
+            $ref: '#/definitions/utils.ErrorResponse'
+        "500":
+          description: Server error
+          schema:
+            $ref: '#/definitions/utils.ErrorResponse'
+      summary: Create download job
+      tags:
+      - download
+  /api/jobs/{id}:
+    delete:
+      description: Delete a job and its associated files
+      parameters:
+      - description: Job ID
+        in: path
+        name: id
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/models.DeleteResponse'
+        "400":
+          description: Invalid job ID
+          schema:
+            $ref: '#/definitions/utils.ErrorResponse'
+        "404":
+          description: Job not found
+          schema:
+            $ref: '#/definitions/utils.ErrorResponse'
+        "500":
+          description: Delete failed
+          schema:
+            $ref: '#/definitions/utils.ErrorResponse'
+      summary: Delete job
+      tags:
+      - jobs
+  /api/status/{id}:
+    get:
+      description: Check the status and progress of a download job
+      parameters:
+      - description: Job ID
+        in: path
+        name: id
+        required: true
+        type: string
+      - description: Signed URL token
+        in: query
+        name: token
+        required: true
+        type: string
+      - description: Expiration timestamp
+        in: query
+        name: expires
+        required: true
+        type: integer
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/models.StatusResponse'
+        "400":
+          description: Invalid job ID
+          schema:
+            $ref: '#/definitions/utils.ErrorResponse'
+        "401":
+          description: Missing token or expires
+          schema:
+            $ref: '#/definitions/utils.ErrorResponse'
+        "403":
+          description: Invalid or expired token
+          schema:
+            $ref: '#/definitions/utils.ErrorResponse'
+        "404":
+          description: Job not found
+          schema:
+            $ref: '#/definitions/utils.ErrorResponse'
+        "500":
+          description: Server error
+          schema:
+            $ref: '#/definitions/utils.ErrorResponse'
+      summary: Get job status
+      tags:
+      - status
+  /files/{id}/{filename}:
+    get:
+      description: Download the merged output file
+      parameters:
+      - description: Job ID
+        in: path
+        name: id
+        required: true
+        type: string
+      - description: Output filename
+        in: path
+        name: filename
+        required: true
+        type: string
+      - description: Signed URL token
+        in: query
+        name: token
+        required: true
+        type: string
+      - description: Expiration timestamp
+        in: query
+        name: expires
+        required: true
+        type: integer
+      produces:
+      - application/octet-stream
+      responses:
+        "200":
+          description: Output file
+          schema:
+            type: file
+        "400":
+          description: Invalid parameters
+          schema:
+            $ref: '#/definitions/utils.ErrorResponse'
+        "401":
+          description: Missing auth
+          schema:
+            $ref: '#/definitions/utils.ErrorResponse'
+        "403":
+          description: Invalid token
+          schema:
+            $ref: '#/definitions/utils.ErrorResponse'
+        "404":
+          description: Not found
+          schema:
+            $ref: '#/definitions/utils.ErrorResponse'
+      summary: Download file
+      tags:
+      - files
+  /health:
+    get:
+      description: Check if the server is running
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/models.HealthResponse'
+      summary: Health check
+      tags:
+      - health
+  /stream/{id}:
+    get:
+      description: Stream video/audio using FFmpeg pipe (realtime remux/convert)
+      parameters:
+      - description: Job ID
+        in: path
+        name: id
+        required: true
+        type: string
+      - description: Signed URL token
+        in: query
+        name: token
+        required: true
+        type: string
+      - description: Expiration timestamp
+        in: query
+        name: expires
+        required: true
+        type: integer
+      produces:
+      - application/octet-stream
+      responses:
+        "200":
+          description: Media stream
+          schema:
+            type: file
+        "307":
+          description: Redirect to download URL
+        "400":
+          description: Invalid parameters
+          schema:
+            $ref: '#/definitions/utils.ErrorResponse'
+        "401":
+          description: Missing auth
+          schema:
+            $ref: '#/definitions/utils.ErrorResponse'
+        "403":
+          description: Invalid token
+          schema:
+            $ref: '#/definitions/utils.ErrorResponse'
+        "404":
+          description: Not found
+          schema:
+            $ref: '#/definitions/utils.ErrorResponse'
+        "500":
+          description: Stream failed
+          schema:
+            $ref: '#/definitions/utils.ErrorResponse'
+      summary: Stream video/audio
+      tags:
+      - stream
+schemes:
+- https
+- http
+swagger: "2.0"

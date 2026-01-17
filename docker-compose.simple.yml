@@ -1,0 +1,47 @@
+# Simple test - chỉ test 2 services chính, không cần proxy
+services:
+  # YouTube Downloader Go service
+  yt-downloader:
+    platform: linux/amd64
+    build:
+      context: ./yt-downloader
+      dockerfile: Dockerfile
+    image: yt-downloader:test
+    container_name: yt-downloader-simple
+    restart: always
+    ports:
+      - "5001:5001"
+    environment:
+      - BASE_URL=http://localhost:8080
+      - PORT=5001
+    volumes:
+      - yt_storage_simple:/app/storage
+    healthcheck:
+      test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://localhost:5001/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 10s
+
+  # YouTube Extractor Python service
+  yt-extractor:
+    platform: linux/amd64
+    build:
+      context: ./yt-extractor
+      dockerfile: Dockerfile
+    image: yt-extractor:test
+    container_name: yt-extractor-simple
+    restart: always
+    ports:
+      - "8300:8300"
+    environment:
+      - PYTHONUNBUFFERED=1
+    healthcheck:
+      test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://localhost:8300/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 15s
+
+volumes:
+  yt_storage_simple:
