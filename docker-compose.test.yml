@@ -1,0 +1,112 @@
+version: '3.8'
+
+# Local testing stack - without SSL/Nginx
+# Usage: docker-compose -f docker-compose.test.yml up -d
+
+services:
+  # Cloudflare WARP - SOCKS5 proxy on port 40000
+  warp:
+    image: caomingjun/warp:latest
+    container_name: warp-test
+    restart: always
+    cap_add:
+      - NET_ADMIN
+    sysctls:
+      - net.ipv6.conf.all.disable_ipv6=0
+      - net.ipv4.conf.all.src_valid_mark=1
+    volumes:
+      - warp_data_test:/var/lib/cloudflare-warp
+    environment:
+      - WARP_SLEEP=2
+    healthcheck:
+      test: ["CMD", "curl", "-fsS", "--socks5", "127.0.0.1:40000", "https://www.cloudflare.com/cdn-cgi/trace"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
+    networks:
+      - backend_test
+
+  # Gost - HTTP proxy with authentication
+  gost:
+    image: ginuerzh/gost:latest
+    container_name: gost-test
+    restart: always
+    depends_on:
+      warp:
+        condition: service_healthy
+    ports:
+      - "1111:1111"  # WARP proxy (public)
+      - "2222:2222"  # Direct proxy (public)
+    environment:
+      - WARP_USER=${WARP_USER}
+      - WARP_PASS=${WARP_PASS}
+      - DIRECT_USER=${DIRECT_USER}
+      - DIRECT_PASS=${DIRECT_PASS}
+    command: >
+      -L=http://${WARP_USER}:${WARP_PASS}@:1111?probeResist=code:400
+      -F=socks5://warp:40000
+      -L=http://${DIRECT_USER}:${DIRECT_PASS}@:2222?probeResist=code:400
+    networks:
+      - backend_test
+
+  # YouTube Downloader Go service
+  yt-downloader:
+    platform: linux/amd64
+    build:
+      context: ./yt-downloader
+      dockerfile: Dockerfile
+    image: yt-downloader:test
+    container_name: yt-downloader-test
+    restart: always
+    ports:
+      - "8080:8080"  # Expose directly for testing
+    environment:
+      - BASE_URL=http://localhost:8080
+      - PORT=8080
+    volumes:
+      - yt_storage_test:/app/storage
+    depends_on:
+      gost:
+        condition: service_started
+    healthcheck:
+      test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://localhost:8080/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 10s
+    networks:
+      - backend_test
+
+  # YouTube Extractor Python service
+  yt-extractor:
+    platform: linux/amd64
+    build:
+      context: ./yt-extractor
+      dockerfile: Dockerfile
+    image: yt-extractor:test
+    container_name: yt-extractor-test
+    restart: always
+    ports:
+      - "8300:8300"  # Expose directly for testing
+    environment:
+      - PYTHONUNBUFFERED=1
+    depends_on:
+      gost:
+        condition: service_started
+    healthcheck:
+      test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://localhost:8300/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 15s
+    networks:
+      - backend_test
+
+networks:
+  backend_test:
+    driver: bridge
+
+volumes:
+  warp_data_test:
+  yt_storage_test:

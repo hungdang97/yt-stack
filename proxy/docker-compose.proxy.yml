@@ -1,0 +1,54 @@
+version: '3.8'
+
+services:
+  # Cloudflare WARP - provides SOCKS5 proxy on port 40000
+  warp:
+    image: caomingjun/warp:latest
+    container_name: warp
+    restart: always
+    cap_add:
+      - NET_ADMIN
+    sysctls:
+      - net.ipv6.conf.all.disable_ipv6=0
+      - net.ipv4.conf.all.src_valid_mark=1
+    volumes:
+      - warp_data:/var/lib/cloudflare-warp
+    environment:
+      - WARP_SLEEP=2
+    healthcheck:
+      test: ["CMD", "curl", "-fsS", "--socks5", "127.0.0.1:40000", "https://www.cloudflare.com/cdn-cgi/trace"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
+    networks:
+      - proxy_network
+
+  # Gost - HTTP proxy with authentication
+  gost:
+    image: ginuerzh/gost:latest
+    container_name: gost
+    restart: always
+    depends_on:
+      warp:
+        condition: service_healthy
+    ports:
+      - "1111:1111"  # WARP proxy (public)
+      - "2222:2222"  # Direct proxy (public)
+    volumes:
+      - ./gost.json:/etc/gost/gost.json:ro
+    environment:
+      - WARP_USER=${WARP_USER}
+      - WARP_PASS=${WARP_PASS}
+      - DIRECT_USER=${DIRECT_USER}
+      - DIRECT_PASS=${DIRECT_PASS}
+    command: -C /etc/gost/gost.json
+    networks:
+      - proxy_network
+
+networks:
+  proxy_network:
+    driver: bridge
+
+volumes:
+  warp_data:

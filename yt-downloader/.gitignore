@@ -1,0 +1,36 @@
+# Binaries
+yt-downloader-go
+*.exe
+*.exe~
+*.dll
+*.so
+*.dylib
+
+# Test binary
+*.test
+
+# Output of go coverage
+*.out
+
+# Dependency directories
+vendor/
+
+# IDE
+.idea/
+.vscode/
+*.swp
+*.swo
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Storage
+storage/
+
+# Logs
+*.log
+
+# Environment
+.env
+.env.local

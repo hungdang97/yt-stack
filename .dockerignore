@@ -1,0 +1,54 @@
+# Git
+.git
+.gitignore
+.gitattributes
+
+# Documentation
+README.md
+docs/
+*.md
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+.claude/
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Logs
+*.log
+logs/
+
+# Dependencies (will be installed in container)
+node_modules/
+vendor/
+
+# Temporary files
+tmp/
+temp/
+*.tmp
+
+# Build artifacts
+*.exe
+*.dll
+*.so
+*.dylib
+
+# Test files
+*_test.go
+test/
+tests/
+__pycache__/
+*.pyc
+*.pyo
+
+# Environment (use docker-compose env instead)
+.env.local
+.env.*.local
+
+# Scripts (not needed in image)
+scripts/

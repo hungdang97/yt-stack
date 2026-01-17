@@ -1,0 +1,41 @@
+# Ignore duplicate files at root level (should be in subdirectories)
+/download.go
+/files.go
+/health.go
+/jobs.go
+/status.go
+/stream.go
+
+# Git
+.git
+.gitignore
+
+# Documentation
+README.md
+*.md
+
+# IDE
+.vscode
+.idea
+*.swp
+.claude
+
+# OS
+.DS_Store
+
+# Logs
+*.log
+
+# Test files
+*_test.go
+
+# Environment
+.env
+.env.local
+
+# Build artifacts
+yt-downloader-go
+*.exe
+
+# Storage
+storage/*
