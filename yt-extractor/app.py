@@ -1,19 +1,23 @@
 from fastapi import FastAPI, Query, HTTPException
 from fastapi.responses import JSONResponse
 from urllib.parse import quote
-import yt_dlp
-from mapper import map_yt_dlp_to_api
-import cookie_db
 import asyncio
 from collections import deque
 from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
+import os
+
+# Set Deno path BEFORE importing yt_dlp
+BASE_DIR = Path(__file__).parent
+DENO_BIN_DIR = str(BASE_DIR / 'bin')
+os.environ["PATH"] = f"{DENO_BIN_DIR}:" + os.environ.get("PATH", "")
+
+# Now import yt_dlp - it will find deno in PATH
+import yt_dlp
+from mapper import map_yt_dlp_to_api
+import cookie_db
 
 app = FastAPI()
-
-# JavaScript runtime configuration (Deno in bin/)
-BASE_DIR = Path(__file__).parent
-DENO_PATH = str(BASE_DIR / 'bin' / 'deno')
 
 # Thread pool for blocking yt-dlp operations
 executor = ThreadPoolExecutor(max_workers=10)
@@ -120,8 +124,8 @@ def build_ydl_opts(cookies, proxy=None):
                 'player_client': ['TVHTML5'],
             }
         },
-        # Deno JavaScript runtime
-        'js_runtimes': {'deno': {'path': DENO_PATH}},
+        # Deno JavaScript runtime (found via PATH)
+        'js_runtime': 'deno',
     }
     if proxy:
         opts['proxy'] = proxy
