@@ -87,7 +87,7 @@ if [ -d "/opt/yt-stack" ]; then
     print_success "Repository updated"
 else
     cd /opt
-    git clone https://github.com/BlueByteVietNam/yt-stack.git > /dev/null 2>&1
+    git clone https://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@github.com/BlueByteVietNam/yt-stack.git > /dev/null 2>&1
     cd yt-stack
     print_success "Repository cloned to /opt/yt-stack"
 fi
