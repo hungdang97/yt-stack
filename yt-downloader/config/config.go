@@ -26,7 +26,7 @@ const (
 	BufferSize   = 64 * 1024 // 64KB - optimal for io.CopyBuffer
 
 	// Extract API
-	ExtractAPIBase    = "http://127.0.0.1:8300/api/youtube/video"
+	ExtractAPIBase    = "http://yt-extractor:8300/api/youtube/video"
 	ExtractAPITimeout = 15 * time.Second
 
 	// Cleanup
@@ -165,7 +165,7 @@ var MimeToExt = map[string]string{
 }
 
 // WARP Proxy config
-const WARPProxyURL = "http://wrap:1111@0.0.0.0:1111"
+const WARPProxyURL = "http://wrap:1111@gost:1111"
 
 // BufferPool for reusing buffers (reduces GC pressure)
 var BufferPool = sync.Pool{
