@@ -14,7 +14,7 @@ type DownloadRequest struct {
 // @Description Output configuration
 type OutputConfig struct {
 	Type    string `json:"type" example:"video" enums:"video,audio"`
-	Format  string `json:"format" example:"mp4" enums:"mp4,webm,mkv,mp3,m4a,wav,opus,flac"`
+	Format  string `json:"format" example:"mp4" enums:"mp4,webm,mkv,mp3,m4a,wav,opus,flac,ogg"`
 	Quality string `json:"quality,omitempty" example:"1080p" enums:"2160p,1440p,1080p,720p,480p,360p"`
 }
 
