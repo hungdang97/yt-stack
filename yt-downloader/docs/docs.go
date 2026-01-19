@@ -139,6 +139,20 @@ const docTemplate = `{
                         "name": "id",
                         "in": "path",
                         "required": true
+                    },
+                    {
+                        "type": "string",
+                        "description": "Signed URL token",
+                        "name": "token",
+                        "in": "query",
+                        "required": true
+                    },
+                    {
+                        "type": "string",
+                        "description": "Expiration timestamp",
+                        "name": "expires",
+                        "in": "query",
+                        "required": true
                     }
                 ],
                 "responses": {
@@ -150,6 +164,18 @@ const docTemplate = `{
                     },
                     "400": {
                         "description": "Invalid job ID",
+                        "schema": {
+                            "$ref": "#/definitions/utils.ErrorResponse"
+                        }
+                    },
+                    "401": {
+                        "description": "Missing token or expires",
+                        "schema": {
+                            "$ref": "#/definitions/utils.ErrorResponse"
+                        }
+                    },
+                    "403": {
+                        "description": "Invalid or expired token",
                         "schema": {
                             "$ref": "#/definitions/utils.ErrorResponse"
                         }
@@ -409,10 +435,6 @@ const docTemplate = `{
                     "type": "number",
                     "example": 213.5
                 },
-                "id": {
-                    "type": "string",
-                    "example": "V1StGXR8_Z5jdHi"
-                },
                 "needsReencode": {
                     "type": "boolean",
                     "example": false
@@ -432,6 +454,10 @@ const docTemplate = `{
                 "selectedQuality": {
                     "type": "string",
                     "example": "720p"
+                },
+                "statusUrl": {
+                    "type": "string",
+                    "example": "https://api.ytconvert.org/api/status/V1StGXR8_Z5jdHi?token=xxx\u0026expires=xxx"
                 },
                 "title": {
                     "type": "string",
@@ -467,7 +493,8 @@ const docTemplate = `{
                         "m4a",
                         "wav",
                         "opus",
-                        "flac"
+                        "flac",
+                        "ogg"
                     ],
                     "example": "mp4"
                 },
@@ -571,9 +598,9 @@ const docTemplate = `{
 // SwaggerInfo holds exported Swagger Info so clients can modify it
 var SwaggerInfo = &swag.Spec{
 	Version:          "2.0",
-	Host:             "",
+	Host:             "api.ytconvert.org",
 	BasePath:         "/",
-	Schemes:          []string{},
+	Schemes:          []string{"https", "http"},
 	Title:            "YT Downloader API",
 	Description:      "API for downloading YouTube videos and audio",
 	InfoInstanceName: "swagger",

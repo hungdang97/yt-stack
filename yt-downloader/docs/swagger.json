@@ -146,7 +146,7 @@
                         "required": true
                     },
                     {
-                        "type": "integer",
+                        "type": "string",
                         "description": "Expiration timestamp",
                         "name": "expires",
                         "in": "query",
@@ -433,10 +433,6 @@
                     "type": "number",
                     "example": 213.5
                 },
-                "statusUrl": {
-                    "type": "string",
-                    "example": "https://api.ytconvert.org/api/status/V1StGXR8_Z5jdHi?token=xxx&expires=xxx"
-                },
                 "needsReencode": {
                     "type": "boolean",
                     "example": false
@@ -456,6 +452,10 @@
                 "selectedQuality": {
                     "type": "string",
                     "example": "720p"
+                },
+                "statusUrl": {
+                    "type": "string",
+                    "example": "https://api.ytconvert.org/api/status/V1StGXR8_Z5jdHi?token=xxx\u0026expires=xxx"
                 },
                 "title": {
                     "type": "string",
@@ -491,7 +491,8 @@
                         "m4a",
                         "wav",
                         "opus",
-                        "flac"
+                        "flac",
+                        "ogg"
                     ],
                     "example": "mp4"
                 },

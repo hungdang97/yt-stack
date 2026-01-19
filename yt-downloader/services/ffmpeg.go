@@ -192,5 +192,16 @@ func canCopyAudio(inputExt string, outputFormat string) bool {
 		return true
 	}
 
+	// webm to ogg: YouTube webm can contain Vorbis codec
+	// Attempt copy first, will transcode if codec mismatch
+	if inputExt == "webm" && outputFormat == "ogg" {
+		return true
+	}
+
+	// ogg to webm: OGG Vorbis can be copied to webm container
+	if inputExt == "ogg" && outputFormat == "webm" {
+		return true
+	}
+
 	return false
 }

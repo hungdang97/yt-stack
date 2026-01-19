@@ -50,9 +50,6 @@ definitions:
       duration:
         example: 213.5
         type: number
-      statusUrl:
-        example: https://api.ytconvert.org/api/status/V1StGXR8_Z5jdHi?token=xxx&expires=xxx
-        type: string
       needsReencode:
         example: false
         type: boolean
@@ -67,6 +64,9 @@ definitions:
         type: string
       selectedQuality:
         example: 720p
+        type: string
+      statusUrl:
+        example: https://api.ytconvert.org/api/status/V1StGXR8_Z5jdHi?token=xxx&expires=xxx
         type: string
       title:
         example: Rick Astley - Never Gonna Give You Up
@@ -95,6 +95,7 @@ definitions:
         - wav
         - opus
         - flac
+        - ogg
         example: mp4
         type: string
       quality:
@@ -261,7 +262,7 @@ paths:
         in: query
         name: expires
         required: true
-        type: integer
+        type: string
       produces:
       - application/json
       responses:

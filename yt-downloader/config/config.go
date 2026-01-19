@@ -64,7 +64,7 @@ func mustGetEnv(key string) string {
 // Supported formats
 var (
 	VideoFormats = []string{"mp4", "webm", "mkv"}
-	AudioFormats = []string{"mp3", "m4a", "wav", "opus", "flac"}
+	AudioFormats = []string{"mp3", "m4a", "wav", "opus", "flac", "ogg"}
 	Qualities    = []string{"2160p", "1440p", "1080p", "720p", "480p", "360p", "144p"}
 	OSTypes      = []string{"ios", "android", "macos", "windows", "linux"}
 )
@@ -142,6 +142,7 @@ var AudioCodecMap = map[string]string{
 	"opus": "libopus",
 	"flac": "flac",
 	"webm": "libopus",
+	"ogg":  "libvorbis",
 }
 
 var VideoCodecMap = map[string]string{
