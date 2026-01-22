@@ -30,8 +30,8 @@ const (
 	ExtractAPITimeout = 15 * time.Second
 
 	// Cleanup
-	CleanupInterval  = "*/5 * * * *" // Every 5 minutes
-	MaxJobAge        = 30 * time.Minute
+	CleanupInterval  = "*/3 * * * *" // Every 3 minutes
+	MaxJobAge        = 15 * time.Minute
 	CleanupBatchSize = 5000
 	// Job ID
 	JobIDLength = 21
