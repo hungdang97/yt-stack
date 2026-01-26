@@ -18,8 +18,8 @@ services:
     environment:
       - WARP_SLEEP=2
       - GOST_ARGS=-L :40000
-    logging:
-      driver: "none"
+    # logging:
+    #   driver: "none"
     healthcheck:
       test: ["CMD", "curl", "-fsS", "--socks5", "127.0.0.1:40000", "https://www.cloudflare.com/cdn-cgi/trace"]
       interval: 30s
@@ -45,8 +45,8 @@ services:
       - WARP_PASS=${WARP_PASS}
       - DIRECT_USER=${DIRECT_USER}
       - DIRECT_PASS=${DIRECT_PASS}
-    logging:
-      driver: "none"
+    # logging:
+    #   driver: "none"
     command: >
       -L=http://${WARP_USER}:${WARP_PASS}@:1111?probeResist=code:400
       -F=socks5://warp:40000
@@ -70,8 +70,8 @@ services:
       - PORT=5001
     volumes:
       - yt_storage:/app/storage
-    logging:
-      driver: "none"
+    # logging:
+    #   driver: "none"
     depends_on:
       gost:
         condition: service_started
@@ -95,8 +95,8 @@ services:
     restart: always
     environment:
       - PYTHONUNBUFFERED=1
-    logging:
-      driver: "none"
+    # logging:
+    #   driver: "none"
     depends_on:
       gost:
         condition: service_started
@@ -127,8 +127,8 @@ services:
     volumes:
       - letsencrypt:/etc/letsencrypt
       - certbot_webroot:/var/www/certbot
-    logging:
-      driver: "none"
+    # logging:
+    #   driver: "none"
     depends_on:
       yt-downloader:
         condition: service_healthy
