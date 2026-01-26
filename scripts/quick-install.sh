@@ -70,11 +70,11 @@ echo ""
 # Step 4: Configure Firewall
 print_info "Step 4/6: Configuring firewall..."
 ufw --force enable
-ufw allow 22/tcp comment 'SSH' > /dev/null 2>&1
-ufw allow 80/tcp comment 'HTTP' > /dev/null 2>&1
-ufw allow 443/tcp comment 'HTTPS' > /dev/null 2>&1
-ufw allow 1111/tcp comment 'WARP Proxy' > /dev/null 2>&1
-ufw allow 2222/tcp comment 'Direct Proxy' > /dev/null 2>&1
+sudo ufw allow 22/tcp comment 'SSH' > /dev/null 2>&1
+sudo ufw allow 80/tcp comment 'HTTP' > /dev/null 2>&1
+sudo ufw allow 443/tcp comment 'HTTPS' > /dev/null 2>&1
+sudo ufw allow 1111/tcp comment 'WARP Proxy' > /dev/null 2>&1
+sudo ufw allow 2222/tcp comment 'Direct Proxy' > /dev/null 2>&1
 print_success "Firewall configured (ports 22, 80, 443, 1111, 2222)"
 echo ""
 
