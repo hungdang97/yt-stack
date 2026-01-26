@@ -166,7 +166,9 @@ var MimeToExt = map[string]string{
 }
 
 // WARP Proxy config
-const WARPProxyURL = "http://wrap:1111@gost:1111"
+var WARP_USER = mustGetEnv("WARP_USER")
+var WARP_PASS = mustGetEnv("WARP_PASS")
+var WARPProxyURL = "http://" + WARP_USER + ":" + WARP_PASS + "@gost:1111"
 
 // BufferPool for reusing buffers (reduces GC pressure)
 var BufferPool = sync.Pool{
