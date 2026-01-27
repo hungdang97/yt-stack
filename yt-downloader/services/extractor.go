@@ -86,7 +86,7 @@ func SelectVideo(data *models.ExtractResponse, requestedQuality string, osType s
 	// Filter streams by supported codecs
 	var compatibleStreams []models.Stream
 	for _, stream := range data.VideoStreams {
-		codec := getStreamCodec(&stream)
+		codec := GetStreamCodec(&stream)
 		if isCodecSupported(codec, profile.VideoCodecs) {
 			compatibleStreams = append(compatibleStreams, stream)
 		}
@@ -104,8 +104,8 @@ func SelectVideo(data *models.ExtractResponse, requestedQuality string, osType s
 		}
 
 		// 2. Format compatibility priority (compatible codecs preferred)
-		codecI := getStreamCodec(&compatibleStreams[i])
-		codecJ := getStreamCodec(&compatibleStreams[j])
+		codecI := GetStreamCodec(&compatibleStreams[i])
+		codecJ := GetStreamCodec(&compatibleStreams[j])
 		compatI := isVideoCodecCompatible(codecI, targetFormat)
 		compatJ := isVideoCodecCompatible(codecJ, targetFormat)
 
@@ -184,7 +184,7 @@ func SelectVideo(data *models.ExtractResponse, requestedQuality string, osType s
 		}
 
 		// Set NeedsReencode flag based on codec compatibility
-		videoCodec := getStreamCodec(selectedStream)
+		videoCodec := GetStreamCodec(selectedStream)
 		result.NeedsReencode = !isVideoCodecCompatible(videoCodec, targetFormat)
 	}
 
@@ -202,7 +202,7 @@ func SelectAudio(data *models.ExtractResponse, trackID string, osType string) *m
 	// Filter streams by supported codecs
 	var compatibleStreams []models.Stream
 	for _, stream := range data.AudioStreams {
-		codec := getStreamCodec(&stream)
+		codec := GetStreamCodec(&stream)
 		if isCodecSupported(codec, profile.AudioCodecs) {
 			compatibleStreams = append(compatibleStreams, stream)
 		}
@@ -238,8 +238,8 @@ func SelectAudio(data *models.ExtractResponse, trackID string, osType string) *m
 
 	// Sort by codec priority, then bitrate (higher is better)
 	sort.Slice(compatibleStreams, func(i, j int) bool {
-		codecI := getStreamCodec(&compatibleStreams[i])
-		codecJ := getStreamCodec(&compatibleStreams[j])
+		codecI := GetStreamCodec(&compatibleStreams[i])
+		codecJ := GetStreamCodec(&compatibleStreams[j])
 		priorityI := codecPriority(codecI, profile.AudioCodecs)
 		priorityJ := codecPriority(codecJ, profile.AudioCodecs)
 
