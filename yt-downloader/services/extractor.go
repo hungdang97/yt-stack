@@ -319,8 +319,15 @@ func codecPriority(codec string, priorityList []string) int {
 func isVideoCodecCompatible(videoCodec string, targetFormat string) bool {
 	switch targetFormat {
 	case "mp4":
-		// MP4 supports H.264/H.265 video
-		return slices.Contains([]string{"avc1", "hvc1", "hev1"}, videoCodec)
+		// MP4 supports H.264/H.265/VP9/AV1 video
+		// Modern players (2016+) support VP9 and AV1 in MP4 container
+		// This avoids extremely heavy re-encoding for 4K videos
+		return slices.Contains([]string{
+			"avc1",         // H.264
+			"hvc1", "hev1", // H.265
+			"vp09", "vp9", // VP9 (widely supported in modern browsers/players)
+			"av01", // AV1 (modern codec, supported 2018+)
+		}, videoCodec)
 	case "webm":
 		// WebM supports VP8/VP9/AV1 video
 		return slices.Contains([]string{"vp8", "vp9", "vp09", "av01"}, videoCodec)

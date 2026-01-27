@@ -16,8 +16,8 @@ func TestIsVideoCodecCompatible(t *testing.T) {
 		// MP4 tests
 		{"H.264 to MP4", "avc1", "mp4", true},
 		{"H.265 to MP4", "hvc1", "mp4", true},
-		{"VP9 to MP4", "vp9", "mp4", false},
-		{"AV1 to MP4", "av01", "mp4", false},
+		{"VP9 to MP4", "vp9", "mp4", true},  // Now compatible - modern players support VP9 in MP4
+		{"AV1 to MP4", "av01", "mp4", true}, // Now compatible - modern players support AV1 in MP4
 
 		// WebM tests
 		{"VP9 to WebM", "vp9", "webm", true},
@@ -50,7 +50,7 @@ func TestSelectVideo_NeedsReencode(t *testing.T) {
 		videoCodec       string
 		expectedReencode bool
 	}{
-		{"VP9 to MP4 needs re-encode", "mp4", "vp9", true},
+		{"VP9 to MP4 no re-encode", "mp4", "vp9", false}, // VP9 is now compatible with MP4
 		{"H.264 to MP4 no re-encode", "mp4", "avc1", false},
 		{"VP9 to WebM no re-encode", "webm", "vp9", false},
 		{"H.264 to WebM needs re-encode", "webm", "avc1", true},
@@ -87,7 +87,7 @@ func TestSelectVideo_NeedsReencode(t *testing.T) {
 	}
 }
 
-// TestSelectVideo_PreferCompatibleCodec tests that compatible codecs are preferred
+// TestSelectVideo_PreferCompatibleCodec tests that best quality compatible codec is selected
 func TestSelectVideo_PreferCompatibleCodec(t *testing.T) {
 	// Create mock extract response with both VP9 and H.264 streams at same quality
 	extractData := &models.ExtractResponse{
@@ -113,7 +113,7 @@ func TestSelectVideo_PreferCompatibleCodec(t *testing.T) {
 		},
 	}
 
-	// When targeting MP4, should prefer H.264 even with lower bitrate
+	// When targeting MP4, should prefer VP9 (higher bitrate) since it's now compatible
 	result := SelectVideo(extractData, "1080p", "android", "mp4")
 
 	if result.Stream == nil {
@@ -121,8 +121,8 @@ func TestSelectVideo_PreferCompatibleCodec(t *testing.T) {
 	}
 
 	codec := getStreamCodec(result.Stream)
-	if codec != "avc1" {
-		t.Errorf("Expected H.264 (avc1) to be preferred for MP4, got %s", codec)
+	if codec != "vp9" {
+		t.Errorf("Expected VP9 to be preferred for MP4 (higher bitrate, compatible), got %s", codec)
 	}
 
 	if result.NeedsReencode {

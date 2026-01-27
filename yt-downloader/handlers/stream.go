@@ -112,14 +112,58 @@ func streamVideo(c *fiber.Ctx, meta *models.Meta) error {
 	c.Set("Content-Disposition", fmt.Sprintf(`attachment; filename="%s"; filename*=UTF-8''%s`, filename, encodedFilename))
 	c.Set("Cache-Control", "no-cache")
 
-	// Build FFmpeg command for remuxing (no re-encoding, very light CPU)
-	args := []string{
-		"-y",
-		"-i", videoPath,
-		"-i", audioPath,
-		"-c:v", "copy",
-		"-c:a", "copy",
-		"-f", getFFmpegFormat(format),
+	// Build FFmpeg command - use copy when possible, re-encode when needed
+	var args []string
+
+	if meta.NeedsReencode {
+		// Re-encode for codec compatibility
+		videoCodec := config.VideoCodecMap[format]
+		if videoCodec == "" {
+			videoCodec = "libx264" // fallback to H.264
+		}
+		audioCodec := config.AudioCodecMap[format]
+		if audioCodec == "" {
+			audioCodec = "aac" // fallback to AAC
+		}
+
+		args = []string{"-y"}
+
+		// Add trim if specified (accurate seek after -i for re-encoding)
+		if meta.Trim != nil {
+			args = append(args, "-i", videoPath, "-i", audioPath)
+			args = append(args, "-ss", fmt.Sprintf("%.3f", meta.Trim.Start))
+			args = append(args, "-t", fmt.Sprintf("%.3f", meta.Trim.End-meta.Trim.Start))
+		} else {
+			args = append(args, "-i", videoPath, "-i", audioPath)
+		}
+
+		args = append(args,
+			"-c:v", videoCodec,
+			"-preset", "ultrafast", // Fastest preset for streaming
+			"-crf", "23", // Good quality
+			"-c:a", audioCodec,
+			"-b:a", "192k",
+			"-f", getFFmpegFormat(format),
+		)
+
+	} else {
+		// Fast copy - no re-encoding (very light CPU, very fast)
+		args = []string{"-y"}
+
+		// Add trim if specified (fast seek before -i for copy mode)
+		if meta.Trim != nil {
+			args = append(args, "-ss", fmt.Sprintf("%.3f", meta.Trim.Start))
+			args = append(args, "-i", videoPath, "-i", audioPath)
+			args = append(args, "-t", fmt.Sprintf("%.3f", meta.Trim.End-meta.Trim.Start))
+		} else {
+			args = append(args, "-i", videoPath, "-i", audioPath)
+		}
+
+		args = append(args,
+			"-c:v", "copy",
+			"-c:a", "copy",
+			"-f", getFFmpegFormat(format),
+		)
 	}
 
 	// Add movflags for streamable MP4
@@ -165,13 +209,22 @@ func streamAudio(c *fiber.Ctx, meta *models.Meta) error {
 	var args []string
 
 	if canCopyAudioStream(inputExt, format) {
-		args = []string{
-			"-y",
-			"-i", audioPath,
+		args = []string{"-y"}
+
+		// Add trim if specified (fast seek before -i for copy mode)
+		if meta.Trim != nil {
+			args = append(args, "-ss", fmt.Sprintf("%.3f", meta.Trim.Start))
+			args = append(args, "-i", audioPath)
+			args = append(args, "-t", fmt.Sprintf("%.3f", meta.Trim.End-meta.Trim.Start))
+		} else {
+			args = append(args, "-i", audioPath)
+		}
+
+		args = append(args,
 			"-c:a", "copy",
 			"-f", getFFmpegFormat(format),
 			"pipe:1",
-		}
+		)
 	} else {
 		codec := config.AudioCodecMap[format]
 		if codec == "" {
@@ -183,12 +236,21 @@ func streamAudio(c *fiber.Ctx, meta *models.Meta) error {
 			bitrate = "192k"
 		}
 
-		args = []string{
-			"-y",
-			"-i", audioPath,
+		args = []string{"-y"}
+
+		// Add trim if specified (accurate seek after -i for transcoding)
+		if meta.Trim != nil {
+			args = append(args, "-i", audioPath)
+			args = append(args, "-ss", fmt.Sprintf("%.3f", meta.Trim.Start))
+			args = append(args, "-t", fmt.Sprintf("%.3f", meta.Trim.End-meta.Trim.Start))
+		} else {
+			args = append(args, "-i", audioPath)
+		}
+
+		args = append(args,
 			"-vn",
 			"-c:a", codec,
-		}
+		)
 
 		// Add bitrate for lossy codecs
 		if codec != "pcm_s16le" && codec != "flac" {
