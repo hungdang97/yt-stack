@@ -256,8 +256,8 @@ func SelectAudio(data *models.ExtractResponse, trackID string, osType string) *m
 	return nil
 }
 
-// getStreamCodec returns the codec from Stream, preferring Codec field over mimeType extraction
-func getStreamCodec(stream *models.Stream) string {
+// GetStreamCodec returns the codec from Stream, preferring Codec field over mimeType extraction
+func GetStreamCodec(stream *models.Stream) string {
 	// Prefer direct codec field if available
 	if stream.Codec != "" {
 		// Extract base codec: "avc1.4d400c" -> "avc1", "mp4a.40.2" -> "mp4a"
@@ -339,38 +339,33 @@ func isVideoCodecCompatible(videoCodec string, targetFormat string) bool {
 	}
 }
 
+// IsAudioCodecCompatible checks if audio codec is compatible with target format
+func IsAudioCodecCompatible(audioCodec string, targetFormat string) bool {
+	switch targetFormat {
+	case "mp4", "m4a":
+		// MP4/M4A support AAC audio
+		return strings.HasPrefix(audioCodec, "mp4a") // AAC codec
+	case "webm":
+		// WebM supports Opus and Vorbis
+		return audioCodec == "opus" || audioCodec == "vorbis"
+	case "mkv":
+		// MKV supports almost everything
+		return true
+	case "opus":
+		// Opus format expects Opus codec
+		return audioCodec == "opus"
+	case "ogg":
+		// OGG typically uses Vorbis or Opus
+		return audioCodec == "vorbis" || audioCodec == "opus"
+	case "mp3", "wav", "flac":
+		// These formats require transcoding from any source
+		return false
+	default:
+		return false
+	}
+}
+
 // GetExtension returns file extension for a stream
 func GetExtension(stream *models.Stream) string {
 	return utils.GetExtFromMimeType(stream.MimeType)
-}
-
-// NeedsReencode checks if video/audio need re-encoding for target format
-func NeedsReencode(videoStream *models.Stream, audioStream *models.Stream, targetFormat string) bool {
-	if videoStream == nil {
-		return false
-	}
-
-	videoCodec := getStreamCodec(videoStream)
-	audioCodec := ""
-	if audioStream != nil {
-		audioCodec = getStreamCodec(audioStream)
-	}
-
-	switch targetFormat {
-	case "mp4":
-		// MP4 supports H.264/H.265 video and AAC audio
-		videoOK := slices.Contains([]string{"avc1", "hvc1", "hev1"}, videoCodec)
-		audioOK := audioCodec == "" || strings.HasPrefix(audioCodec, "mp4a")
-		return !(videoOK && audioOK)
-	case "webm":
-		// WebM supports VP8/VP9/AV1 video and Opus/Vorbis audio
-		videoOK := slices.Contains([]string{"vp8", "vp9", "vp09", "av01"}, videoCodec)
-		audioOK := audioCodec == "" || slices.Contains([]string{"opus", "vorbis"}, audioCodec)
-		return !(videoOK && audioOK)
-	case "mkv":
-		// MKV supports almost everything
-		return false
-	}
-
-	return false
 }
