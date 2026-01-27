@@ -6,6 +6,15 @@ from collections import deque
 from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
 import os
+import logging
+
+# Configure logging
+logging.basicConfig(
+    level=logging.INFO,
+    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
+    handlers=[logging.StreamHandler()]
+)
+logger = logging.getLogger(__name__)
 
 # Set Deno path BEFORE importing yt_dlp
 BASE_DIR = Path(__file__).parent
@@ -153,24 +162,32 @@ def extract_sync(video_id: str, proxy: str, profile: str, cookies: str):
                 if not has_audio:
                     missing.append('audio')
                 error_msg = f"Missing streams: {', '.join(missing)}"
+                logger.error(f"[{video_id}] Missing streams: {', '.join(missing)} | proxy={proxy}")
                 if profile:
+                    logger.info(f"[{video_id}] Invalidating cookie profile: {profile}")
                     cookie_db.invalidate(profile)
                 return None, error_msg
 
             return result, None
     except Exception as e:
+        logger.error(f"[{video_id}] Extraction failed: {str(e)} | proxy={proxy}", exc_info=True)
         if profile and cookie_db.is_bad(e):
+            logger.info(f"[{video_id}] Invalidating bad cookie profile: {profile}")
             cookie_db.invalidate(profile)
         return None, str(e)
 
 
 @app.get('/api/youtube/video/{video_id}')
 async def extract(video_id: str, proxy: str = Query(None)):
+    logger.info(f"[{video_id}] Extraction request received | proxy={proxy}")
+    
     profile, cookies = await cookie_pool.get()
     if not cookies:
+        logger.error(f"[{video_id}] No active cookie available")
         return JSONResponse({'error': 'No active cookie'}, status_code=503)
 
     proxy_url = build_proxy_url(proxy)
+    logger.info(f"[{video_id}] Using cookie profile: {profile} | proxy_url={proxy_url}")
 
     # Run blocking yt-dlp in thread pool
     loop = asyncio.get_event_loop()
@@ -179,7 +196,10 @@ async def extract(video_id: str, proxy: str = Query(None)):
     )
 
     if error:
+        logger.error(f"[{video_id}] Extraction failed with error: {error}")
         return JSONResponse({'error': error}, status_code=500)
+    
+    logger.info(f"[{video_id}] Extraction successful | video_streams={len(result.get('videoStreams', []))} | audio_streams={len(result.get('audioStreams', []))}")
     return result
 
 
