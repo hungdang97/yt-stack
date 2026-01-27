@@ -120,7 +120,7 @@ func TestSelectVideo_PreferCompatibleCodec(t *testing.T) {
 		t.Fatal("Expected stream to be selected")
 	}
 
-	codec := getStreamCodec(result.Stream)
+	codec := GetStreamCodec(result.Stream)
 	if codec != "vp9" {
 		t.Errorf("Expected VP9 to be preferred for MP4 (higher bitrate, compatible), got %s", codec)
 	}
