@@ -10,16 +10,45 @@ import (
 )
 
 // FFmpegMerge merges video and audio files
-func FFmpegMerge(jobDir string, format string, videoFile string, audioFile string) (string, error) {
+// If needsReencode is true, re-encodes to compatible codecs for target format
+// If needsReencode is false, copies codecs directly (fast, lossless)
+func FFmpegMerge(jobDir string, format string, videoFile string, audioFile string, needsReencode bool) (string, error) {
 	outputFile := filepath.Join(jobDir, fmt.Sprintf("output.%s", format))
 
-	args := []string{
-		"-y",
-		"-i", filepath.Join(jobDir, videoFile),
-		"-i", filepath.Join(jobDir, audioFile),
-		"-c:v", "copy",
-		"-c:a", "copy",
-		outputFile,
+	var args []string
+
+	if needsReencode {
+		// Re-encode to compatible codecs for target format
+		videoCodec := config.VideoCodecMap[format]
+		if videoCodec == "" {
+			videoCodec = "libx264" // fallback to H.264
+		}
+		audioCodec := config.AudioCodecMap[format]
+		if audioCodec == "" {
+			audioCodec = "aac" // fallback to AAC
+		}
+
+		args = []string{
+			"-y",
+			"-i", filepath.Join(jobDir, videoFile),
+			"-i", filepath.Join(jobDir, audioFile),
+			"-c:v", videoCodec,
+			"-preset", "fast", // Balance speed vs quality
+			"-crf", "23", // Good quality (18-28 range, lower = better)
+			"-c:a", audioCodec,
+			"-b:a", "192k", // Audio bitrate
+			outputFile,
+		}
+	} else {
+		// Fast copy - no re-encoding (lossless, very fast)
+		args = []string{
+			"-y",
+			"-i", filepath.Join(jobDir, videoFile),
+			"-i", filepath.Join(jobDir, audioFile),
+			"-c:v", "copy",
+			"-c:a", "copy",
+			outputFile,
+		}
 	}
 
 	if err := runFFmpeg(args); err != nil {

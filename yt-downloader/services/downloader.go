@@ -132,40 +132,52 @@ func downloadChunked(ctx context.Context, downloadURL string, destPath string, t
 }
 
 // downloadChunkWithRetry downloads a single chunk with retry logic
+// Strategy: 2 attempts only
+// - Attempt 1: Cloudflare proxy
+// - Attempt 2: Direct IP (if attempt 1 fails)
 func downloadChunkWithRetry(ctx context.Context, downloadURL string, chunkPath string, start, end int64) error {
 	tmpPath := chunkPath + ".tmp"
 
-	var lastErr error
-	for retry := 0; retry < config.MaxRetries; retry++ {
-		resp, err := fetchRange(ctx, downloadURL, start, end)
-		if err != nil {
-			lastErr = err
-			// Don't retry on 403
-			if httpErr, ok := err.(*HTTPError); ok && httpErr.StatusCode == 403 {
-				return err
-			}
-			time.Sleep(config.RetryDelay * time.Duration(retry+1))
-			continue
-		}
-
+	// Attempt 1: Use Cloudflare proxy
+	resp, err := fetchRangeWithClient(ctx, downloadURL, start, end, true)
+	if err == nil {
 		err = streamToFile(resp.Body, tmpPath)
 		resp.Body.Close()
 
-		if err != nil {
-			lastErr = err
-			os.Remove(tmpPath)
-			time.Sleep(config.RetryDelay * time.Duration(retry+1))
-			continue
+		if err == nil {
+			// Success - rename tmp to final
+			if err := os.Rename(tmpPath, chunkPath); err != nil {
+				return fmt.Errorf("rename failed: %w", err)
+			}
+			return nil
 		}
-
-		// Success - rename tmp to final
-		if err := os.Rename(tmpPath, chunkPath); err != nil {
-			return fmt.Errorf("rename failed: %w", err)
-		}
-		return nil
+		os.Remove(tmpPath)
 	}
 
-	return lastErr
+	// Don't retry on 403
+	if httpErr, ok := err.(*HTTPError); ok && httpErr.StatusCode == 403 {
+		return err
+	}
+
+	// Attempt 2: Use direct IP (no proxy)
+	time.Sleep(config.RetryDelay)
+	resp, err = fetchRangeWithClient(ctx, downloadURL, start, end, false)
+	if err != nil {
+		return fmt.Errorf("chunk download failed after 2 attempts: %w", err)
+	}
+	defer resp.Body.Close()
+
+	err = streamToFile(resp.Body, tmpPath)
+	if err != nil {
+		os.Remove(tmpPath)
+		return fmt.Errorf("chunk download failed: %w", err)
+	}
+
+	// Success - rename tmp to final
+	if err := os.Rename(tmpPath, chunkPath); err != nil {
+		return fmt.Errorf("rename failed: %w", err)
+	}
+	return nil
 }
 
 // streamToFile streams data from reader to file using buffer pool
@@ -229,8 +241,14 @@ func mergeChunks(chunksDir string, destPath string, numChunks int) error {
 	return nil
 }
 
-// fetchRange fetches a byte range from URL
+// fetchRange fetches a byte range from URL using proxy (default)
 func fetchRange(ctx context.Context, downloadURL string, start, end int64) (*http.Response, error) {
+	return fetchRangeWithClient(ctx, downloadURL, start, end, true)
+}
+
+// fetchRangeWithClient fetches a byte range from URL with optional proxy
+// useProxy=true: use Cloudflare proxy, useProxy=false: direct IP
+func fetchRangeWithClient(ctx context.Context, downloadURL string, start, end int64, useProxy bool) (*http.Response, error) {
 	// Add range to URL as query parameter (YouTube style)
 	rangeURL := fmt.Sprintf("%s&range=%d-%d", downloadURL, start, end)
 
@@ -244,7 +262,13 @@ func fetchRange(ctx context.Context, downloadURL string, start, end int64) (*htt
 	req.Header.Set("Origin", "https://www.youtube.com")
 	req.Header.Set("Referer", "https://www.youtube.com/")
 
-	resp, err := config.DownloadClient.Do(req)
+	// Choose client based on proxy preference
+	client := config.DownloadClient
+	if !useProxy {
+		client = config.DownloadClientNoProxy
+	}
+
+	resp, err := client.Do(req)
 	if err != nil {
 		return nil, fmt.Errorf("request failed: %w", err)
 	}

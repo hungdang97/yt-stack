@@ -27,7 +27,7 @@ const (
 
 	// Extract API
 	ExtractAPIBase    = "http://yt-extractor:8300/api/youtube/video"
-	ExtractAPITimeout = 15 * time.Second
+	ExtractAPITimeout = 10 * time.Second
 
 	// Cleanup
 	CleanupInterval  = "*/3 * * * *" // Every 3 minutes
@@ -178,8 +178,9 @@ var BufferPool = sync.Pool{
 
 // HTTP Clients (reuse connections via pooling)
 var (
-	ExtractClient  *http.Client
-	DownloadClient *http.Client
+	ExtractClient         *http.Client
+	DownloadClient        *http.Client // With Cloudflare proxy
+	DownloadClientNoProxy *http.Client // Direct IP (no proxy)
 )
 
 // Transport for Extract API (no proxy - local API)
@@ -201,6 +202,14 @@ var downloadTransport = &http.Transport{
 	DisableCompression:  true, // No gzip for downloads - save CPU
 }
 
+// Transport for Download without proxy (direct IP)
+var downloadTransportNoProxy = &http.Transport{
+	MaxIdleConns:        100,
+	MaxIdleConnsPerHost: 10,
+	IdleConnTimeout:     90 * time.Second,
+	DisableCompression:  true, // No gzip for downloads - save CPU
+}
+
 func init() {
 	ExtractClient = &http.Client{
 		Transport: extractTransport,
@@ -208,6 +217,10 @@ func init() {
 	}
 	DownloadClient = &http.Client{
 		Transport: downloadTransport,
+		Timeout:   ChunkTimeout,
+	}
+	DownloadClientNoProxy = &http.Client{
+		Transport: downloadTransportNoProxy,
 		Timeout:   ChunkTimeout,
 	}
 }
