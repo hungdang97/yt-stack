@@ -71,6 +71,7 @@ type Meta struct {
 	Status        string      `json:"status"` // pending, completed, error
 	CreatedAt     int64       `json:"createdAt"`
 	VideoID       string      `json:"videoId"`
+	CTier         int         `json:"ctier,omitempty"` // Customer tier (1=Tier1, others=Standard)
 	Title         string      `json:"title"`
 	Duration      float64     `json:"duration"`
 	Files         FilesInfo   `json:"files"`
