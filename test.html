@@ -294,14 +294,20 @@
     </div>
   </div>
 
-  <div class="form-group">
-    <label>Audio Bitrate</label>
-    <select id="bitrate">
-      <option value="192k">192 kbps</option>
-      <option value="128k">128 kbps</option>
-      <option value="320k">320 kbps</option>
-      <option value="64k">64 kbps</option>
-    </select>
+  <div class="row">
+    <div class="form-group">
+      <label>Audio Language (optional)</label>
+      <input type="text" id="audioLanguage" placeholder="e.g., vi, en, ko, ja" maxlength="5">
+    </div>
+    <div class="form-group">
+      <label>Audio Bitrate</label>
+      <select id="bitrate">
+        <option value="192k">192 kbps</option>
+        <option value="128k">128 kbps</option>
+        <option value="320k">320 kbps</option>
+        <option value="64k">64 kbps</option>
+      </select>
+    </div>
   </div>
 
   <div class="form-group">
@@ -387,6 +393,7 @@
       format: document.getElementById('format'),
       quality: document.getElementById('quality'),
       qualityGroup: document.getElementById('qualityGroup'),
+      audioLanguage: document.getElementById('audioLanguage'),
       bitrate: document.getElementById('bitrate'),
       enableTrim: document.getElementById('enableTrim'),
       trimFields: document.getElementById('trimFields'),
@@ -480,6 +487,12 @@
         audio: { bitrate: els.bitrate.value }
       };
 
+      // Add audio language if specified
+      const audioLang = els.audioLanguage.value.trim();
+      if (audioLang) {
+        body.audio.trackId = audioLang;
+      }
+
       if (els.platform.value) body.os = els.platform.value;
       if (els.type.value === 'video' && els.quality.value) {
         body.output.quality = els.quality.value;
@@ -507,11 +520,27 @@
 
         currentStatusUrl = data.statusUrl;
         els.statusTitle.textContent = data.title;
-        els.statusInfo.textContent = `Duration: ${formatDuration(data.duration)}` +
-          (data.selectedQuality ? ` | Quality: ${data.selectedQuality}` : '');
+        
+        // Build status info
+        let infoText = `Duration: ${formatDuration(data.duration)}`;
+        if (data.selectedQuality) {
+          infoText += ` | Quality: ${data.selectedQuality}`;
+        }
+        if (data.availableAudioLanguages && data.availableAudioLanguages.length > 0) {
+          infoText += ` | Available Languages: ${data.availableAudioLanguages.join(', ')}`;
+        }
+        els.statusInfo.textContent = infoText;
 
+        // Show warnings
+        const warnings = [];
         if (data.qualityChanged && data.qualityChangeReason) {
-          els.warningBox.textContent = data.qualityChangeReason;
+          warnings.push(data.qualityChangeReason);
+        }
+        if (data.audioLanguageChanged && data.audioLanguageChangeReason) {
+          warnings.push(data.audioLanguageChangeReason);
+        }
+        if (warnings.length > 0) {
+          els.warningBox.innerHTML = warnings.join('<br>');
           els.warningBox.style.display = 'block';
         }
 
