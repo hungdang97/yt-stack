@@ -73,6 +73,7 @@ func HandleDownload(c *fiber.Ctx) error {
 
 	// Select streams
 	var videoSelection *models.VideoSelectionResult
+	var audioSelection *models.AudioSelectionResult
 	var audioStream *models.Stream
 
 	if req.Output.Type == "video" {
@@ -80,15 +81,17 @@ func HandleDownload(c *fiber.Ctx) error {
 		if videoSelection.Stream == nil {
 			return utils.NotFound(c, utils.ErrVideoNotFound, "No compatible video stream found")
 		}
-		audioStream = services.SelectAudio(extractData, req.Audio.TrackID, osType, req.Output.Format)
-		if audioStream == nil {
+		audioSelection = services.SelectAudio(extractData, req.Audio.TrackID, osType, req.Output.Format)
+		if audioSelection.Stream == nil {
 			return utils.NotFound(c, utils.ErrAudioNotFound, "No compatible audio stream found")
 		}
+		audioStream = audioSelection.Stream
 	} else {
-		audioStream = services.SelectAudio(extractData, req.Audio.TrackID, osType, req.Output.Format)
-		if audioStream == nil {
+		audioSelection = services.SelectAudio(extractData, req.Audio.TrackID, osType, req.Output.Format)
+		if audioSelection.Stream == nil {
 			return utils.NotFound(c, utils.ErrAudioNotFound, "No compatible audio stream found")
 		}
+		audioStream = audioSelection.Stream
 	}
 
 	// Generate job ID
@@ -159,6 +162,13 @@ func HandleDownload(c *fiber.Ctx) error {
 		response.QualityChanged = videoSelection.QualityChanged
 		response.QualityChangeReason = videoSelection.QualityChangeReason
 		response.NeedsReencode = videoSelection.NeedsReencode
+	}
+
+	// Add audio language information
+	if audioSelection != nil {
+		response.AvailableAudioLanguages = audioSelection.AvailableAudioLanguages
+		response.AudioLanguageChanged = audioSelection.AudioLanguageChanged
+		response.AudioLanguageChangeReason = audioSelection.AudioLanguageChangeReason
 	}
 
 	return c.JSON(response)

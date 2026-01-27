@@ -37,14 +37,17 @@ type TrimConfig struct {
 // DownloadResponse is returned when a job is created
 // @Description Response after creating a download job
 type DownloadResponse struct {
-	StatusURL           string  `json:"statusUrl" example:"https://api.ytconvert.org/api/status/V1StGXR8_Z5jdHi?token=xxx&expires=xxx"`
-	Title               string  `json:"title" example:"Rick Astley - Never Gonna Give You Up"`
-	Duration            float64 `json:"duration" example:"213.5"`
-	RequestedQuality    string  `json:"requestedQuality,omitempty" example:"1080p"`
-	SelectedQuality     string  `json:"selectedQuality,omitempty" example:"720p"`
-	QualityChanged      bool    `json:"qualityChanged" example:"true"`
-	QualityChangeReason string  `json:"qualityChangeReason,omitempty" example:"1080p not available, using 720p"`
-	NeedsReencode       bool    `json:"needsReencode" example:"false"`
+	StatusURL                 string   `json:"statusUrl" example:"https://api.ytconvert.org/api/status/V1StGXR8_Z5jdHi?token=xxx&expires=xxx"`
+	Title                     string   `json:"title" example:"Rick Astley - Never Gonna Give You Up"`
+	Duration                  float64  `json:"duration" example:"213.5"`
+	RequestedQuality          string   `json:"requestedQuality,omitempty" example:"1080p"`
+	SelectedQuality           string   `json:"selectedQuality,omitempty" example:"720p"`
+	QualityChanged            bool     `json:"qualityChanged" example:"true"`
+	QualityChangeReason       string   `json:"qualityChangeReason,omitempty" example:"1080p not available, using 720p"`
+	NeedsReencode             bool     `json:"needsReencode" example:"false"`
+	AvailableAudioLanguages   []string `json:"availableAudioLanguages,omitempty" example:"['en', 'vi', 'ko']"`
+	AudioLanguageChanged      bool     `json:"audioLanguageChanged" example:"true"`
+	AudioLanguageChangeReason string   `json:"audioLanguageChangeReason,omitempty" example:"Requested language 'vi' not found, using 'en'"`
 }
 
 // Job status constants
@@ -98,10 +101,11 @@ type FileInfo struct {
 
 // ExtractResponse from YouTube Extract API
 type ExtractResponse struct {
-	Title        string   `json:"title"`
-	Duration     float64  `json:"duration"`
-	VideoStreams []Stream `json:"videoStreams"`
-	AudioStreams []Stream `json:"audioStreams"`
+	Title                   string   `json:"title"`
+	Duration                float64  `json:"duration"`
+	VideoStreams            []Stream `json:"videoStreams"`
+	AudioStreams            []Stream `json:"audioStreams"`
+	AvailableAudioLanguages []string `json:"availableAudioLanguages"`
 }
 
 // Stream represents a video or audio stream
@@ -127,6 +131,14 @@ type VideoSelectionResult struct {
 	QualityChanged      bool
 	QualityChangeReason string
 	NeedsReencode       bool
+}
+
+// AudioSelectionResult contains the selected audio stream and metadata
+type AudioSelectionResult struct {
+	Stream                    *Stream
+	AvailableAudioLanguages   []string
+	AudioLanguageChanged      bool
+	AudioLanguageChangeReason string
 }
 
 // HealthResponse for health check

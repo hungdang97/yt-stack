@@ -122,6 +122,7 @@ def map_audio_stream(fmt):
         'codec': fmt.get('acodec'),
         'audioTrackId': lang_code,
         'audioTrackType': acont_type,
+        'isOriginal': acont_type == 'original',
     }
 
 
@@ -151,6 +152,15 @@ def map_yt_dlp_to_api(info):
         elif acodec != 'none':
             audio_streams.append(map_audio_stream(fmt))
 
+    # Extract available audio languages (unique language codes)
+    available_languages = []
+    seen_languages = set()
+    for stream in audio_streams:
+        lang = stream.get('audioTrackId')
+        if lang and lang not in seen_languages:
+            available_languages.append(lang)
+            seen_languages.add(lang)
+
     categories = info.get('categories')
 
     return {
@@ -162,6 +172,7 @@ def map_yt_dlp_to_api(info):
         'duration': info.get('duration'),
         'videoStreams': video_streams,
         'audioStreams': audio_streams,
+        'availableAudioLanguages': available_languages,
         'subtitles': [],
         'category': categories[0] if categories else None,
         'tags': info.get('tags', []),
