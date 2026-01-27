@@ -297,8 +297,17 @@ func SelectAudio(data *models.ExtractResponse, trackID string, osType string, ta
 		return compatibleStreams[i].Bitrate > compatibleStreams[j].Bitrate
 	})
 
+	fmt.Printf("[SelectAudio] After sorting, top streams:\n")
+	for i := 0; i < len(compatibleStreams) && i < 5; i++ {
+		fmt.Printf("[SelectAudio]   %d: AudioTrackID=%s, Codec=%s, Bitrate=%.0f, IsOriginal=%v\n",
+			i, compatibleStreams[i].AudioTrackID, GetStreamCodec(&compatibleStreams[i]),
+			compatibleStreams[i].Bitrate, compatibleStreams[i].IsOriginal)
+	}
+
 	if len(compatibleStreams) > 0 {
 		result.Stream = &compatibleStreams[0]
+		fmt.Printf("[SelectAudio] ✓ FINAL SELECTED: AudioTrackID=%s, Codec=%s, Bitrate=%.0f\n",
+			result.Stream.AudioTrackID, GetStreamCodec(result.Stream), result.Stream.Bitrate)
 	}
 
 	return result
