@@ -192,8 +192,12 @@ func SelectVideo(data *models.ExtractResponse, requestedQuality string, osType s
 }
 
 // SelectAudio selects the best audio stream based on device, track, and target format
-// Prioritizes format-compatible codecs to avoid transcoding
-func SelectAudio(data *models.ExtractResponse, trackID string, osType string, targetFormat string) *models.Stream {
+// Returns AudioSelectionResult with language validation and fallback information
+func SelectAudio(data *models.ExtractResponse, trackID string, osType string, targetFormat string) *models.AudioSelectionResult {
+	result := &models.AudioSelectionResult{
+		AvailableAudioLanguages: data.AvailableAudioLanguages,
+	}
+
 	// Get device profile
 	profile, ok := config.DeviceProfiles[osType]
 	if !ok {
@@ -210,11 +214,22 @@ func SelectAudio(data *models.ExtractResponse, trackID string, osType string, ta
 	}
 
 	if len(compatibleStreams) == 0 {
-		return nil
+		return result
 	}
 
-	// Filter by track ID if specified
+	// Validate requested trackID (language) against available languages
+	requestedLangAvailable := false
 	if trackID != "" {
+		for _, lang := range data.AvailableAudioLanguages {
+			if lang == trackID {
+				requestedLangAvailable = true
+				break
+			}
+		}
+	}
+
+	// Filter by track ID if specified and available
+	if trackID != "" && requestedLangAvailable {
 		var filtered []models.Stream
 		for _, stream := range compatibleStreams {
 			if stream.AudioTrackID == trackID {
@@ -224,8 +239,23 @@ func SelectAudio(data *models.ExtractResponse, trackID string, osType string, ta
 		if len(filtered) > 0 {
 			compatibleStreams = filtered
 		}
+	} else if trackID != "" && !requestedLangAvailable {
+		// Requested language not available - fall back to original
+		result.AudioLanguageChanged = true
+		result.AudioLanguageChangeReason = fmt.Sprintf("Requested language '%s' not available, using default language", trackID)
+
+		// Find original audio track
+		var originals []models.Stream
+		for _, stream := range compatibleStreams {
+			if stream.IsOriginal {
+				originals = append(originals, stream)
+			}
+		}
+		if len(originals) > 0 {
+			compatibleStreams = originals
+		}
 	} else {
-		// Prefer original audio track
+		// No trackID specified - prefer original audio track
 		var originals []models.Stream
 		for _, stream := range compatibleStreams {
 			if stream.IsOriginal {
@@ -256,10 +286,10 @@ func SelectAudio(data *models.ExtractResponse, trackID string, osType string, ta
 	})
 
 	if len(compatibleStreams) > 0 {
-		return &compatibleStreams[0]
+		result.Stream = &compatibleStreams[0]
 	}
 
-	return nil
+	return result
 }
 
 // GetStreamCodec returns the codec from Stream, preferring Codec field over mimeType extraction
