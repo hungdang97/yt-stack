@@ -69,11 +69,7 @@ func HandleDownload(c *fiber.Ctx) error {
 	}
 
 	// Calculate thread count based on customer tier
-	// Tier 1 (Premium): 4 threads, Others (Standard): 1 thread
-	threads := 1
-	if req.CTier == 1 {
-		threads = 4
-	}
+	threads := config.GetDownloadThreads(req.CTier)
 
 	// Select streams
 	var videoSelection *models.VideoSelectionResult
@@ -109,6 +105,7 @@ func HandleDownload(c *fiber.Ctx) error {
 		Status:        models.StatusPending,
 		CreatedAt:     time.Now().UnixMilli(),
 		VideoID:       videoID,
+		CTier:         req.CTier,
 		Title:         extractData.Title,
 		Duration:      extractData.Duration,
 		OutputType:    req.Output.Type,

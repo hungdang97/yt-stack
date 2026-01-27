@@ -129,7 +129,7 @@ func streamVideo(c *fiber.Ctx, meta *models.Meta) error {
 
 	args = append(args, "pipe:1")
 
-	return runFFmpegStream(c, args)
+	return runFFmpegStream(c, args, meta)
 }
 
 // streamAudio streams audio, with transcoding if needed
@@ -198,10 +198,10 @@ func streamAudio(c *fiber.Ctx, meta *models.Meta) error {
 		args = append(args, "-f", getFFmpegFormat(format), "pipe:1")
 	}
 
-	return runFFmpegStream(c, args)
+	return runFFmpegStream(c, args, meta)
 }
 
-func runFFmpegStream(c *fiber.Ctx, args []string) error {
+func runFFmpegStream(c *fiber.Ctx, args []string, meta *models.Meta) error {
 	cmd := exec.Command("ffmpeg", args...)
 	cmd.Stderr = os.Stderr
 
@@ -221,7 +221,7 @@ func runFFmpegStream(c *fiber.Ctx, args []string) error {
 		}()
 
 		buf := make([]byte, 64*1024)
-		rateLimit := config.StreamRateLimit
+		rateLimit := config.GetStreamRateLimit(meta.CTier)
 
 		var startTime time.Time
 		var totalBytes int64

@@ -43,12 +43,31 @@ const (
 
 	// Limits
 	MaxTrimDuration = 24 * time.Hour
-
-	// Stream rate limit (bytes per second)
-	// 0 = unlimited, otherwise limits FFmpeg output read speed
-	// This creates backpressure to prevent FFmpeg from processing faster than needed
-	StreamRateLimit = 1 * 1024 * 1024 // 1MB/s
 )
+
+// TierConfig holds configuration for each customer tier
+type TierConfig struct {
+	Name            string // Tier name for logging/debugging
+	DownloadThreads int    // Number of parallel download threads
+	StreamRateLimit int64  // Stream rate limit in bytes per second
+	// Future: Add more tier-specific configs here (e.g., MaxConcurrentJobs, Priority, etc.)
+}
+
+// TierConfigs maps customer tier to its configuration
+// Easy to maintain and extend for new tiers
+var TierConfigs = map[int]TierConfig{
+	1: {
+		Name:            "Tier1",
+		DownloadThreads: 4,
+		StreamRateLimit: 2 * 1024 * 1024, // 2MB/s
+	},
+	// Default tier for all others (2, 3, 4, 5, etc.)
+	0: {
+		Name:            "Standard",
+		DownloadThreads: 1,
+		StreamRateLimit: 1 * 1024 * 1024, // 1MB/s
+	},
+}
 
 // Base URL for download links (required env)
 var BaseURL = mustGetEnv("BASE_URL")
@@ -59,6 +78,26 @@ func mustGetEnv(key string) string {
 		panic("Required environment variable " + key + " is not set")
 	}
 	return value
+}
+
+// GetTierConfig returns the configuration for a given customer tier
+// Falls back to tier 0 (Standard) if tier is not found
+func GetTierConfig(ctier int) TierConfig {
+	if config, exists := TierConfigs[ctier]; exists {
+		return config
+	}
+	// Default to tier 0 (Standard) for unknown tiers
+	return TierConfigs[0]
+}
+
+// GetStreamRateLimit returns the stream rate limit based on customer tier
+func GetStreamRateLimit(ctier int) int64 {
+	return GetTierConfig(ctier).StreamRateLimit
+}
+
+// GetDownloadThreads returns the number of download threads based on customer tier
+func GetDownloadThreads(ctier int) int {
+	return GetTierConfig(ctier).DownloadThreads
 }
 
 // Supported formats
