@@ -15,10 +15,32 @@ import (
 )
 
 // Extract fetches video metadata from YouTube Extract API
+// Tries twice: 1st attempt without proxy (direct IP), 2nd attempt with proxy (Cloudflare)
 func Extract(videoID string) (*models.ExtractResponse, error) {
-	// URL encode proxy to handle special characters (: @ /)
-	proxyEncoded := url.QueryEscape(config.WARPProxyURL)
-	apiURL := fmt.Sprintf("%s/%s?proxy=%s", config.ExtractAPIBase, videoID, proxyEncoded)
+	// First attempt: Direct IP (no proxy)
+	result, err := extractWithProxy(videoID, "")
+	if err == nil {
+		return result, nil
+	}
+
+	// Second attempt: With Cloudflare proxy
+	result, err = extractWithProxy(videoID, config.WARPProxyURL)
+	if err != nil {
+		return nil, fmt.Errorf("extract failed after 2 attempts: %w", err)
+	}
+
+	return result, nil
+}
+
+// extractWithProxy performs the actual extraction with optional proxy
+func extractWithProxy(videoID string, proxy string) (*models.ExtractResponse, error) {
+	// Build API URL
+	apiURL := fmt.Sprintf("%s/%s", config.ExtractAPIBase, videoID)
+	if proxy != "" {
+		// URL encode proxy to handle special characters (: @ /)
+		proxyEncoded := url.QueryEscape(proxy)
+		apiURL = fmt.Sprintf("%s?proxy=%s", apiURL, proxyEncoded)
+	}
 
 	req, err := http.NewRequest("GET", apiURL, nil)
 	if err != nil {
@@ -51,8 +73,8 @@ func Extract(videoID string) (*models.ExtractResponse, error) {
 	return &result, nil
 }
 
-// SelectVideo selects the best video stream based on quality and device
-func SelectVideo(data *models.ExtractResponse, requestedQuality string, osType string) *models.VideoSelectionResult {
+// SelectVideo selects the best video stream based on quality, device, and target format
+func SelectVideo(data *models.ExtractResponse, requestedQuality string, osType string, targetFormat string) *models.VideoSelectionResult {
 	result := &models.VideoSelectionResult{}
 
 	// Get device profile
@@ -74,11 +96,24 @@ func SelectVideo(data *models.ExtractResponse, requestedQuality string, osType s
 		return result
 	}
 
-	// Sort by height (descending) then by bitrate (descending)
+	// Sort by height (descending), then format compatibility, then bitrate (descending)
 	sort.Slice(compatibleStreams, func(i, j int) bool {
+		// 1. Height priority (higher is better)
 		if compatibleStreams[i].Height != compatibleStreams[j].Height {
 			return compatibleStreams[i].Height > compatibleStreams[j].Height
 		}
+
+		// 2. Format compatibility priority (compatible codecs preferred)
+		codecI := getStreamCodec(&compatibleStreams[i])
+		codecJ := getStreamCodec(&compatibleStreams[j])
+		compatI := isVideoCodecCompatible(codecI, targetFormat)
+		compatJ := isVideoCodecCompatible(codecJ, targetFormat)
+
+		if compatI != compatJ {
+			return compatI // true comes first
+		}
+
+		// 3. Bitrate priority (higher is better)
 		return compatibleStreams[i].Bitrate > compatibleStreams[j].Bitrate
 	})
 
@@ -147,6 +182,10 @@ func SelectVideo(data *models.ExtractResponse, requestedQuality string, osType s
 		if result.SelectedQuality == "" {
 			result.SelectedQuality = fmt.Sprintf("%dp", selectedStream.Height)
 		}
+
+		// Set NeedsReencode flag based on codec compatibility
+		videoCodec := getStreamCodec(selectedStream)
+		result.NeedsReencode = !isVideoCodecCompatible(videoCodec, targetFormat)
 	}
 
 	return result
@@ -274,6 +313,23 @@ func codecPriority(codec string, priorityList []string) int {
 		}
 	}
 	return len(priorityList)
+}
+
+// isVideoCodecCompatible checks if video codec is compatible with target format
+func isVideoCodecCompatible(videoCodec string, targetFormat string) bool {
+	switch targetFormat {
+	case "mp4":
+		// MP4 supports H.264/H.265 video
+		return slices.Contains([]string{"avc1", "hvc1", "hev1"}, videoCodec)
+	case "webm":
+		// WebM supports VP8/VP9/AV1 video
+		return slices.Contains([]string{"vp8", "vp9", "vp09", "av01"}, videoCodec)
+	case "mkv":
+		// MKV supports almost everything
+		return true
+	default:
+		return false
+	}
 }
 
 // GetExtension returns file extension for a stream

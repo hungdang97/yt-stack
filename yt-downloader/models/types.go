@@ -67,21 +67,22 @@ type StatusResponse struct {
 
 // Meta represents job metadata stored in meta.json
 type Meta struct {
-	ID         string      `json:"id"`
-	Status     string      `json:"status"` // pending, completed, error
-	CreatedAt  int64       `json:"createdAt"`
-	VideoID    string      `json:"videoId"`
-	Title      string      `json:"title"`
-	Duration   float64     `json:"duration"`
-	Files      FilesInfo   `json:"files"`
-	OutputType string      `json:"outputType"` // video or audio
-	Format     string      `json:"format"`
-	Quality    string      `json:"quality,omitempty"`
-	Bitrate    string      `json:"bitrate,omitempty"`
-	Trim       *TrimConfig `json:"trim,omitempty"`
-	Output     string      `json:"output,omitempty"`
-	StreamOnly bool        `json:"streamOnly,omitempty"` // true = skip merge, stream only
-	Error      string      `json:"error,omitempty"`
+	ID            string      `json:"id"`
+	Status        string      `json:"status"` // pending, completed, error
+	CreatedAt     int64       `json:"createdAt"`
+	VideoID       string      `json:"videoId"`
+	Title         string      `json:"title"`
+	Duration      float64     `json:"duration"`
+	Files         FilesInfo   `json:"files"`
+	OutputType    string      `json:"outputType"` // video or audio
+	Format        string      `json:"format"`
+	Quality       string      `json:"quality,omitempty"`
+	Bitrate       string      `json:"bitrate,omitempty"`
+	Trim          *TrimConfig `json:"trim,omitempty"`
+	Output        string      `json:"output,omitempty"`
+	StreamOnly    bool        `json:"streamOnly,omitempty"`    // true = skip merge, stream only
+	NeedsReencode bool        `json:"needsReencode,omitempty"` // true = video needs re-encoding for format compatibility
+	Error         string      `json:"error,omitempty"`
 }
 
 type FilesInfo struct {

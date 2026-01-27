@@ -80,7 +80,7 @@ func HandleDownload(c *fiber.Ctx) error {
 	var audioStream *models.Stream
 
 	if req.Output.Type == "video" {
-		videoSelection = services.SelectVideo(extractData, req.Output.Quality, osType)
+		videoSelection = services.SelectVideo(extractData, req.Output.Quality, osType, req.Output.Format)
 		if videoSelection.Stream == nil {
 			return utils.NotFound(c, utils.ErrVideoNotFound, "No compatible video stream found")
 		}
@@ -105,17 +105,18 @@ func HandleDownload(c *fiber.Ctx) error {
 
 	// Prepare metadata
 	meta := &models.Meta{
-		ID:         jobID,
-		Status:     models.StatusPending,
-		CreatedAt:  time.Now().UnixMilli(),
-		VideoID:    videoID,
-		Title:      extractData.Title,
-		Duration:   extractData.Duration,
-		OutputType: req.Output.Type,
-		Format:     req.Output.Format,
-		Bitrate:    bitrate,
-		Trim:       req.Trim,
-		Files:      models.FilesInfo{},
+		ID:            jobID,
+		Status:        models.StatusPending,
+		CreatedAt:     time.Now().UnixMilli(),
+		VideoID:       videoID,
+		Title:         extractData.Title,
+		Duration:      extractData.Duration,
+		OutputType:    req.Output.Type,
+		Format:        req.Output.Format,
+		Bitrate:       bitrate,
+		Trim:          req.Trim,
+		Files:         models.FilesInfo{},
+		NeedsReencode: videoSelection != nil && videoSelection.NeedsReencode,
 	}
 
 	// Set file info
@@ -218,7 +219,7 @@ func processJob(jobID string, meta *models.Meta, videoSelection *models.VideoSel
 	var err error
 
 	if meta.OutputType == "video" {
-		outputFile, err = services.FFmpegMerge(jobDir, format, meta.Files.Video.Name, meta.Files.Audio.Name)
+		outputFile, err = services.FFmpegMerge(jobDir, format, meta.Files.Video.Name, meta.Files.Audio.Name, meta.NeedsReencode)
 		if err != nil {
 			utils.UpdateMetaError(jobID, "Processing failed: "+err.Error())
 			return
@@ -252,31 +253,36 @@ func processJob(jobID string, meta *models.Meta, videoSelection *models.VideoSel
 }
 
 // shouldMerge determines if the job should be pre-merged or stream-only
-// Strategy: minimize CPU usage
-// - Heavy tasks (transcode): threshold 15 minutes
-// - Light tasks (remux/copy): threshold 4 hours
+// Strategy:
+// - Audio: merge if ≤ 5 minutes, stream if > 5 minutes
+// - Video: merge if ≤ 1 hour, stream if > 1 hour
 func shouldMerge(meta *models.Meta) bool {
 	const (
-		maxDurationTranscode = 15 * 60.0  // 15 minutes - heavy CPU (transcode)
-		maxDurationRemux     = 4 * 3600.0 // 4 hours - light CPU (remux/copy)
+		maxDurationAudio = 5 * 60.0   // 5 minutes for audio
+		maxDurationVideo = 1 * 3600.0 // 1 hour for video
 	)
 
-	// Check if this job needs transcoding (heavy CPU)
-	transcode := needsTranscode(meta)
-
-	if transcode {
-		return meta.Duration <= maxDurationTranscode
+	if meta.OutputType == "audio" {
+		return meta.Duration <= maxDurationAudio
 	}
-	return meta.Duration <= maxDurationRemux
+
+	// Video
+	return meta.Duration <= maxDurationVideo
 }
 
 // needsTranscode checks if the job requires transcoding (heavy CPU)
 // Returns true for:
+// - Video codec re-encoding for format compatibility (e.g., VP9→H.264 for MP4)
 // - Audio format conversion (e.g., webm→mp3)
 // - Video with accurate trim (requires re-encoding)
 func needsTranscode(meta *models.Meta) bool {
 	// Video with accurate trim needs re-encoding
 	if meta.OutputType == "video" && meta.Trim != nil && meta.Trim.Accurate {
+		return true
+	}
+
+	// Video needs re-encoding for format compatibility
+	if meta.OutputType == "video" && meta.NeedsReencode {
 		return true
 	}
 
