@@ -68,6 +68,13 @@ func HandleDownload(c *fiber.Ctx) error {
 		bitrate = "192k"
 	}
 
+	// Calculate thread count based on customer tier
+	// Tier 1 (Premium): 4 threads, Others (Standard): 1 thread
+	threads := 1
+	if req.CTier == 1 {
+		threads = 4
+	}
+
 	// Select streams
 	var videoSelection *models.VideoSelectionResult
 	var audioStream *models.Stream
@@ -139,7 +146,7 @@ func HandleDownload(c *fiber.Ctx) error {
 	}
 
 	// Start background processing
-	go processJob(jobID, meta, videoSelection, audioStream, req.Output.Format, bitrate)
+	go processJob(jobID, meta, videoSelection, audioStream, req.Output.Format, bitrate, threads)
 
 	// Build response
 	response := models.DownloadResponse{
@@ -160,7 +167,7 @@ func HandleDownload(c *fiber.Ctx) error {
 }
 
 // processJob handles the background download and processing
-func processJob(jobID string, meta *models.Meta, videoSelection *models.VideoSelectionResult, audioStream *models.Stream, format string, bitrate string) {
+func processJob(jobID string, meta *models.Meta, videoSelection *models.VideoSelectionResult, audioStream *models.Stream, format string, bitrate string, threads int) {
 	// Timeout: 30 minutes max per job to prevent zombie goroutines
 	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Minute)
 	defer cancel()
@@ -179,12 +186,12 @@ func processJob(jobID string, meta *models.Meta, videoSelection *models.VideoSel
 
 		go func() {
 			videoPath := jobDir + "/" + meta.Files.Video.Name
-			errChan <- services.Download(ctx, videoSelection.Stream.URL, videoPath, videoSelection.Stream.ContentLength)
+			errChan <- services.Download(ctx, videoSelection.Stream.URL, videoPath, videoSelection.Stream.ContentLength, threads)
 		}()
 
 		go func() {
 			audioPath := jobDir + "/" + meta.Files.Audio.Name
-			errChan <- services.Download(ctx, audioStream.URL, audioPath, audioStream.ContentLength)
+			errChan <- services.Download(ctx, audioStream.URL, audioPath, audioStream.ContentLength, threads)
 		}()
 
 		for i := 0; i < 2; i++ {
@@ -195,7 +202,7 @@ func processJob(jobID string, meta *models.Meta, videoSelection *models.VideoSel
 		}
 	} else {
 		audioPath := jobDir + "/" + meta.Files.Audio.Name
-		if err := services.Download(ctx, audioStream.URL, audioPath, audioStream.ContentLength); err != nil {
+		if err := services.Download(ctx, audioStream.URL, audioPath, audioStream.ContentLength, threads); err != nil {
 			utils.UpdateMetaError(jobID, "Download failed: "+err.Error())
 			return
 		}

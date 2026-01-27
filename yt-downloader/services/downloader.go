@@ -24,11 +24,15 @@ func (e *HTTPError) Error() string {
 }
 
 // Download downloads a file using streaming (low memory)
-func Download(ctx context.Context, downloadURL string, destPath string, totalSize int64) error {
+// threads: number of parallel download threads (0 = use config.Threads default)
+func Download(ctx context.Context, downloadURL string, destPath string, totalSize int64, threads int) error {
+	if threads <= 0 {
+		threads = config.Threads
+	}
 	if totalSize <= config.ChunkSize {
 		return downloadSingle(ctx, downloadURL, destPath, totalSize)
 	}
-	return downloadChunked(ctx, downloadURL, destPath, totalSize)
+	return downloadChunked(ctx, downloadURL, destPath, totalSize, threads)
 }
 
 // downloadSingle streams small files directly to disk
@@ -50,7 +54,7 @@ func downloadSingle(ctx context.Context, downloadURL string, destPath string, to
 }
 
 // downloadChunked downloads large files using parallel workers with chunk files
-func downloadChunked(ctx context.Context, downloadURL string, destPath string, totalSize int64) error {
+func downloadChunked(ctx context.Context, downloadURL string, destPath string, totalSize int64, threads int) error {
 	// Create chunks directory
 	chunksDir := destPath + ".chunks"
 	if err := os.MkdirAll(chunksDir, 0755); err != nil {
@@ -61,12 +65,12 @@ func downloadChunked(ctx context.Context, downloadURL string, destPath string, t
 	numChunks := int((totalSize + config.ChunkSize - 1) / config.ChunkSize)
 
 	// Error channel for workers
-	errChan := make(chan error, config.Threads)
+	errChan := make(chan error, threads)
 	chunkIndex := int32(-1)
 
 	// Start workers
 	var wg sync.WaitGroup
-	for w := 0; w < config.Threads; w++ {
+	for w := 0; w < threads; w++ {
 		wg.Add(1)
 		go func() {
 			defer wg.Done()

@@ -27,6 +27,10 @@ definitions:
     properties:
       audio:
         $ref: '#/definitions/models.AudioConfig'
+      ctier:
+        description: 'Customer tier: 1=Premium (4 threads), others=Standard (1 thread)'
+        example: 1
+        type: integer
       os:
         enum:
         - ios

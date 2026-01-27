@@ -5,6 +5,7 @@ package models
 type DownloadRequest struct {
 	URL    string       `json:"url" example:"https://youtube.com/watch?v=dQw4w9WgXcQ"`
 	OS     string       `json:"os,omitempty" example:"windows" enums:"ios,android,macos,windows,linux"`
+	CTier  int          `json:"ctier,omitempty" example:"1"` // Customer tier: 1=Premium (4 threads), others=Standard (1 thread)
 	Output OutputConfig `json:"output"`
 	Audio  AudioConfig  `json:"audio,omitempty"`
 	Trim   *TrimConfig  `json:"trim,omitempty"`
