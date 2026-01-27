@@ -191,8 +191,9 @@ func SelectVideo(data *models.ExtractResponse, requestedQuality string, osType s
 	return result
 }
 
-// SelectAudio selects the best audio stream based on device and track
-func SelectAudio(data *models.ExtractResponse, trackID string, osType string) *models.Stream {
+// SelectAudio selects the best audio stream based on device, track, and target format
+// Prioritizes format-compatible codecs to avoid transcoding
+func SelectAudio(data *models.ExtractResponse, trackID string, osType string, targetFormat string) *models.Stream {
 	// Get device profile
 	profile, ok := config.DeviceProfiles[osType]
 	if !ok {
@@ -236,16 +237,21 @@ func SelectAudio(data *models.ExtractResponse, trackID string, osType string) *m
 		}
 	}
 
-	// Sort by codec priority, then bitrate (higher is better)
+	// Sort by format compatibility first, then bitrate (higher is better)
+	// This prioritizes codecs that don't need transcoding for the target format
 	sort.Slice(compatibleStreams, func(i, j int) bool {
 		codecI := GetStreamCodec(&compatibleStreams[i])
 		codecJ := GetStreamCodec(&compatibleStreams[j])
-		priorityI := codecPriority(codecI, profile.AudioCodecs)
-		priorityJ := codecPriority(codecJ, profile.AudioCodecs)
 
-		if priorityI != priorityJ {
-			return priorityI < priorityJ
+		// 1. Format compatibility priority (compatible codecs preferred)
+		compatI := IsAudioCodecCompatible(codecI, targetFormat)
+		compatJ := IsAudioCodecCompatible(codecJ, targetFormat)
+
+		if compatI != compatJ {
+			return compatI // true comes first
 		}
+
+		// 2. Bitrate priority (higher is better)
 		return compatibleStreams[i].Bitrate > compatibleStreams[j].Bitrate
 	})
 

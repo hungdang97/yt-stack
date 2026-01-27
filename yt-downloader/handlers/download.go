@@ -80,12 +80,12 @@ func HandleDownload(c *fiber.Ctx) error {
 		if videoSelection.Stream == nil {
 			return utils.NotFound(c, utils.ErrVideoNotFound, "No compatible video stream found")
 		}
-		audioStream = services.SelectAudio(extractData, req.Audio.TrackID, osType)
+		audioStream = services.SelectAudio(extractData, req.Audio.TrackID, osType, req.Output.Format)
 		if audioStream == nil {
 			return utils.NotFound(c, utils.ErrAudioNotFound, "No compatible audio stream found")
 		}
 	} else {
-		audioStream = services.SelectAudio(extractData, req.Audio.TrackID, osType)
+		audioStream = services.SelectAudio(extractData, req.Audio.TrackID, osType, req.Output.Format)
 		if audioStream == nil {
 			return utils.NotFound(c, utils.ErrAudioNotFound, "No compatible audio stream found")
 		}
@@ -257,7 +257,7 @@ func processJob(jobID string, meta *models.Meta, videoSelection *models.VideoSel
 func shouldMerge(meta *models.Meta) bool {
 	const (
 		maxDurationAudio = 5 * 60.0   // 5 minutes for audio
-		maxDurationVideo = 4 * 3600.0 // 1 hour for video
+		maxDurationVideo = 1 * 3600.0 // 1 hour for video
 	)
 
 	// Check if needs transcoding (heavy CPU)
