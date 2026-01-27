@@ -113,7 +113,7 @@ func HandleDownload(c *fiber.Ctx) error {
 		Bitrate:       bitrate,
 		Trim:          req.Trim,
 		Files:         models.FilesInfo{},
-		NeedsReencode: videoSelection != nil && videoSelection.NeedsReencode,
+		NeedsReencode: calculateNeedsReencode(videoSelection, audioStream, req.Output.Format),
 	}
 
 	// Set file info
@@ -332,4 +332,27 @@ func needsAudioTranscode(meta *models.Meta) bool {
 	}
 
 	return true
+}
+
+// calculateNeedsReencode determines if re-encoding is needed based on video and audio codec compatibility
+func calculateNeedsReencode(videoSelection *models.VideoSelectionResult, audioStream *models.Stream, targetFormat string) bool {
+	// For audio-only downloads, no video codec check needed
+	if videoSelection == nil {
+		return false
+	}
+
+	// Check video codec compatibility
+	if videoSelection.NeedsReencode {
+		return true
+	}
+
+	// Check audio codec compatibility
+	if audioStream != nil {
+		audioCodec := services.GetStreamCodec(audioStream)
+		if !services.IsAudioCodecCompatible(audioCodec, targetFormat) {
+			return true
+		}
+	}
+
+	return false
 }
