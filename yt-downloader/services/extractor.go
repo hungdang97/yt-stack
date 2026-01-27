@@ -220,29 +220,41 @@ func SelectAudio(data *models.ExtractResponse, trackID string, osType string, ta
 	// Validate requested trackID (language) against available languages
 	requestedLangAvailable := false
 	if trackID != "" {
+		fmt.Printf("[SelectAudio] Requested trackID: %s\n", trackID)
+		fmt.Printf("[SelectAudio] Available languages: %v\n", data.AvailableAudioLanguages)
 		for _, lang := range data.AvailableAudioLanguages {
 			if lang == trackID {
 				requestedLangAvailable = true
 				break
 			}
 		}
+		fmt.Printf("[SelectAudio] Language available: %v\n", requestedLangAvailable)
 	}
 
 	// Filter by track ID if specified and available
 	if trackID != "" && requestedLangAvailable {
 		var filtered []models.Stream
-		for _, stream := range compatibleStreams {
+		fmt.Printf("[SelectAudio] Filtering %d compatible streams by trackID=%s\n", len(compatibleStreams), trackID)
+		for i, stream := range compatibleStreams {
+			fmt.Printf("[SelectAudio] Stream %d: AudioTrackID=%s, IsOriginal=%v, Codec=%s\n",
+				i, stream.AudioTrackID, stream.IsOriginal, GetStreamCodec(&stream))
 			if stream.AudioTrackID == trackID {
 				filtered = append(filtered, stream)
+				fmt.Printf("[SelectAudio] ✓ Matched stream %d\n", i)
 			}
 		}
+		fmt.Printf("[SelectAudio] Filtered count: %d\n", len(filtered))
 		if len(filtered) > 0 {
 			compatibleStreams = filtered
+		} else {
+			// No streams matched - this shouldn't happen if language is available
+			fmt.Printf("[SelectAudio] WARNING: No streams matched trackID=%s even though language is available!\n", trackID)
 		}
 	} else if trackID != "" && !requestedLangAvailable {
 		// Requested language not available - fall back to original
 		result.AudioLanguageChanged = true
 		result.AudioLanguageChangeReason = fmt.Sprintf("Requested language '%s' not available, using default language", trackID)
+		fmt.Printf("[SelectAudio] Language not available, falling back to original\n")
 
 		// Find original audio track
 		var originals []models.Stream
