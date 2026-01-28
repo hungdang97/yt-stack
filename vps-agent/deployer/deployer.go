@@ -46,22 +46,6 @@ func (d *Deployer) Deploy() error {
 	return nil
 }
 
-func (d *Deployer) Restart() error {
-	log.Println("[Deployer] Restarting service...")
-
-	cmd := exec.Command("docker-compose", "restart")
-	cmd.Dir = d.projectDir
-	output, err := cmd.CombinedOutput()
-
-	if err != nil {
-		log.Printf("[Deployer] Restart failed: %s", output)
-		return err
-	}
-
-	log.Println("[Deployer] Restart successful")
-	return nil
-}
-
 func (d *Deployer) Stop() error {
 	cmd := exec.Command("docker-compose", "down")
 	cmd.Dir = d.projectDir
