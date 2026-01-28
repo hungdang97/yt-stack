@@ -3,6 +3,13 @@ set -e
 
 echo "=== YT-Stack VPS Auto-Setup ==="
 
+# Check root permission
+if [ "$(id -u)" != "0" ]; then
+   echo "❌ Error: This script must be run as root."
+   echo "👉 Please run: curl -sSL ... | sudo HUB_URL=... bash"
+   exit 1
+fi
+
 # Required ENV
 HUB_URL="${HUB_URL:?HUB_URL is required}"
 

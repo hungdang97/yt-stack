@@ -26,19 +26,45 @@ func NewConfigFetcher(hubURL string) *ConfigFetcher {
 
 // detectServerIP detects public IP
 func detectServerIP() string {
-	// Try public IP
-	resp, err := http.Get("https://ifconfig.me")
-	if err == nil {
-		defer resp.Body.Close()
-		var ip string
-		fmt.Fscanf(resp.Body, "%s", &ip)
-		return ip
+	// Provider list to try
+	providers := []string{
+		"https://api.ipify.org",
+		"https://checkip.amazonaws.com",
+		"https://ifconfig.me/ip", // /ip path for plain text
 	}
 
-	// Fallback to local IP
+	client := &http.Client{Timeout: 5 * time.Second}
+
+	for _, url := range providers {
+		req, _ := http.NewRequest("GET", url, nil)
+		req.Header.Set("User-Agent", "curl/7.68.0") // Pretend to be curl
+
+		resp, err := client.Do(req)
+		if err == nil {
+			defer resp.Body.Close()
+			if resp.StatusCode == 200 {
+				var ip string
+				fmt.Fscanf(resp.Body, "%s", &ip)
+				ip = strings.TrimSpace(ip)
+				// Basic validation: should not start with < (HTML)
+				if ip != "" && !strings.HasPrefix(ip, "<") {
+					return ip
+				}
+			}
+		}
+	}
+
+	// Fallback to local IP via hostname command
 	cmd := exec.Command("hostname", "-I")
 	output, _ := cmd.Output()
-	return strings.TrimSpace(strings.Split(string(output), " ")[0])
+	// Get first IP
+	ips := strings.Fields(string(output))
+	if len(ips) > 0 {
+		return ips[0]
+	}
+
+	// Last resort: simple hostname
+	return "127.0.0.1"
 }
 
 // RegisterWithHub registers VPS with auto-generated config
