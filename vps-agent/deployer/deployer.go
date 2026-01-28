@@ -64,6 +64,32 @@ func (d *Deployer) Deploy() error {
 	}
 
 	log.Println("[Deployer] Deploy successful")
+
+	// Auto Prune after deploy to keep system clean
+	if err := d.Prune(); err != nil {
+		log.Printf("[Deployer] Warning: Post-deploy prune failed: %v", err)
+		// Don't fail the deployment just because prune failed
+	}
+
+	return nil
+}
+
+func (d *Deployer) Prune() error {
+	log.Println("[Deployer] Pruning unused docker resources...")
+
+	// Equivalient to 'docker system prune -af'
+	// Prune images (even tagged ones if not used? No, -a on system prune removes unused images, not just dangling)
+	// User requested "clean very clean", so -af is appropriate.
+	cmd := exec.Command("docker", "system", "prune", "-af")
+	cmd.Dir = d.projectDir
+	output, err := cmd.CombinedOutput()
+
+	if err != nil {
+		log.Printf("[Deployer] Prune failed: %s", output)
+		return err
+	}
+
+	log.Printf("[Deployer] Prune successful: %s", output)
 	return nil
 }
 
