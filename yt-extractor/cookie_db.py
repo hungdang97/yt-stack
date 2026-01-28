@@ -14,34 +14,35 @@ _MONGO_URI = os.environ.get(
 _col = MongoClient(_MONGO_URI)['cookie']['cookies']
 
 
-def _update_last_used(doc_id):
-    """Background update - không block main thread."""
-    _col.update_one({'_id': doc_id}, {'$set': {'last_used': datetime.now()}})
-
-
 def get():
-    """Get active cookie with least recent usage (round-robin)."""
-    doc = _col.find_one({'status': 'active'}, sort=[('last_used', 1)])
-    if doc:
-        Thread(target=_update_last_used, args=(doc['_id'],), daemon=True).start()
+    """Get a random active cookie."""
+    pipeline = [
+        {'$match': {'status': 'active'}},
+        {'$sample': {'size': 1}}
+    ]
+    docs = list(_col.aggregate(pipeline))
+    if docs:
+        doc = docs[0]
+        # No last_used update needed for random strategy
         return doc['profile_name'], doc['cookie_string']
     return None, None
 
 
 def get_batch(limit=10):
-    """Get multiple active cookies for pool pre-fetching."""
-    docs = list(_col.find({'status': 'active'}, sort=[('last_used', 1)]).limit(limit))
+    """Get multiple random active cookies."""
+    pipeline = [
+        {'$match': {'status': 'active'}},
+        {'$sample': {'size': limit}}
+    ]
+    docs = list(_col.aggregate(pipeline))
     if docs:
-        # Update last_used for all fetched docs in background
-        doc_ids = [doc['_id'] for doc in docs]
-        Thread(target=_update_batch_last_used, args=(doc_ids,), daemon=True).start()
         return [(doc['profile_name'], doc['cookie_string']) for doc in docs]
     return []
 
 
 def _update_batch_last_used(doc_ids):
-    """Background batch update."""
-    _col.update_many({'_id': {'$in': doc_ids}}, {'$set': {'last_used': datetime.now()}})
+    """Deprecated: No longer used with random strategy."""
+    pass
 
 
 def invalidate(profile):
