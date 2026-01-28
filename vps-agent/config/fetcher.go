@@ -67,10 +67,16 @@ func detectServerIP() string {
 	return "127.0.0.1"
 }
 
-// RegisterWithHub registers VPS with auto-generated config
-func (f *ConfigFetcher) RegisterWithHub() (map[string]interface{}, error) {
-	// Generate config
-	config := GenerateConfig(f.serverIP)
+// RegisterWithHub registers VPS with Hub (using existing config or generating new)
+func (f *ConfigFetcher) RegisterWithHub(existingConfig map[string]interface{}) (map[string]interface{}, error) {
+	var config map[string]interface{}
+
+	if existingConfig != nil {
+		config = existingConfig
+	} else {
+		// Generate new config
+		config = GenerateConfig(f.serverIP)
+	}
 
 	// Register with Hub
 	url := fmt.Sprintf("%s/api/server-config/register", f.hubURL)
