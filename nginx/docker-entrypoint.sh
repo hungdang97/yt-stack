@@ -5,7 +5,7 @@ set -e
 MAIN_CERT_EXISTS=false
 EXTRACTOR_CERT_EXISTS=false
 
-if [ -f "/etc/letsencrypt/live/${DOMAIN}/fullchain.pem" ]; then
+if [ -f "/etc/letsencrypt/live/${DOWNLOAD_DOMAIN}/fullchain.pem" ]; then
     MAIN_CERT_EXISTS=true
 fi
 
@@ -19,7 +19,7 @@ if [ "$MAIN_CERT_EXISTS" = false ] || [ "$EXTRACTOR_CERT_EXISTS" = false ]; then
 
     # Use HTTP-only config for initial cert request
     echo "Starting nginx with HTTP-only config for ACME challenge..."
-    envsubst '${DOMAIN} ${EXTRACTOR_DOMAIN}' < /etc/nginx/nginx-http-only.conf > /etc/nginx/nginx.conf
+    envsubst '${DOWNLOAD_DOMAIN} ${EXTRACTOR_DOMAIN}' < /etc/nginx/nginx-http-only.conf > /etc/nginx/nginx.conf
 
     # Start nginx in background
     nginx
@@ -29,10 +29,10 @@ if [ "$MAIN_CERT_EXISTS" = false ] || [ "$EXTRACTOR_CERT_EXISTS" = false ]; then
 
     # Obtain certificate for main domain if missing
     if [ "$MAIN_CERT_EXISTS" = false ]; then
-        echo "Requesting SSL certificate for ${DOMAIN}..."
+        echo "Requesting SSL certificate for ${DOWNLOAD_DOMAIN}..."
         certbot certonly --webroot \
             -w /var/www/certbot \
-            -d ${DOMAIN} \
+            -d ${DOWNLOAD_DOMAIN} \
             --email ${EMAIL} \
             --agree-tos \
             --non-interactive \
@@ -59,7 +59,7 @@ fi
 
 # Use full config with SSL
 echo "Loading full nginx config with SSL..."
-envsubst '${DOMAIN} ${EXTRACTOR_DOMAIN}' < /etc/nginx/nginx.conf.template > /etc/nginx/nginx.conf
+envsubst '${DOWNLOAD_DOMAIN} ${EXTRACTOR_DOMAIN}' < /etc/nginx/nginx.conf.template > /etc/nginx/nginx.conf
 
 # Test nginx config
 nginx -t

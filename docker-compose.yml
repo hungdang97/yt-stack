@@ -119,8 +119,8 @@ services:
       - "80:80"
       - "443:443"
     environment:
-      - DOMAIN=${DOMAIN}
-      - EXTRACTOR_DOMAIN=${EXTRACTOR_DOMAIN}
+      - DOWNLOAD_DOMAIN=${DOWNLOAD_SUBDOMAIN}.${BASE_DOMAIN}
+      - EXTRACTOR_DOMAIN=${EXTRACTOR_SUBDOMAIN}.${BASE_DOMAIN}
       - EMAIL=${EMAIL}
     volumes:
       - letsencrypt:/etc/letsencrypt

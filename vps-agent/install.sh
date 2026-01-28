@@ -43,6 +43,11 @@ fi
 
 # 3. Clean install - Reset existing service
 echo "[3/5] Cleaning up old service..."
+if [ -d "$PROJECT_DIR" ]; then
+    echo "  Stopping existing Docker containers..."
+    cd $PROJECT_DIR && docker-compose down --remove-orphans || true
+fi
+
 if systemctl list-units --full -all | grep -Fq 'vps-agent.service'; then
     echo "  Stopping and removing existing vps-agent service..."
     systemctl stop vps-agent || true
