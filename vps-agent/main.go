@@ -3,6 +3,7 @@ package main
 import (
 	"fmt"
 	"log"
+	"net"
 	"os"
 	"time"
 
@@ -11,6 +12,20 @@ import (
 	"vps-agent/deployer"
 	"vps-agent/heartbeat"
 )
+
+// waitForDNS waits until the domain resolves (A record exists)
+func waitForDNS(domain string) {
+	log.Printf("Checking DNS for %s...", domain)
+	for {
+		ips, err := net.LookupHost(domain)
+		if err == nil && len(ips) > 0 {
+			log.Printf("  ✓ Found records: %v", ips)
+			return
+		}
+		log.Printf("  ... waiting for DNS propagation for %s (Retrying in 10s)", domain)
+		time.Sleep(10 * time.Second)
+	}
+}
 
 func main() {
 	hubURL := os.Getenv("HUB_URL")
@@ -61,6 +76,18 @@ func main() {
 		log.Fatalf("Failed to generate .env: %v", err)
 	}
 	log.Printf("✓ .env file generated: %s", envPath)
+
+	// 3.5 Verify DNS Propagation
+	baseDomain := "ytconvert.org"
+	subdomain := fmt.Sprintf("%v", cfg["subdomain"])
+
+	downloadDomain := fmt.Sprintf("%s.%s", subdomain, baseDomain)
+	extractDomain := fmt.Sprintf("ext-%s.%s", subdomain, baseDomain)
+
+	log.Println("Verifying DNS records...")
+	waitForDNS(downloadDomain)
+	waitForDNS(extractDomain)
+	log.Println("✓ DNS records verified")
 
 	// 4. Build & Deploy service
 	dep := deployer.NewDeployer(projectDir)
