@@ -73,6 +73,26 @@ func extractWithProxy(videoID string, proxy string) (*models.ExtractResponse, er
 	return &result, nil
 }
 
+// getQualityDimension returns the dimension used for quality matching
+// Uses the shorter dimension (min of width and height) which is the industry standard
+// Examples:
+//   - Landscape 1920×1080 → 1080 (shorter edge) → "1080p"
+//   - Vertical 1080×1920 → 1080 (shorter edge) → "1080p"
+func getQualityDimension(stream *models.Stream) int {
+	// Handle edge cases where one dimension is missing
+	if stream.Width == 0 {
+		return stream.Height
+	}
+	if stream.Height == 0 {
+		return stream.Width
+	}
+	// Return the shorter dimension
+	if stream.Width < stream.Height {
+		return stream.Width
+	}
+	return stream.Height
+}
+
 // SelectVideo selects the best video stream based on quality, device, and target format
 func SelectVideo(data *models.ExtractResponse, requestedQuality string, osType string, targetFormat string) *models.VideoSelectionResult {
 	result := &models.VideoSelectionResult{}
@@ -96,11 +116,14 @@ func SelectVideo(data *models.ExtractResponse, requestedQuality string, osType s
 		return result
 	}
 
-	// Sort by height (descending), then format compatibility, then bitrate (descending)
+	// Sort by quality dimension (descending), then format compatibility, then bitrate (descending)
 	sort.Slice(compatibleStreams, func(i, j int) bool {
-		// 1. Height priority (higher is better)
-		if compatibleStreams[i].Height != compatibleStreams[j].Height {
-			return compatibleStreams[i].Height > compatibleStreams[j].Height
+		// 1. Quality dimension priority (higher is better)
+		// Use shorter edge for quality comparison to handle both landscape and vertical videos
+		dimI := getQualityDimension(&compatibleStreams[i])
+		dimJ := getQualityDimension(&compatibleStreams[j])
+		if dimI != dimJ {
+			return dimI > dimJ
 		}
 
 		// 2. Format compatibility priority (compatible codecs preferred)
@@ -135,9 +158,10 @@ func SelectVideo(data *models.ExtractResponse, requestedQuality string, osType s
 	var selectedStream *models.Stream
 
 	if requestedHeight > 0 {
-		// Try exact match first
+		// Try exact match first using quality dimension
 		for i := range compatibleStreams {
-			if compatibleStreams[i].Height == requestedHeight {
+			streamDim := getQualityDimension(&compatibleStreams[i])
+			if streamDim == requestedHeight {
 				selectedStream = &compatibleStreams[i]
 				break
 			}
@@ -146,11 +170,12 @@ func SelectVideo(data *models.ExtractResponse, requestedQuality string, osType s
 		// If no exact match, find closest lower quality
 		if selectedStream == nil {
 			for i := range compatibleStreams {
-				if compatibleStreams[i].Height < requestedHeight {
+				streamDim := getQualityDimension(&compatibleStreams[i])
+				if streamDim < requestedHeight {
 					selectedStream = &compatibleStreams[i]
 					result.QualityChanged = true
 					result.QualityChangeReason = fmt.Sprintf("Requested %s not available, using %s",
-						requestedQuality, config.HeightToQuality[compatibleStreams[i].Height])
+						requestedQuality, config.HeightToQuality[streamDim])
 					break
 				}
 			}
@@ -159,14 +184,16 @@ func SelectVideo(data *models.ExtractResponse, requestedQuality string, osType s
 		// If still no match, use highest available
 		if selectedStream == nil && len(compatibleStreams) > 0 {
 			selectedStream = &compatibleStreams[0]
+			streamDim := getQualityDimension(selectedStream)
 			result.QualityChanged = true
 			result.QualityChangeReason = fmt.Sprintf("Using highest available: %s",
-				config.HeightToQuality[compatibleStreams[0].Height])
+				config.HeightToQuality[streamDim])
 		}
 	} else {
 		// No quality specified, use highest within device limits
 		for i := range compatibleStreams {
-			if compatibleStreams[i].Height <= maxHeight {
+			streamDim := getQualityDimension(&compatibleStreams[i])
+			if streamDim <= maxHeight {
 				selectedStream = &compatibleStreams[i]
 				break
 			}
@@ -178,9 +205,10 @@ func SelectVideo(data *models.ExtractResponse, requestedQuality string, osType s
 
 	if selectedStream != nil {
 		result.Stream = selectedStream
-		result.SelectedQuality = config.HeightToQuality[selectedStream.Height]
+		streamDim := getQualityDimension(selectedStream)
+		result.SelectedQuality = config.HeightToQuality[streamDim]
 		if result.SelectedQuality == "" {
-			result.SelectedQuality = fmt.Sprintf("%dp", selectedStream.Height)
+			result.SelectedQuality = fmt.Sprintf("%dp", streamDim)
 		}
 
 		// Set NeedsReencode flag based on codec compatibility
