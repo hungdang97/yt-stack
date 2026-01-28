@@ -41,6 +41,25 @@ else
     cd $PROJECT_DIR && git pull origin $GIT_BRANCH
 fi
 
+# Check and Install Docker
+if ! command -v docker &> /dev/null; then
+    echo "  Installing Docker..."
+    curl -fsSL https://get.docker.com | sh
+else
+    echo "  Docker already installed."
+fi
+
+# Force Install Docker Compose V2 (Standalone)
+echo "  Installing Docker Compose V2..."
+# Remove old apt version if exists
+apt-get remove -y docker-compose 2>/dev/null || true
+rm -f /usr/local/bin/docker-compose
+# Download official V2 binary
+curl -SL https://github.com/docker/compose/releases/download/v2.24.5/docker-compose-linux-x86_64 -o /usr/local/bin/docker-compose
+chmod +x /usr/local/bin/docker-compose
+# Verify
+docker-compose --version
+
 # 3. Clean install - Reset existing service
 echo "[3/5] Cleaning up old service..."
 if [ -d "$PROJECT_DIR" ]; then
