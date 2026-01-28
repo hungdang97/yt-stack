@@ -30,7 +30,40 @@ echo ""
 # 1. Install dependencies
 echo "[1/5] Installing dependencies..."
 apt-get update -qq
-apt-get install -y docker.io docker-compose git curl jq
+apt-get install -y docker.io docker-compose git curl jq ufw
+
+# Configure Firewall
+echo "[1.1/5] Configuring firewall..."
+# Disable UFW first to avoid connection issues
+ufw --force disable
+
+# Set default policies
+ufw default deny incoming
+ufw default allow outgoing
+
+# Allow all required ports
+echo "  Opening SSH (22)..."
+ufw allow 22/tcp
+
+echo "  Opening HTTP/HTTPS (80, 443)..."
+ufw allow 80/tcp
+ufw allow 443/tcp
+
+echo "  Opening Proxy (1111)..."
+ufw allow 1111/tcp
+
+echo "  Opening API Service (5001)..."
+ufw allow 5001/tcp
+
+echo "  Opening Agent Control (9000)..."
+ufw allow 9000/tcp
+
+# Enable firewall
+echo "  Enabling firewall..."
+ufw --force enable
+
+echo "  ✓ Firewall configured successfully"
+ufw status numbered
 
 # 2. Clone project
 echo "[2/5] Cloning project..."

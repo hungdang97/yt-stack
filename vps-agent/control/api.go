@@ -11,16 +11,18 @@ import (
 )
 
 type ControlAPI struct {
-	fetcher  *config.ConfigFetcher
-	deployer *deployer.Deployer
-	app      *fiber.App
+	fetcher    *config.ConfigFetcher
+	deployer   *deployer.Deployer
+	projectDir string
+	app        *fiber.App
 }
 
-func NewControlAPI(fetcher *config.ConfigFetcher, deployer *deployer.Deployer) *ControlAPI {
+func NewControlAPI(fetcher *config.ConfigFetcher, deployer *deployer.Deployer, projectDir string) *ControlAPI {
 	return &ControlAPI{
-		fetcher:  fetcher,
-		deployer: deployer,
-		app:      fiber.New(fiber.Config{DisableStartupMessage: true}),
+		fetcher:    fetcher,
+		deployer:   deployer,
+		projectDir: projectDir,
+		app:        fiber.New(fiber.Config{DisableStartupMessage: true}),
 	}
 }
 
@@ -52,7 +54,8 @@ func (api *ControlAPI) Restart(c *fiber.Ctx) error {
 		log.Printf("[Control] Warning: Failed to fetch config, using existing .env: %v", err)
 	} else {
 		// 2. Generate new .env
-		if err := api.fetcher.GenerateEnvFile(config, "../yt-stack/.env"); err != nil {
+		envPath := fmt.Sprintf("%s/.env", api.projectDir)
+		if err := api.fetcher.GenerateEnvFile(config, envPath); err != nil {
 			log.Printf("[Control] Warning: Failed to update .env: %v", err)
 		} else {
 			log.Println("[Control] Config updated successfully")
