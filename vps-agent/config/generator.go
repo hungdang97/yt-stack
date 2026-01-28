@@ -3,7 +3,6 @@ package config
 import (
 	"crypto/rand"
 	"encoding/hex"
-	"fmt"
 	"strings"
 )
 
@@ -14,7 +13,7 @@ func GenerateConfig(serverIP string) map[string]interface{} {
 	return map[string]interface{}{
 		// Core Identity
 		"server_ip": serverIP,
-		"name":      fmt.Sprintf("vps-%s", subdomain),
+		"name":      subdomain,
 		"subdomain": subdomain,
 		"email":     "admin@ytconvert.org",
 		"port":      5001,

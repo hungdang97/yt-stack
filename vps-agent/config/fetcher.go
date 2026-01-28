@@ -132,7 +132,12 @@ func (f *ConfigFetcher) GenerateEnvFile(config map[string]interface{}, envPath s
 	fmt.Fprintf(file, "# === Core Identity ===\n")
 	fmt.Fprintf(file, "SERVER_IP=%v\n", config["server_ip"])
 	fmt.Fprintf(file, "SERVER_NAME=%v\n", config["name"])
-	fmt.Fprintf(file, "SUBDOMAIN=%v\n", config["subdomain"])
+
+	// Domain Structure
+	fmt.Fprintf(file, "BASE_DOMAIN=ytconvert.org\n")
+	fmt.Fprintf(file, "DOWNLOAD_SUBDOMAIN=%v\n", config["subdomain"])
+	fmt.Fprintf(file, "EXTRACTOR_SUBDOMAIN=ext-%v\n", config["subdomain"])
+
 	fmt.Fprintf(file, "EMAIL=%v\n", config["email"])
 	fmt.Fprintf(file, "PORT=%v\n\n", config["port"])
 

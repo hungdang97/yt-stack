@@ -21,14 +21,20 @@ var (
 	// Core Identity
 	ServerIP   = mustGetEnv("SERVER_IP")
 	ServerName = mustGetEnv("SERVER_NAME")
-	Subdomain  = mustGetEnv("SUBDOMAIN")
-	Email      = mustGetEnv("EMAIL")
-	Port       = mustGetEnvInt("PORT")
 
-	// Derived from Subdomain (constructed in code)
-	Domain          = Subdomain + ".ytconvert.org"
-	ExtractorDomain = "ext-" + Subdomain + ".ytconvert.org"
-	BaseURL         = "https://" + Subdomain + ".ytconvert.org"
+	// Domain Components
+	BaseDomain         = mustGetEnv("BASE_DOMAIN")         // ytconvert.org
+	DownloadSubdomain  = mustGetEnv("DOWNLOAD_SUBDOMAIN")  // vps-103-45...
+	ExtractorSubdomain = mustGetEnv("EXTRACTOR_SUBDOMAIN") // ext-vps-103-45...
+
+	Email = mustGetEnv("EMAIL")
+	Port  = mustGetEnvInt("PORT")
+
+	// Derived from Components
+	Subdomain       = DownloadSubdomain // Alias for backward compat
+	Domain          = DownloadSubdomain + "." + BaseDomain
+	ExtractorDomain = ExtractorSubdomain + "." + BaseDomain
+	BaseURL         = "https://" + Domain
 
 	// Proxy Credentials
 	WARPUser   = mustGetEnv("WARP_USER")
