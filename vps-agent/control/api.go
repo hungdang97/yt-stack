@@ -49,6 +49,13 @@ func (api *ControlAPI) Restart(c *fiber.Ctx) error {
 	// 1. Pull latest config
 	api.updateConfig()
 
+	// 1.5 Pull latest code from Git
+	log.Println("[Control] Pulling latest code...")
+	if err := api.deployer.PullCode(); err != nil {
+		log.Printf("[Control] Warning: Git pull failed: %v", err)
+		// We continue even if pull fails, to at least try to rebuild with what we have
+	}
+
 	// 2. Stop service
 	log.Println("[Control] Stopping service...")
 	api.deployer.Stop()
