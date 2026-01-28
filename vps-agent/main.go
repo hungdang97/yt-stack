@@ -33,9 +33,18 @@ func main() {
 	serverIP := fetcher.GetServerIP()
 	log.Printf("Detected Server IP: %s", serverIP)
 
-	// 2. Register with Hub (auto-generate config)
-	log.Println("Registering with Hub (auto-generating config)...")
-	cfg, err := fetcher.RegisterWithHub()
+	// 2. Check for existing config
+	log.Println("Checking for existing config on Hub...")
+	existingConfig, err := fetcher.FetchConfig()
+	if err == nil && existingConfig != nil {
+		log.Println("✓ Found existing config on Hub. Preserving configuration.")
+	} else {
+		log.Println("! No existing config found. Generating new config...")
+	}
+
+	// 3. Register with Hub (using existing or auto-generating)
+	log.Println("Registering with Hub...")
+	cfg, err := fetcher.RegisterWithHub(existingConfig)
 	if err != nil {
 		log.Fatalf("Failed to register: %v", err)
 	}
