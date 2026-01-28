@@ -69,7 +69,7 @@ func main() {
 	log.Println("✓ Service deployed successfully")
 
 	// 5. Start Control API
-	controlAPI := control.NewControlAPI(fetcher, dep)
+	controlAPI := control.NewControlAPI(fetcher, dep, projectDir)
 	controlAPI.SetupRoutes()
 
 	go func() {
