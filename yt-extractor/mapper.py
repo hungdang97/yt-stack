@@ -110,11 +110,31 @@ def map_audio_stream(fmt):
     """Map yt-dlp format to API audio stream format."""
     ext = fmt.get('ext', 'm4a')
     url = fmt.get('url')
-    lang_code, acont_type = parse_audio_lang_from_url(url)
+    
+    # ✅ Use yt-dlp's official 'language' field as primary source
+    lang_code = fmt.get('language') or fmt.get('audio_lang')
+    
+    # Parse format_note to extract original/dubbed info
+    format_note = fmt.get('format_note', '')
+    is_original = 'original' in format_note.lower()
+    
+    # Fallback: parse from URL if language field is not available
+    if not lang_code:
+        url_lang, url_acont = parse_audio_lang_from_url(url)
+        lang_code = url_lang
+        acont_type = url_acont
+    else:
+        # If language field exists, determine content type from format_note
+        acont_type = 'original' if is_original else None
+        
+        # Secondary fallback: check URL for content type if not in format_note
+        if not acont_type:
+            _, url_acont = parse_audio_lang_from_url(url)
+            acont_type = url_acont
 
     return {
         'url': url,
-        'quality': fmt.get('format_note') or f"{int(fmt.get('abr') or 0)}kbps",
+        'quality': format_note or f"{int(fmt.get('abr') or 0)}kbps",
         'format': get_format_name(ext),
         'mimeType': f"audio/{ext}",
         'bitrate': fmt.get('abr') or fmt.get('tbr'),
@@ -122,7 +142,7 @@ def map_audio_stream(fmt):
         'codec': fmt.get('acodec'),
         'audioTrackId': lang_code,
         'audioTrackType': acont_type,
-        'isOriginal': acont_type == 'original',
+        'isOriginal': is_original or acont_type == 'original',
     }
 
 
