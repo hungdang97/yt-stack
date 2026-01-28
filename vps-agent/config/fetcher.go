@@ -139,7 +139,7 @@ func (f *ConfigFetcher) GenerateEnvFile(config map[string]interface{}, envPath s
 	fmt.Fprintf(file, "EXTRACTOR_SUBDOMAIN=ext-%v\n", config["subdomain"])
 
 	fmt.Fprintf(file, "EMAIL=%v\n", config["email"])
-	fmt.Fprintf(file, "PORT=%v\n\n", config["port"])
+	fmt.Fprintf(file, "PORT=%s\n\n", formatInt(config["port"]))
 
 	// Proxy Credentials
 	fmt.Fprintf(file, "# === Proxy Credentials ===\n")
@@ -151,31 +151,31 @@ func (f *ConfigFetcher) GenerateEnvFile(config map[string]interface{}, envPath s
 	// Storage & Download
 	fmt.Fprintf(file, "# === Storage & Download ===\n")
 	fmt.Fprintf(file, "STORAGE_DIR=%v\n", config["storage_dir"])
-	fmt.Fprintf(file, "DOWNLOAD_THREADS=%v\n", config["download_threads"])
-	fmt.Fprintf(file, "CHUNK_SIZE=%v\n", config["chunk_size"])
-	fmt.Fprintf(file, "MAX_RETRIES=%v\n", config["max_retries"])
-	fmt.Fprintf(file, "RETRY_DELAY_MS=%v\n", config["retry_delay_ms"])
-	fmt.Fprintf(file, "CHUNK_TIMEOUT_S=%v\n\n", config["chunk_timeout_s"])
+	fmt.Fprintf(file, "DOWNLOAD_THREADS=%s\n", formatInt(config["download_threads"]))
+	fmt.Fprintf(file, "CHUNK_SIZE=%s\n", formatInt(config["chunk_size"]))
+	fmt.Fprintf(file, "MAX_RETRIES=%s\n", formatInt(config["max_retries"]))
+	fmt.Fprintf(file, "RETRY_DELAY_MS=%s\n", formatInt(config["retry_delay_ms"]))
+	fmt.Fprintf(file, "CHUNK_TIMEOUT_S=%s\n\n", formatInt(config["chunk_timeout_s"]))
 
 	// Extract API
 	fmt.Fprintf(file, "# === Extract API ===\n")
-	fmt.Fprintf(file, "EXTRACT_API_TIMEOUT=%v\n\n", config["extract_api_timeout"])
+	fmt.Fprintf(file, "EXTRACT_API_TIMEOUT=%s\n\n", formatInt(config["extract_api_timeout"]))
 
 	// Cleanup
 	fmt.Fprintf(file, "# === Cleanup ===\n")
 	fmt.Fprintf(file, "CLEANUP_INTERVAL=%v\n", config["cleanup_interval"])
-	fmt.Fprintf(file, "MAX_JOB_AGE_MIN=%v\n", config["max_job_age_min"])
-	fmt.Fprintf(file, "CLEANUP_BATCH_SIZE=%v\n\n", config["cleanup_batch_size"])
+	fmt.Fprintf(file, "MAX_JOB_AGE_MIN=%s\n", formatInt(config["max_job_age_min"]))
+	fmt.Fprintf(file, "CLEANUP_BATCH_SIZE=%s\n\n", formatInt(config["cleanup_batch_size"]))
 
 	// Security
 	fmt.Fprintf(file, "# === Security ===\n")
 	fmt.Fprintf(file, "SIGNED_URL_SECRET=%v\n", config["signed_url_secret"])
-	fmt.Fprintf(file, "SIGNED_URL_EXPIRATION_MIN=%v\n\n", config["signed_url_expiration_min"])
+	fmt.Fprintf(file, "SIGNED_URL_EXPIRATION_MIN=%s\n\n", formatInt(config["signed_url_expiration_min"]))
 
 	// Limits
 	fmt.Fprintf(file, "# === Limits ===\n")
-	fmt.Fprintf(file, "MAX_TRIM_DURATION_MIN=%v\n", config["max_trim_duration_min"])
-	fmt.Fprintf(file, "MAX_FILE_SIZE_GB=%v\n\n", config["max_file_size_gb"])
+	fmt.Fprintf(file, "MAX_TRIM_DURATION_MIN=%s\n", formatInt(config["max_trim_duration_min"]))
+	fmt.Fprintf(file, "MAX_FILE_SIZE_GB=%s\n\n", formatInt(config["max_file_size_gb"]))
 
 	// Feature Flags
 	fmt.Fprintf(file, "# === Feature Flags ===\n")
@@ -193,4 +193,19 @@ func (f *ConfigFetcher) GenerateEnvFile(config map[string]interface{}, envPath s
 
 func (f *ConfigFetcher) GetServerIP() string {
 	return f.serverIP
+}
+
+// formatInt safely formats interface{} as int string
+// Handles float64 (from JSON), int, and others
+func formatInt(v interface{}) string {
+	switch val := v.(type) {
+	case float64:
+		return fmt.Sprintf("%.0f", val)
+	case int:
+		return fmt.Sprintf("%d", val)
+	case int64:
+		return fmt.Sprintf("%d", val)
+	default:
+		return fmt.Sprintf("%v", val)
+	}
 }
