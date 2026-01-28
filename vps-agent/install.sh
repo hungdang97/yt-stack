@@ -41,8 +41,18 @@ else
     cd $PROJECT_DIR && git pull origin $GIT_BRANCH
 fi
 
-# 3. Download Agent binary
-echo "[3/5] Installing VPS Agent..."
+# 3. Clean install - Reset existing service
+echo "[3/5] Cleaning up old service..."
+if systemctl list-units --full -all | grep -Fq 'vps-agent.service'; then
+    echo "  Stopping and removing existing vps-agent service..."
+    systemctl stop vps-agent || true
+    systemctl disable vps-agent || true
+    rm -f /etc/systemd/system/vps-agent.service
+    systemctl daemon-reload
+fi
+
+# 4. Download Agent binary
+echo "[4/5] Installing VPS Agent..."
 AGENT_DIR="$PROJECT_DIR/vps-agent"
 mkdir -p $AGENT_DIR
 curl -sSL $HUB_URL/downloads/vps-agent -o $AGENT_DIR/vps-agent
@@ -79,7 +89,7 @@ EOF
 echo "[5/5] Starting Agent..."
 systemctl daemon-reload
 systemctl enable vps-agent
-systemctl start vps-agent
+systemctl restart vps-agent
 
 echo ""
 echo "✓ Setup complete!"
