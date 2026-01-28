@@ -3,7 +3,6 @@ package config
 import (
 	"crypto/rand"
 	"encoding/hex"
-	"strings"
 )
 
 // GenerateConfig auto-generates full config from server IP
@@ -61,10 +60,10 @@ func GenerateConfig(serverIP string) map[string]interface{} {
 	}
 }
 
-// generateSubdomain creates subdomain from IP
-// 103.45.67.89 → vps-103-45-67-89
+// generateSubdomain creates random subdomain
+// vps-x7z9q2w1
 func generateSubdomain(ip string) string {
-	return "vps-" + strings.ReplaceAll(ip, ".", "-")
+	return "vps-" + generateRandomString(8)
 }
 
 // generateRandomString generates cryptographically secure random string
