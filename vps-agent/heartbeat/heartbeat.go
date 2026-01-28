@@ -1,10 +1,13 @@
 package heartbeat
 
 import (
+	"bytes"
+	"encoding/json"
 	"fmt"
 	"log"
 	"net/http"
 	"time"
+	"vps-agent/metrics"
 )
 
 type Heartbeat struct {
@@ -32,7 +35,21 @@ func (h *Heartbeat) Start() {
 func (h *Heartbeat) ping() {
 	url := fmt.Sprintf("%s/api/server-config/%s/heartbeat", h.hubURL, h.serverIP)
 
-	resp, err := http.Post(url, "application/json", nil)
+	// Collect system metrics
+	m, err := metrics.Collect()
+	if err != nil {
+		log.Printf("[Heartbeat] Failed to collect metrics: %v", err)
+		// Continue even if metrics fail, to keep sending heartbeat
+		m = &metrics.SystemMetrics{}
+	}
+
+	payload, err := json.Marshal(m)
+	if err != nil {
+		log.Printf("[Heartbeat] Failed to marshal metrics: %v", err)
+		return
+	}
+
+	resp, err := http.Post(url, "application/json", bytes.NewBuffer(payload))
 	if err != nil {
 		log.Printf("[Heartbeat] Failed to ping hub: %v", err)
 		return
@@ -40,6 +57,9 @@ func (h *Heartbeat) ping() {
 	defer resp.Body.Close()
 
 	if resp.StatusCode == 200 {
-		log.Println("[Heartbeat] Ping successful")
+		// Only log periodically or on change to avoid noise
+		// log.Println("[Heartbeat] Ping successful")
+	} else {
+		log.Printf("[Heartbeat] Ping failed with status: %d", resp.StatusCode)
 	}
 }
