@@ -1,106 +1,88 @@
 package config
 
 import (
+	"encoding/json"
+	"fmt"
 	"net/http"
 	"net/url"
 	"os"
+	"strconv"
 	"sync"
 	"time"
 
 	_ "github.com/joho/godotenv/autoload" // Auto-load .env file
 )
 
-const (
-	// Server
-	Port = 5001
+// ============================================
+// LOAD FROM ENV (Primitives Only - ~30 vars)
+// ============================================
 
-	// Storage
-	StorageDir = "./storage"
+var (
+	// Core Identity
+	ServerIP   = mustGetEnv("SERVER_IP")
+	ServerName = mustGetEnv("SERVER_NAME")
+	Subdomain  = mustGetEnv("SUBDOMAIN")
+	Email      = mustGetEnv("EMAIL")
+	Port       = mustGetEnvInt("PORT")
 
-	// Download settings
-	Threads      = 4
-	ChunkSize    = 10_000_000 // 10MB
-	MaxRetries   = 3
-	RetryDelay   = 100 * time.Millisecond
-	ChunkTimeout = 30 * time.Second
-	BufferSize   = 64 * 1024 // 64KB - optimal for io.CopyBuffer
+	// Derived from Subdomain (constructed in code)
+	Domain          = Subdomain + ".ytconvert.org"
+	ExtractorDomain = "ext-" + Subdomain + ".ytconvert.org"
+	BaseURL         = "https://" + Subdomain + ".ytconvert.org"
+
+	// Proxy Credentials
+	WARPUser   = mustGetEnv("WARP_USER")
+	WARPPass   = mustGetEnv("WARP_PASS")
+	DirectUser = mustGetEnv("DIRECT_USER")
+	DirectPass = mustGetEnv("DIRECT_PASS")
+
+	// Derived Proxy URLs (constructed in code)
+	WARPProxyURL   = fmt.Sprintf("http://%s:%s@gost:1111", WARPUser, WARPPass)
+	DirectProxyURL = fmt.Sprintf("http://%s:%s@gost:2222", DirectUser, DirectPass)
+
+	// Storage & Download
+	StorageDir      = getEnvOrDefault("STORAGE_DIR", "./storage")
+	DownloadThreads = mustGetEnvInt("DOWNLOAD_THREADS")
+	ChunkSize       = int64(mustGetEnvInt("CHUNK_SIZE"))
+	MaxRetries      = mustGetEnvInt("MAX_RETRIES")
+	RetryDelay      = time.Duration(mustGetEnvInt("RETRY_DELAY_MS")) * time.Millisecond
+	ChunkTimeout    = time.Duration(mustGetEnvInt("CHUNK_TIMEOUT_S")) * time.Second
+	BufferSize      = 64 * 1024 // Fixed constant
 
 	// Extract API
-	ExtractAPIBase    = "http://yt-extractor:8300/api/youtube/video"
-	ExtractAPITimeout = 10 * time.Second
+	ExtractAPIBase    = "http://yt-extractor:8300/api/youtube/video" // Fixed
+	ExtractAPITimeout = time.Duration(mustGetEnvInt("EXTRACT_API_TIMEOUT")) * time.Second
 
 	// Cleanup
-	CleanupInterval  = "*/3 * * * *" // Every 3 minutes
-	MaxJobAge        = 15 * time.Minute
-	CleanupBatchSize = 5000
-	// Job ID
+	CleanupInterval  = mustGetEnv("CLEANUP_INTERVAL")
+	MaxJobAge        = time.Duration(mustGetEnvInt("MAX_JOB_AGE_MIN")) * time.Minute
+	CleanupBatchSize = mustGetEnvInt("CLEANUP_BATCH_SIZE")
+
+	// Security
+	SignedURLSecret     = mustGetEnv("SIGNED_URL_SECRET")
+	SignedURLExpiration = time.Duration(mustGetEnvInt("SIGNED_URL_EXPIRATION_MIN")) * time.Minute
+
+	// Job ID - Fixed constants
 	JobIDLength = 21
 	JobIDRegex  = `^[a-zA-Z0-9_-]{21}$`
 
-	// Signed URL
-	SignedURLSecret     = "18072001aA@"
-	SignedURLExpiration = 30 * time.Minute
-
 	// Limits
-	MaxTrimDuration = 24 * time.Hour
+	MaxTrimDuration = time.Duration(mustGetEnvInt("MAX_TRIM_DURATION_MIN")) * time.Minute
+	MaxFileSize     = int64(mustGetEnvInt("MAX_FILE_SIZE_GB")) * 1024 * 1024 * 1024
+
+	// Feature Flags
+	EnableMerge    = mustGetEnvBool("ENABLE_MERGE")
+	EnableTrim     = mustGetEnvBool("ENABLE_TRIM")
+	EnableReencode = mustGetEnvBool("ENABLE_REENCODE")
+
+	// Tier Config (parsed from JSON)
+	TierConfigs = loadTierConfigs()
 )
 
-// TierConfig holds configuration for each customer tier
-type TierConfig struct {
-	Name            string // Tier name for logging/debugging
-	DownloadThreads int    // Number of parallel download threads
-	StreamRateLimit int64  // Stream rate limit in bytes per second
-	// Future: Add more tier-specific configs here (e.g., MaxConcurrentJobs, Priority, etc.)
-}
+// ============================================
+// FIXED CONSTANTS (Not in ENV)
+// ============================================
 
-// TierConfigs maps customer tier to its configuration
-// Easy to maintain and extend for new tiers
-var TierConfigs = map[int]TierConfig{
-	1: {
-		Name:            "Tier1",
-		DownloadThreads: 4,
-		StreamRateLimit: 2 * 1024 * 1024, // 2MB/s
-	},
-	// Default tier for all others (2, 3, 4, 5, etc.)
-	0: {
-		Name:            "Standard",
-		DownloadThreads: 2,
-		StreamRateLimit: 1 * 1024 * 1024, // 1MB/s
-	},
-}
-
-// Base URL for download links (required env)
-var BaseURL = mustGetEnv("BASE_URL")
-
-func mustGetEnv(key string) string {
-	value := os.Getenv(key)
-	if value == "" {
-		panic("Required environment variable " + key + " is not set")
-	}
-	return value
-}
-
-// GetTierConfig returns the configuration for a given customer tier
-// Falls back to tier 0 (Standard) if tier is not found
-func GetTierConfig(ctier int) TierConfig {
-	if config, exists := TierConfigs[ctier]; exists {
-		return config
-	}
-	// Default to tier 0 (Standard) for unknown tiers
-	return TierConfigs[0]
-}
-
-// GetStreamRateLimit returns the stream rate limit based on customer tier
-func GetStreamRateLimit(ctier int) int64 {
-	return GetTierConfig(ctier).StreamRateLimit
-}
-
-// GetDownloadThreads returns the number of download threads based on customer tier
-func GetDownloadThreads(ctier int) int {
-	return GetTierConfig(ctier).DownloadThreads
-}
-
-// Supported formats
 var (
 	VideoFormats = []string{"mp4", "webm", "mkv"}
 	AudioFormats = []string{"mp3", "m4a", "wav", "opus", "flac", "ogg"}
@@ -174,38 +156,81 @@ var DefaultProfile = DeviceProfile{
 
 // FFmpeg codec mappings
 var AudioCodecMap = map[string]string{
-	"mp3":  "libmp3lame",
-	"m4a":  "aac",
-	"mp4":  "aac",
-	"wav":  "pcm_s16le",
-	"opus": "libopus",
-	"flac": "flac",
-	"webm": "libopus",
-	"ogg":  "libvorbis",
+	"mp3": "libmp3lame", "m4a": "aac", "mp4": "aac", "wav": "pcm_s16le",
+	"opus": "libopus", "flac": "flac", "webm": "libopus", "ogg": "libvorbis",
 }
 
 var VideoCodecMap = map[string]string{
-	"mp4":  "libx264",
-	"mkv":  "libx264",
-	"webm": "libvpx-vp9",
+	"mp4": "libx264", "mkv": "libx264", "webm": "libvpx-vp9",
 }
 
 // MIME type to extension mapping
 var MimeToExt = map[string]string{
-	"video/mp4":   "mp4",
-	"video/webm":  "webm",
-	"audio/mp4":   "m4a",
-	"audio/webm":  "webm",
-	"audio/mpeg":  "mp3",
-	"audio/ogg":   "ogg",
-	"audio/opus":  "opus",
-	"audio/flac":  "flac",
-	"audio/wav":   "wav",
-	"audio/x-wav": "wav",
+	"video/mp4": "mp4", "video/webm": "webm",
+	"audio/mp4": "m4a", "audio/webm": "webm", "audio/mpeg": "mp3",
+	"audio/ogg": "ogg", "audio/opus": "opus", "audio/flac": "flac",
+	"audio/wav": "wav", "audio/x-wav": "wav",
 }
 
-// WARP Proxy config
-const WARPProxyURL = "http://wrap:1111@gost:1111"
+// ============================================
+// TIER CONFIGURATION
+// ============================================
+
+// TierConfig holds configuration for each customer tier
+type TierConfig struct {
+	Name    string
+	Threads int   `json:"threads"`
+	Rate    int64 `json:"rate"`
+}
+
+func loadTierConfigs() map[int]TierConfig {
+	tierJSON := mustGetEnv("TIER_CONFIG")
+
+	var configs map[string]TierConfig
+	if err := json.Unmarshal([]byte(tierJSON), &configs); err != nil {
+		panic("Invalid TIER_CONFIG: " + err.Error())
+	}
+
+	// Convert string keys to int and add names
+	result := make(map[int]TierConfig)
+	for k, v := range configs {
+		tier, _ := strconv.Atoi(k)
+		if tier == 0 {
+			v.Name = "Standard"
+		} else if tier == 1 {
+			v.Name = "Tier1"
+		} else {
+			v.Name = fmt.Sprintf("Tier%d", tier)
+		}
+		result[tier] = v
+	}
+
+	return result
+}
+
+// GetTierConfig returns the configuration for a given customer tier
+// Falls back to tier 0 (Standard) if tier is not found
+func GetTierConfig(ctier int) TierConfig {
+	if config, exists := TierConfigs[ctier]; exists {
+		return config
+	}
+	// Default to tier 0 (Standard) for unknown tiers
+	return TierConfigs[0]
+}
+
+// GetStreamRateLimit returns the stream rate limit based on customer tier
+func GetStreamRateLimit(ctier int) int64 {
+	return GetTierConfig(ctier).Rate
+}
+
+// GetDownloadThreads returns the number of download threads based on customer tier
+func GetDownloadThreads(ctier int) int {
+	return GetTierConfig(ctier).Threads
+}
+
+// ============================================
+// HTTP CLIENTS
+// ============================================
 
 // BufferPool for reusing buffers (reduces GC pressure)
 var BufferPool = sync.Pool{
@@ -218,7 +243,7 @@ var BufferPool = sync.Pool{
 // HTTP Clients (reuse connections via pooling)
 var (
 	ExtractClient         *http.Client
-	DownloadClient        *http.Client // With Cloudflare proxy
+	DownloadClient        *http.Client // With WARP proxy
 	DownloadClientNoProxy *http.Client // Direct IP (no proxy)
 )
 
@@ -229,12 +254,13 @@ var extractTransport = &http.Transport{
 	IdleConnTimeout:     90 * time.Second,
 }
 
-// HTTP proxy URL for downloads
-var proxyURL, _ = url.Parse(WARPProxyURL)
+// HTTP proxy URLs
+var warpProxyURL, _ = url.Parse(WARPProxyURL)
+var directProxyURL, _ = url.Parse(DirectProxyURL)
 
-// Transport for Download (gzip disabled for raw streaming)
+// Transport for Download with WARP proxy
 var downloadTransport = &http.Transport{
-	Proxy:               http.ProxyURL(proxyURL),
+	Proxy:               http.ProxyURL(warpProxyURL),
 	MaxIdleConns:        100,
 	MaxIdleConnsPerHost: 10,
 	IdleConnTimeout:     90 * time.Second,
@@ -262,4 +288,37 @@ func init() {
 		Transport: downloadTransportNoProxy,
 		Timeout:   ChunkTimeout,
 	}
+}
+
+// ============================================
+// HELPER FUNCTIONS
+// ============================================
+
+func mustGetEnv(key string) string {
+	value := os.Getenv(key)
+	if value == "" {
+		panic("Required environment variable " + key + " is not set")
+	}
+	return value
+}
+
+func getEnvOrDefault(key, defaultValue string) string {
+	if value := os.Getenv(key); value != "" {
+		return value
+	}
+	return defaultValue
+}
+
+func mustGetEnvInt(key string) int {
+	value := mustGetEnv(key)
+	i, err := strconv.Atoi(value)
+	if err != nil {
+		panic(fmt.Sprintf("Invalid integer value for %s: %s", key, value))
+	}
+	return i
+}
+
+func mustGetEnvBool(key string) bool {
+	value := mustGetEnv(key)
+	return value == "true" || value == "1"
 }

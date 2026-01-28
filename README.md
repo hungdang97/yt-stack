@@ -1,309 +1,145 @@
-# YouTube Stack - Docker Deployment
+# YT-Stack: Scalable YouTube Downloader System
 
-Kiến trúc hoàn chỉnh cho YouTube downloader services với WARP proxy, SSL/HTTPS và auto-scaling.
+System download YouTube video hiệu suất cao với kiến trúc **Hub - VPS Agent**. Hỗ trợ auto-scaling, proxy management (WARP + Direct), SSL tự động, và quản lý tập trung.
 
-## Kiến trúc hệ thống
+## 🚀 Kiến Trúc Mới (3 Tầng)
 
-```
-┌─────────────────────────────────────────────────────────┐
-│                    Internet (HTTPS)                      │
-└──────────────────────┬──────────────────────────────────┘
-                       │
-                       ▼
-              ┌─────────────────┐
-              │  Nginx + SSL    │ (Port 80, 443)
-              │   (Certbot)     │
-              └────────┬────────┘
-                       │
-         ┌─────────────┴──────────────┐
-         ▼                            ▼
-┌──────────────────┐        ┌──────────────────┐
-│  yt-downloader   │        │  yt-extractor    │
-│   (Go:8080)      │        │  (Python:8300)   │
-└────────┬─────────┘        └────────┬─────────┘
-         │                           │
-         └──────────┬────────────────┘
-                    │ (Proxy via Gost)
-                    ▼
-         ┌─────────────────────┐
-         │   Gost Proxy Layer  │
-         │  Port 1111 (WARP)   │
-         │  Port 2222 (Direct) │
-         └──────────┬──────────┘
-                    │
-                    ▼
-         ┌─────────────────────┐
-         │  Cloudflare WARP    │
-         │  (SOCKS5:40000)     │
-         └─────────────────────┘
+1. **Hub (Central Management)**: Quản lý config, dashboard điều khiển restart/rebuild.
+2. **VPS Agent**: Chạy trên mỗi server, tự động detect IP, fetch config, generate .env, và deploy service.
+3. **YT-Downloader Service**: Core service xử lý download/stream, sử dụng Docker.
+
+```mermaid
+graph TD
+    Hub[YT-Stack Hub] -->|Control API| Agent[VPS Agent]
+    Agent -->|Heartbeat| Hub
+    Agent -->|Deploy| Docker[Docker Stack]
+    Docker -->|Read Config| Env[.env File]
+    
+    subgraph "VPS Server"
+        Agent
+        Env
+        Docker
+        subgraph "Docker Stack"
+            Downloader[yt-downloader]
+            Extractor[yt-extractor]
+            Nginx[Nginx SSL]
+            Proxies[WARP + Gost]
+        end
+    end
 ```
 
-## Thành phần
+---
 
-### Services
-- **yt-downloader**: Go service cho YouTube download (port 8080)
-- **yt-extractor**: Python/FastAPI service cho metadata extraction (port 8300)
-- **nginx**: Reverse proxy với SSL tự động (port 80, 443)
-- **warp**: Cloudflare WARP SOCKS5 proxy (port 40000)
-- **gost**: HTTP proxy gateway với authentication (port 1111, 2222)
+## ✨ Tính Năng Nổi Bật
 
-### Features
-- ✅ SSL/HTTPS tự động với Let's Encrypt (auto-renewal)
-- ✅ WARP proxy cho ẩn danh IP
-- ✅ Direct proxy với IP server gốc
-- ✅ Health checks cho tất cả services
-- ✅ Auto-restart on failure
-- ✅ Rate limiting
-- ✅ Compression (gzip)
+- **Zero-Config Setup**: Cài đặt VPS mới chỉ với 1 dòng lệnh.
+- **Auto-Discovery**: Tự động detect IP `103.45.67.89` -> subdomain `vps-103-45-67-89`.
+- **Auto-Config**: Tự động sinh password, secrets, proxy credentials.
+- **Remote Management**: Restart, Rebuild, xem Status từ Hub Dashboard.
+- **Hub-Based Config**: Lưu trữ config tập trung, update và đồng bộ xuống VPS.
+- **Smart Rate Limiting**: Limit băng thông theo Customer Tier (không phải Server Tier).
 
-## Cấu trúc thư mục
+---
 
-```
-yt-stack/
-├── .env                    # Environment variables
-├── docker-compose.yml      # Main orchestration file
-├── yt-downloader/
-│   ├── Dockerfile
-│   └── [source code]
-├── yt-extractor/
-│   ├── Dockerfile
-│   └── [source code]
-├── nginx/
-│   ├── Dockerfile
-│   ├── nginx.conf
-│   └── docker-entrypoint.sh
-├── proxy/
-│   ├── gost.json
-│   └── docker-compose.proxy.yml
-└── scripts/
-    ├── build.sh          # Build images
-    ├── deploy.sh         # Deploy to VPS
-    ├── setup-vps.sh      # Initial VPS setup
-    ├── logs.sh           # View logs
-    └── restart.sh        # Restart services
-```
+## 🛠 Cài Đặt (Quick Start)
 
-## Yêu cầu
+### 1. Yêu cầu VPS
+- OS: Ubuntu 20.04/22.04 hoặc Debian 11+
+- RAM: Tối thiểu 2GB
+- Disk: 20GB+ SSD
+- Port: Open 80, 443
 
-### Local (Development)
-- Docker 20.10+
-- Docker Compose 1.29+
+### 2. Setup (One-Liner)
 
-### VPS (Production)
-- Ubuntu 20.04/22.04 hoặc Debian 11+
-- RAM tối thiểu: 2GB
-- Disk: 20GB
-- Domain đã trỏ về IP server
-
-## Setup nhanh
-
-### 1. Setup VPS lần đầu
+Chạy lệnh sau trên VPS mới (với quyền root):
 
 ```bash
-# SSH vào VPS
-ssh root@your-vps-ip
+curl -sSL https://hub.ytconvert.org:5005/install.sh | \
+  HUB_URL=https://hub.ytconvert.org:5005 \
+  bash
+```
 
-# Clone repository
-git clone YOUR_REPO_URL /opt/yt-stack
+**Quá trình tự động:**
+1. Cài đặt Docker, Git.
+2. Download **VPS Agent**.
+3. Agent detect IP & Register với Hub.
+4. Agent generate file `.env` (tối ưu, ~25 variables).
+5. Agent build & deploy toàn bộ stack.
+
+---
+
+## ⚙️ Quản Lý & Vận Hành
+
+### Truy cập Hub Dashboard
+- URL: `https://hub.ytconvert.org:5005/admin`
+- Login: admin / (password)
+
+### Các thao tác trên Dashboard:
+1. **View Servers**: Xem danh sách VPS, trạng thái (Online/Offline), phiên bản.
+2. **Edit Config**: Chỉnh sửa thread, rate limit, credentials.
+   - Sau khi sửa, click **Restart** để áp dụng.
+3. **Restart VPS**: Trigger Agent restart service (tự động pull config mới).
+4. **Rebuild VPS**: Trigger Agent rebuild lại docker images (khi update code).
+
+### Kiểm tra Logs trên VPS
+
+```bash
+# Xem log của Agent
+journalctl -u vps-agent -f
+
+# Xem log của Service
 cd /opt/yt-stack
-
-# Chạy setup script (cài Docker, Docker Compose, firewall)
-sudo bash scripts/setup-vps.sh
+docker-compose logs -f yt-downloader
 ```
 
-### 2. Cấu hình môi trường
+---
 
-Tạo file `.env`:
+## 🔧 Deep Dive: Configuration
+
+Hệ thống sử dụng cơ chế config tối ưu, loại bỏ các biến không cần thiết.
+
+### File `.env` (Auto-generated)
+Agent tự động sinh file này tại `/opt/yt-stack/.env`.
 
 ```bash
-DOMAIN=iloveyou-dl3.ytconvert.org
-EMAIL=admin@ytconvert.org
+# Core Identity
+SERVER_IP=103.45.67.89
+SUBDOMAIN=vps-103-45-67-89
+PORT=5001
 
-YT_PORT=8080
-BASE_URL=https://iloveyou-dl3.ytconvert.org
+# Proxy (Auto-generated credentials)
+WARP_USER=...
+WARP_PASS=...
+DIRECT_USER=...
+DIRECT_PASS=...
 
-WARP_USER=wrap
-WARP_PASS=1111
+# Limits & Features
+DOWNLOAD_THREADS=4
+MAX_FILE_SIZE_GB=5
+ENABLE_MERGE=true
 
-DIRECT_USER=server
-DIRECT_PASS=2222
+# Customer Tier Config (JSON)
+TIER_CONFIG={"0":{"threads":2,"rate":1048576},"1":{"threads":4,"rate":2097152}}
 ```
 
-### 3. Deploy
+**Lưu ý:** Không chỉnh sửa thủ công `.env` trên VPS. Hãy sửa trên Hub Dashboard và restart VPS.
 
-```bash
-# Build images (nếu build trên local)
-./scripts/build.sh
+---
 
-# Deploy toàn bộ stack
-./scripts/deploy.sh
-```
+## 🐛 Troubleshooting
 
-**Chỉ cần 1 lệnh!** Script sẽ tự động:
-- Build/pull images
-- Start tất cả services
-- Lấy SSL certificate (lần đầu)
-- Configure nginx
-- Health check
+| Vấn đề | Kiểm tra |
+|--------|----------|
+| VPS không hiện trên Hub | Check log agent: `journalctl -u vps-agent` |
+| Service không start | Check docker: `docker-compose ps` |
+| Config không cập nhật | Restart VPS từ Dashboard (để trigger config pull) |
+| Download lỗi 403 | Check WARP/Proxy status |
 
-## Quy trình deploy tiếp theo
+---
 
-Sau lần setup đầu tiên, mỗi lần deploy chỉ cần:
+## 🔒 Security
 
-```bash
-# Trên local: Build images mới
-./scripts/build.sh
-
-# Trên VPS: Pull và restart
-./scripts/deploy.sh
-```
-
-## Quản lý services
-
-### Xem logs
-```bash
-# All services
-./scripts/logs.sh
-
-# Specific service
-./scripts/logs.sh yt-downloader
-./scripts/logs.sh nginx
-```
-
-### Restart services
-```bash
-# All services
-./scripts/restart.sh
-
-# Specific service
-./scripts/restart.sh yt-extractor
-```
-
-### Stop toàn bộ stack
-```bash
-docker-compose down
-```
-
-### Xem trạng thái
-```bash
-docker-compose ps
-```
-
-## Testing
-
-### Test SSL/HTTPS
-```bash
-curl https://iloveyou-dl3.ytconvert.org/health
-```
-
-### Test WARP proxy
-```bash
-# Qua WARP (IP ẩn danh)
-curl -x http://wrap:1111@YOUR_SERVER_IP:1111 https://ifconfig.me
-
-# Qua IP server gốc
-curl -x http://server:2222@YOUR_SERVER_IP:2222 https://ifconfig.me
-```
-
-### Test services
-```bash
-# yt-downloader
-curl https://iloveyou-dl3.ytconvert.org/api/download?url=VIDEO_URL
-
-# yt-extractor
-curl https://iloveyou-dl3.ytconvert.org/api/youtube/video/VIDEO_ID
-```
-
-## SSL Certificate Management
-
-### Auto-renewal
-Certificate tự động renew mỗi ngày lúc 2AM (cron job trong nginx container).
-
-### Manual renewal
-```bash
-docker exec nginx certbot renew --nginx
-docker exec nginx nginx -s reload
-```
-
-### Thêm domain mới
-1. Update `.env`: thêm domain vào `DOMAIN`
-2. Update `nginx/nginx.conf`: thêm vào `server_name`
-3. Restart nginx: `./scripts/restart.sh nginx`
-
-## Troubleshooting
-
-### Service không start
-```bash
-# Check logs
-./scripts/logs.sh SERVICE_NAME
-
-# Check health
-docker inspect --format='{{.State.Health.Status}}' CONTAINER_NAME
-```
-
-### SSL certificate lỗi
-```bash
-# Xóa certificate cũ
-docker exec nginx rm -rf /etc/letsencrypt/live/YOUR_DOMAIN
-
-# Restart để lấy certificate mới
-./scripts/restart.sh nginx
-```
-
-### WARP không kết nối
-```bash
-# Check WARP status
-docker exec warp warp-cli status
-
-# Restart WARP
-./scripts/restart.sh warp
-```
-
-## Performance tuning
-
-### Tăng số worker cho yt-extractor
-Edit `yt-extractor/Dockerfile`:
-```dockerfile
-CMD ["uvicorn", "app:app", "--host", "0.0.0.0", "--port", "8300", "--workers", "8"]
-```
-
-### Tăng rate limit
-Edit `nginx/nginx.conf`:
-```nginx
-limit_req_zone $binary_remote_addr zone=api_limit:10m rate=100r/s;
-```
-
-## Security Notes
-
-- ✅ Services chạy với non-root user
-- ✅ Firewall (UFW) chỉ mở port cần thiết
-- ✅ Proxy có authentication
-- ✅ SSL/TLS 1.2+ only
-- ✅ Security headers enabled
-- ⚠️  Đổi password proxy trong `.env` trước khi production
-
-## Backup
-
-### Backup volumes
-```bash
-docker run --rm \
-  -v yt-stack_letsencrypt:/data \
-  -v $(pwd):/backup \
-  alpine tar czf /backup/letsencrypt-backup.tar.gz /data
-```
-
-### Restore volumes
-```bash
-docker run --rm \
-  -v yt-stack_letsencrypt:/data \
-  -v $(pwd):/backup \
-  alpine tar xzf /backup/letsencrypt-backup.tar.gz -C /
-```
-
-## License
-
-Private project
-
-## Support
-
-Để báo lỗi hoặc yêu cầu feature mới, tạo issue trên GitHub repository.
+- **Agent Control API**: Port 9000 (Internal/Admin only).
+- **Service API**: Port 5001 (Internal/Behind Nginx).
+- **SSL**: Auto-provisioned bởi Nginx/Certbot.
+- **Proxy Auth**: Gost proxy protected by random credentials.

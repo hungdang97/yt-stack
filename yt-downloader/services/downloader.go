@@ -24,10 +24,10 @@ func (e *HTTPError) Error() string {
 }
 
 // Download downloads a file using streaming (low memory)
-// threads: number of parallel download threads (0 = use config.Threads default)
+// threads: number of parallel download threads (0 = use config.DownloadThreads default)
 func Download(ctx context.Context, downloadURL string, destPath string, totalSize int64, threads int) error {
 	if threads <= 0 {
-		threads = config.Threads
+		threads = config.DownloadThreads
 	}
 	if totalSize <= config.ChunkSize {
 		return downloadSingle(ctx, downloadURL, destPath, totalSize)
