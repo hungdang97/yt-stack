@@ -32,6 +32,8 @@ func FFmpegMerge(jobDir string, format string, videoFile string, audioFile strin
 			"-y",
 			"-i", filepath.Join(jobDir, videoFile),
 			"-i", filepath.Join(jobDir, audioFile),
+			"-map", "0:v:0", // Select video from first input
+			"-map", "1:a:0", // Select audio from second input
 			"-c:v", videoCodec,
 			"-preset", "fast", // Balance speed vs quality
 			"-crf", "23", // Good quality (18-28 range, lower = better)
@@ -45,6 +47,8 @@ func FFmpegMerge(jobDir string, format string, videoFile string, audioFile strin
 			"-y",
 			"-i", filepath.Join(jobDir, videoFile),
 			"-i", filepath.Join(jobDir, audioFile),
+			"-map", "0:v:0", // Select video from first input
+			"-map", "1:a:0", // Select audio from second input
 			"-c:v", "copy",
 			"-c:a", "copy",
 			outputFile,
