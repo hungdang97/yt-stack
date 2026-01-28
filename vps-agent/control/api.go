@@ -29,7 +29,6 @@ func NewControlAPI(fetcher *config.ConfigFetcher, deployer *deployer.Deployer, p
 func (api *ControlAPI) SetupRoutes() {
 	api.app.Get("/status", api.GetStatus)
 	api.app.Post("/control/restart", api.Restart)
-	api.app.Post("/control/rebuild", api.Rebuild)
 	api.app.Post("/control/stop", api.Stop)
 }
 
@@ -67,26 +66,6 @@ func (api *ControlAPI) Restart(c *fiber.Ctx) error {
 	}
 
 	return c.JSON(fiber.Map{"message": "Config pulled and service rebuilt successfully"})
-}
-
-// POST /control/rebuild
-func (api *ControlAPI) Rebuild(c *fiber.Ctx) error {
-	log.Println("[Control] Received rebuild command")
-
-	api.deployer.Stop()
-
-	// Pull new config before rebuild
-	api.updateConfig()
-
-	if err := api.deployer.Build(); err != nil {
-		return c.Status(500).JSON(fiber.Map{"error": "Build failed: " + err.Error()})
-	}
-
-	if err := api.deployer.Deploy(); err != nil {
-		return c.Status(500).JSON(fiber.Map{"error": "Deploy failed: " + err.Error()})
-	}
-
-	return c.JSON(fiber.Map{"message": "Service rebuilt and deployed successfully"})
 }
 
 // POST /control/stop
