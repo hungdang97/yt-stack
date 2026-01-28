@@ -185,7 +185,7 @@ func (f *ConfigFetcher) GenerateEnvFile(config map[string]interface{}, envPath s
 
 	// Tier Config
 	fmt.Fprintf(file, "# === Tier Config ===\n")
-	fmt.Fprintf(file, "TIER_CONFIG=%v\n", config["tier_config"])
+	fmt.Fprintf(file, "TIER_CONFIG='%v'\n", config["tier_config"])
 
 	log.Printf("[Agent] Generated .env file: %s", envPath)
 	return nil
