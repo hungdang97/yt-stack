@@ -47,27 +47,26 @@ func (api *ControlAPI) GetStatus(c *fiber.Ctx) error {
 func (api *ControlAPI) Restart(c *fiber.Ctx) error {
 	log.Println("[Control] Received restart command")
 
-	// 1. Fetch latest config from Hub
-	log.Println("[Control] Fetching latest config from Hub...")
-	config, err := api.fetcher.FetchConfig()
-	if err != nil {
-		log.Printf("[Control] Warning: Failed to fetch config, using existing .env: %v", err)
-	} else {
-		// 2. Generate new .env
-		envPath := fmt.Sprintf("%s/.env", api.projectDir)
-		if err := api.fetcher.GenerateEnvFile(config, envPath); err != nil {
-			log.Printf("[Control] Warning: Failed to update .env: %v", err)
-		} else {
-			log.Println("[Control] Config updated successfully")
-		}
+	// 1. Pull latest config
+	api.updateConfig()
+
+	// 2. Stop service
+	log.Println("[Control] Stopping service...")
+	api.deployer.Stop()
+
+	// 3. Build service
+	log.Println("[Control] Building service...")
+	if err := api.deployer.Build(); err != nil {
+		return c.Status(500).JSON(fiber.Map{"error": "Build failed: " + err.Error()})
 	}
 
-	// 3. Restart service
-	if err := api.deployer.Restart(); err != nil {
-		return c.Status(500).JSON(fiber.Map{"error": "Restart failed: " + err.Error()})
+	// 4. Deploy service
+	log.Println("[Control] Deploying service...")
+	if err := api.deployer.Deploy(); err != nil {
+		return c.Status(500).JSON(fiber.Map{"error": "Deploy failed: " + err.Error()})
 	}
 
-	return c.JSON(fiber.Map{"message": "Config pulled and service restarted successfully"})
+	return c.JSON(fiber.Map{"message": "Config pulled and service rebuilt successfully"})
 }
 
 // POST /control/rebuild
@@ -75,6 +74,9 @@ func (api *ControlAPI) Rebuild(c *fiber.Ctx) error {
 	log.Println("[Control] Received rebuild command")
 
 	api.deployer.Stop()
+
+	// Pull new config before rebuild
+	api.updateConfig()
 
 	if err := api.deployer.Build(); err != nil {
 		return c.Status(500).JSON(fiber.Map{"error": "Build failed: " + err.Error()})
@@ -100,4 +102,22 @@ func (api *ControlAPI) Stop(c *fiber.Ctx) error {
 
 func (api *ControlAPI) Start(port int) error {
 	return api.app.Listen(fmt.Sprintf(":%d", port))
+}
+
+// updateConfig fetches the latest config from Hub and updates .env
+// It logs warnings on failure but does not return error to allow operations to proceed with existing config
+func (api *ControlAPI) updateConfig() {
+	log.Println("[Control] Fetching latest config from Hub...")
+	config, err := api.fetcher.FetchConfig()
+	if err != nil {
+		log.Printf("[Control] Warning: Failed to fetch config, using existing .env: %v", err)
+		return
+	}
+
+	envPath := fmt.Sprintf("%s/.env", api.projectDir)
+	if err := api.fetcher.GenerateEnvFile(config, envPath); err != nil {
+		log.Printf("[Control] Warning: Failed to update .env: %v", err)
+	} else {
+		log.Println("[Control] Config updated successfully")
+	}
 }
