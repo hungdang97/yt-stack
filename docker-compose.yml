@@ -21,7 +21,7 @@ services:
     # logging:
     #   driver: "none"
     healthcheck:
-      test: ["CMD", "curl", "-fsS", "--socks5", "127.0.0.1:40000", "https://www.cloudflare.com/cdn-cgi/trace"]
+      test: [ "CMD", "curl", "-fsS", "--socks5", "127.0.0.1:40000", "https://www.cloudflare.com/cdn-cgi/trace" ]
       interval: 30s
       timeout: 10s
       retries: 3
@@ -38,8 +38,8 @@ services:
       warp:
         condition: service_healthy
     ports:
-      - "1111:1111"  # WARP proxy (public)
-      - "2222:2222"  # Direct proxy (public)
+      - "1111:1111" # WARP proxy (public)
+      - "2222:2222" # Direct proxy (public)
     environment:
       - WARP_USER=${WARP_USER}
       - WARP_PASS=${WARP_PASS}
@@ -48,9 +48,7 @@ services:
     # logging:
     #   driver: "none"
     command: >
-      -L=http://${WARP_USER}:${WARP_PASS}@:1111?probeResist=code:400
-      -F=socks5://warp:40000
-      -L=http://${DIRECT_USER}:${DIRECT_PASS}@:2222?probeResist=code:400
+      -L=http://${WARP_USER}:${WARP_PASS}@:1111?probeResist=code:400 -F=socks5://warp:40000 -L=http://${DIRECT_USER}:${DIRECT_PASS}@:2222?probeResist=code:400
     networks:
       - backend
 
@@ -76,7 +74,7 @@ services:
       gost:
         condition: service_started
     healthcheck:
-      test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://localhost:5001/health"]
+      test: [ "CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://localhost:5001/health" ]
       interval: 30s
       timeout: 10s
       retries: 3
@@ -101,7 +99,7 @@ services:
       gost:
         condition: service_started
     healthcheck:
-      test: ["CMD", "wget", "--no-verbose", "--tries=1", "-O", "/dev/null", "http://localhost:8300/health"]
+      test: [ "CMD", "wget", "--no-verbose", "--tries=1", "-O", "/dev/null", "http://localhost:8300/health" ]
       interval: 30s
       timeout: 10s
       retries: 3
@@ -123,6 +121,7 @@ services:
       - "443:443"
     environment:
       - DOMAIN=${DOMAIN}
+      - EXTRACTOR_DOMAIN=${EXTRACTOR_DOMAIN}
       - EMAIL=${EMAIL}
     volumes:
       - letsencrypt:/etc/letsencrypt
