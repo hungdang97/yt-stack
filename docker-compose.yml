@@ -63,9 +63,8 @@ services:
     restart: always
     expose:
       - "5001"
-    environment:
-      - BASE_URL=${BASE_URL}
-      - PORT=5001
+    env_file:
+      - .env # Load all ~30 config variables
     volumes:
       - yt_storage:/app/storage
     # logging:
