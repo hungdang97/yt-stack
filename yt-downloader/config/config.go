@@ -64,7 +64,7 @@ var TierConfigs = map[int]TierConfig{
 	// Default tier for all others (2, 3, 4, 5, etc.)
 	0: {
 		Name:            "Standard",
-		DownloadThreads: 1,
+		DownloadThreads: 2,
 		StreamRateLimit: 1 * 1024 * 1024, // 1MB/s
 	},
 }
