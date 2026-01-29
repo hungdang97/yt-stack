@@ -116,7 +116,7 @@ func main() {
 	}()
 
 	// 6. Start Heartbeat
-	hb := heartbeat.NewHeartbeat(hubURL, serverIP, 3*time.Second)
+	hb := heartbeat.NewHeartbeat(hubURL, serverIP, projectDir, 3*time.Second)
 	go hb.Start()
 
 	log.Println("✓ Agent running successfully")

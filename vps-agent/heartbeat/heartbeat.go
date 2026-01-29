@@ -11,16 +11,18 @@ import (
 )
 
 type Heartbeat struct {
-	hubURL   string
-	serverIP string
-	interval time.Duration
+	hubURL     string
+	serverIP   string
+	interval   time.Duration
+	projectDir string
 }
 
-func NewHeartbeat(hubURL, serverIP string, interval time.Duration) *Heartbeat {
+func NewHeartbeat(hubURL, serverIP, projectDir string, interval time.Duration) *Heartbeat {
 	return &Heartbeat{
-		hubURL:   hubURL,
-		serverIP: serverIP,
-		interval: interval,
+		hubURL:     hubURL,
+		serverIP:   serverIP,
+		interval:   interval,
+		projectDir: projectDir,
 	}
 }
 
@@ -36,7 +38,7 @@ func (h *Heartbeat) ping() {
 	url := fmt.Sprintf("%s/api/server-config/%s/heartbeat", h.hubURL, h.serverIP)
 
 	// Collect system metrics
-	m, err := metrics.Collect()
+	m, err := metrics.Collect(h.projectDir)
 	if err != nil {
 		log.Printf("[Heartbeat] Failed to collect metrics: %v", err)
 		// Continue even if metrics fail, to keep sending heartbeat

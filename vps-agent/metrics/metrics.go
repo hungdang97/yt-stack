@@ -3,6 +3,7 @@ package metrics
 import (
 	"bufio"
 	"os"
+	"path/filepath"
 	"strconv"
 	"strings"
 	"syscall"
@@ -15,6 +16,7 @@ type SystemMetrics struct {
 	RAMUsage  float64 `json:"ram_usage"`  // 0-100%
 	DiskUsage float64 `json:"disk_usage"` // 0-100%
 	Uptime    int64   `json:"uptime"`     // seconds
+	LastBuild int64   `json:"last_build"` // Unix timestamp of last success build
 }
 
 var (
@@ -25,9 +27,18 @@ var (
 
 // Collect gathers current system metrics
 // Uses native Linux /proc filesystem for cross-distro compatibility
-func Collect() (*SystemMetrics, error) {
+func Collect(projectDir string) (*SystemMetrics, error) {
 	m := &SystemMetrics{
 		Uptime: int64(time.Since(startTime).Seconds()),
+	}
+
+	// Read last build time from file
+	if projectDir != "" {
+		if content, err := os.ReadFile(filepath.Join(projectDir, ".last_build")); err == nil {
+			if ts, err := strconv.ParseInt(strings.TrimSpace(string(content)), 10, 64); err == nil {
+				m.LastBuild = ts
+			}
+		}
 	}
 
 	// CPU Usage

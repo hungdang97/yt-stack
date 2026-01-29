@@ -2,8 +2,12 @@ package deployer
 
 import (
 	"encoding/json"
+	"fmt"
 	"log"
+	"os"
 	"os/exec"
+	"path/filepath"
+	"time"
 )
 
 type Deployer struct {
@@ -64,6 +68,11 @@ func (d *Deployer) Deploy() error {
 	}
 
 	log.Println("[Deployer] Deploy successful")
+
+	// Save last build timestamp
+	if err := os.WriteFile(filepath.Join(d.projectDir, ".last_build"), []byte(fmt.Sprintf("%d", time.Now().Unix())), 0644); err != nil {
+		log.Printf("[Deployer] Warning: Failed to save .last_build: %v", err)
+	}
 
 	// Auto Prune after deploy to keep system clean
 	if err := d.Prune(); err != nil {
