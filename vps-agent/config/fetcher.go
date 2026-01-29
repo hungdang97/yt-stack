@@ -140,7 +140,12 @@ func (f *ConfigFetcher) GenerateEnvFile(config map[string]interface{}, envPath s
 	fmt.Fprintf(file, "SERVER_NAME=%v\n", config["name"])
 
 	// Domain Structure
-	fmt.Fprintf(file, "BASE_DOMAIN=ytconvert.org\n")
+	// Read from Hub's "domain" field (defaults to first Cloudflare domain or ytconvert.org)
+	baseDomain := "ytconvert.org" // Default fallback
+	if domain, ok := config["domain"]; ok && domain != nil && domain != "" {
+		baseDomain = fmt.Sprintf("%v", domain)
+	}
+	fmt.Fprintf(file, "BASE_DOMAIN=%s\n", baseDomain)
 	fmt.Fprintf(file, "DOWNLOAD_SUBDOMAIN=%v\n", config["subdomain"])
 	fmt.Fprintf(file, "EXTRACTOR_SUBDOMAIN=ext-%v\n", config["subdomain"])
 
