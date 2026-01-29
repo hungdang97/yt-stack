@@ -3,7 +3,9 @@ package control
 import (
 	"fmt"
 	"log"
+	"os/exec"
 	"sync"
+	"syscall"
 	"time"
 
 	"vps-agent/config"
@@ -36,6 +38,8 @@ type ControlAPI struct {
 	deployer   *deployer.Deployer
 	projectDir string
 	app        *fiber.App
+	startTime  time.Time
+	version    string
 
 	statusMu      sync.RWMutex
 	currentStatus BuildStatus
@@ -47,6 +51,8 @@ func NewControlAPI(fetcher *config.ConfigFetcher, deployer *deployer.Deployer, p
 		deployer:   deployer,
 		projectDir: projectDir,
 		app:        fiber.New(fiber.Config{DisableStartupMessage: true}),
+		startTime:  time.Now(),
+		version:    "1.0.0",
 		currentStatus: BuildStatus{
 			State:   StateIdle,
 			Message: "Ready",
@@ -56,10 +62,12 @@ func NewControlAPI(fetcher *config.ConfigFetcher, deployer *deployer.Deployer, p
 }
 
 func (api *ControlAPI) SetupRoutes() {
+	api.app.Get("/health", api.HealthCheck)
 	api.app.Get("/status", api.GetStatus)
 	api.app.Get("/control/build-status", api.GetBuildStatus)
 	api.app.Post("/control/restart", api.Restart)
 	api.app.Post("/control/stop", api.Stop)
+	api.app.Post("/control/update-agent", api.UpdateAgent)
 }
 
 // GET /status
@@ -173,4 +181,74 @@ func (api *ControlAPI) updateConfig() error {
 		return err
 	}
 	return nil
+}
+
+// GET /health - Agent health check endpoint
+func (api *ControlAPI) HealthCheck(c *fiber.Ctx) error {
+	// Get disk usage
+	var stat syscall.Statfs_t
+	diskFreeGB := float64(0)
+	diskTotalGB := float64(0)
+	if err := syscall.Statfs("/", &stat); err == nil {
+		diskFreeGB = float64(stat.Bavail*uint64(stat.Bsize)) / (1024 * 1024 * 1024)
+		diskTotalGB = float64(stat.Blocks*uint64(stat.Bsize)) / (1024 * 1024 * 1024)
+	}
+
+	// Get container status
+	containersOK := false
+	if status, err := api.deployer.GetStatus(); err == nil {
+		if healthy, ok := status["healthy"].(bool); ok {
+			containersOK = healthy
+		}
+	}
+
+	// Calculate uptime
+	uptime := time.Since(api.startTime)
+
+	return c.JSON(fiber.Map{
+		"status":         "healthy",
+		"version":        api.version,
+		"uptime_seconds": int(uptime.Seconds()),
+		"uptime":         uptime.String(),
+		"disk_free_gb":   fmt.Sprintf("%.2f", diskFreeGB),
+		"disk_total_gb":  fmt.Sprintf("%.2f", diskTotalGB),
+		"containers_ok":  containersOK,
+	})
+}
+
+// POST /control/update-agent - Self-update the agent
+func (api *ControlAPI) UpdateAgent(c *fiber.Ctx) error {
+	log.Println("[Control] Agent update requested")
+
+	// Check if already in a build process
+	api.statusMu.Lock()
+	if api.currentStatus.State != StateIdle &&
+		api.currentStatus.State != StateSuccess &&
+		api.currentStatus.State != StateError {
+		api.statusMu.Unlock()
+		return c.Status(409).JSON(fiber.Map{"error": "Build in progress, try again later"})
+	}
+	api.statusMu.Unlock()
+
+	// Run update script in background
+	go func() {
+		log.Println("[Control] Starting agent self-update...")
+		updateScript := fmt.Sprintf("%s/vps-agent/update.sh", api.projectDir)
+
+		cmd := exec.Command("bash", updateScript)
+		cmd.Dir = api.projectDir
+		output, err := cmd.CombinedOutput()
+
+		if err != nil {
+			log.Printf("[Control] Update script failed: %v, output: %s", err, output)
+			return
+		}
+
+		log.Printf("[Control] Update script completed: %s", output)
+		// The script will restart the agent, so this goroutine will be killed
+	}()
+
+	return c.JSON(fiber.Map{
+		"message": "Agent update started. Agent will restart shortly.",
+	})
 }
