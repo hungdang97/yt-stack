@@ -67,7 +67,12 @@ func main() {
 	log.Printf("✓ Registered successfully!")
 	log.Printf("  Server Name: %v", cfg["name"])
 	log.Printf("  Subdomain: %v", cfg["subdomain"])
-	log.Printf("  Domain: %v.ytconvert.org", cfg["subdomain"])
+	// Show actual domain from config
+	domain := "ytconvert.org"
+	if d, ok := cfg["domain"]; ok && d != nil && d != "" {
+		domain = fmt.Sprintf("%v", d)
+	}
+	log.Printf("  Domain: %v.%s", cfg["subdomain"], domain)
 
 	// 3. Generate .env file
 	envPath := fmt.Sprintf("%s/.env", projectDir)
@@ -78,7 +83,11 @@ func main() {
 	log.Printf("✓ .env file generated: %s", envPath)
 
 	// 3.5 Verify DNS Propagation
-	baseDomain := "ytconvert.org"
+	// Read domain from Hub config (same logic as fetcher.go)
+	baseDomain := "ytconvert.org" // Default fallback
+	if domain, ok := cfg["domain"]; ok && domain != nil && domain != "" {
+		baseDomain = fmt.Sprintf("%v", domain)
+	}
 	subdomain := fmt.Sprintf("%v", cfg["subdomain"])
 
 	downloadDomain := fmt.Sprintf("%s.%s", subdomain, baseDomain)
