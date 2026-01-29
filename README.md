@@ -54,8 +54,8 @@ graph TD
 Chạy lệnh sau trên VPS mới (với quyền root):
 
 ```bash
-curl -sSL https://hub.ytconvert.org:5005/install.sh | \
-  HUB_URL=https://hub.ytconvert.org:5005 \
+curl -sSL https://hub.ytconvert.org/install.sh | \
+  HUB_URL=https://hub.ytconvert.org \
   bash
 ```
 
