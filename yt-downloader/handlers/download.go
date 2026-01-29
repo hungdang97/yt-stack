@@ -267,7 +267,7 @@ func processJob(jobID string, meta *models.Meta, videoSelection *models.VideoSel
 func shouldMerge(meta *models.Meta) bool {
 	const (
 		maxDurationAudio = 5 * 60.0   // 5 minutes for audio
-		maxDurationVideo = 1 * 3600.0 // 1 hour for video
+		maxDurationVideo = 4 * 3600.0 // 4 hours for video
 	)
 
 	// Check if needs transcoding (heavy CPU)
