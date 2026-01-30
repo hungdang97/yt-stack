@@ -14,28 +14,85 @@ import (
 	"yt-downloader-go/utils"
 )
 
-// Extract fetches video metadata from YouTube Extract API
-// Tries twice: 1st attempt without proxy (direct IP), 2nd attempt with proxy (Cloudflare)
+// Extract fetches video metadata with 4-layer cascading fallback:
+// 1. Android Extractor + Direct IP
+// 2. Android Extractor + Cloudflare Proxy
+// 3. Python Extractor + Direct IP
+// 4. Python Extractor + Cloudflare Proxy
 func Extract(videoID string) (*models.ExtractResponse, error) {
-	// First attempt: Direct IP (no proxy)
-	result, err := extractWithProxy(videoID, "")
-	if err == nil {
+	var lastErr error
+
+	// Layer 1: Android Extractor + Direct IP
+	result, err := extractFromAPI(videoID, config.ExtractAPIAndroid, "")
+	if err == nil && isValidExtractResponse(result) {
+		fmt.Printf("[%s] ✓ Extract success via Android (Direct IP)\n", videoID)
 		return result, nil
 	}
-
-	// Second attempt: With Cloudflare proxy
-	result, err = extractWithProxy(videoID, config.WARPProxyURL)
+	lastErr = err
 	if err != nil {
-		return nil, fmt.Errorf("extract failed after 2 attempts: %w", err)
+		fmt.Printf("[%s] Android+Direct failed: %v\n", videoID, err)
 	}
 
-	return result, nil
+	// Layer 2: Android Extractor + Cloudflare Proxy
+	result, err = extractFromAPI(videoID, config.ExtractAPIAndroid, config.WARPProxyURL)
+	if err == nil && isValidExtractResponse(result) {
+		fmt.Printf("[%s] ✓ Extract success via Android (Cloudflare)\n", videoID)
+		return result, nil
+	}
+	lastErr = err
+	if err != nil {
+		fmt.Printf("[%s] Android+Cloudflare failed: %v\n", videoID, err)
+	}
+
+	// Layer 3: Python Extractor + Direct IP
+	result, err = extractFromAPI(videoID, config.ExtractAPIBase, "")
+	if err == nil && isValidExtractResponse(result) {
+		fmt.Printf("[%s] ✓ Extract success via Python (Direct IP)\n", videoID)
+		return result, nil
+	}
+	lastErr = err
+	if err != nil {
+		fmt.Printf("[%s] Python+Direct failed: %v\n", videoID, err)
+	}
+
+	// Layer 4: Python Extractor + Cloudflare Proxy
+	result, err = extractFromAPI(videoID, config.ExtractAPIBase, config.WARPProxyURL)
+	if err == nil && isValidExtractResponse(result) {
+		fmt.Printf("[%s] ✓ Extract success via Python (Cloudflare)\n", videoID)
+		return result, nil
+	}
+	lastErr = err
+	if err != nil {
+		fmt.Printf("[%s] Python+Cloudflare failed: %v\n", videoID, err)
+	}
+
+	// All 4 layers failed
+	return nil, fmt.Errorf("all 4 extraction layers failed, last error: %w", lastErr)
 }
 
-// extractWithProxy performs the actual extraction with optional proxy
-func extractWithProxy(videoID string, proxy string) (*models.ExtractResponse, error) {
+// isValidExtractResponse validates that the response has required data
+func isValidExtractResponse(resp *models.ExtractResponse) bool {
+	if resp == nil {
+		return false
+	}
+
+	// Must have title
+	if resp.Title == "" {
+		return false
+	}
+
+	// Must have at least one video stream and one audio stream
+	if len(resp.VideoStreams) == 0 || len(resp.AudioStreams) == 0 {
+		return false
+	}
+
+	return true
+}
+
+// extractFromAPI performs the actual extraction from specified API with optional proxy
+func extractFromAPI(videoID string, apiBase string, proxy string) (*models.ExtractResponse, error) {
 	// Build API URL
-	apiURL := fmt.Sprintf("%s/%s", config.ExtractAPIBase, videoID)
+	apiURL := fmt.Sprintf("%s/%s", apiBase, videoID)
 	if proxy != "" {
 		// URL encode proxy to handle special characters (: @ /)
 		proxyEncoded := url.QueryEscape(proxy)

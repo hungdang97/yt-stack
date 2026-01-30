@@ -56,7 +56,8 @@ var (
 	BufferSize      = 64 * 1024 // Fixed constant
 
 	// Extract API
-	ExtractAPIBase    = "http://yt-extractor:8300/api/youtube/video" // Fixed
+	ExtractAPIBase    = "http://yt-extractor:8300/api/youtube/video"         // Python extractor (fallback)
+	ExtractAPIAndroid = "http://yt-extractor-android:8100/api/youtube/video" // Android extractor (primary)
 	ExtractAPITimeout = time.Duration(mustGetEnvInt("EXTRACT_API_TIMEOUT")) * time.Second
 
 	// Cleanup
