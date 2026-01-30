@@ -23,18 +23,16 @@ var (
 	ServerName = mustGetEnv("SERVER_NAME")
 
 	// Domain Components
-	BaseDomain         = mustGetEnv("BASE_DOMAIN")         // ytconvert.org
-	DownloadSubdomain  = mustGetEnv("DOWNLOAD_SUBDOMAIN")  // vps-103-45...
-	ExtractorSubdomain = mustGetEnv("EXTRACTOR_SUBDOMAIN") // ext-vps-103-45...
+	BaseDomain        = mustGetEnv("BASE_DOMAIN")        // ytconvert.org
+	DownloadSubdomain = mustGetEnv("DOWNLOAD_SUBDOMAIN") // vps-103-45...
 
 	Email = mustGetEnv("EMAIL")
 	Port  = mustGetEnvInt("PORT")
 
 	// Derived from Components
-	Subdomain       = DownloadSubdomain // Alias for backward compat
-	Domain          = DownloadSubdomain + "." + BaseDomain
-	ExtractorDomain = ExtractorSubdomain + "." + BaseDomain
-	BaseURL         = "https://" + Domain
+	Subdomain = DownloadSubdomain // Alias for backward compat
+	Domain    = DownloadSubdomain + "." + BaseDomain
+	BaseURL   = "https://" + Domain
 
 	// Proxy Credentials
 	WARPUser   = mustGetEnv("WARP_USER")

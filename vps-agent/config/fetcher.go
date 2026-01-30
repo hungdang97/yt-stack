@@ -147,7 +147,6 @@ func (f *ConfigFetcher) GenerateEnvFile(config map[string]interface{}, envPath s
 	}
 	fmt.Fprintf(file, "BASE_DOMAIN=%s\n", baseDomain)
 	fmt.Fprintf(file, "DOWNLOAD_SUBDOMAIN=%v\n", config["subdomain"])
-	fmt.Fprintf(file, "EXTRACTOR_SUBDOMAIN=ext-%v\n", config["subdomain"])
 
 	fmt.Fprintf(file, "EMAIL=%v\n", config["email"])
 	fmt.Fprintf(file, "PORT=%s\n\n", formatInt(config["port"]))
