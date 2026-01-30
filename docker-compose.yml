@@ -61,8 +61,8 @@ services:
     image: yt-downloader:latest
     container_name: yt-downloader
     restart: always
-    expose:
-      - "5001"
+    ports:
+      - "5001:5001"
     env_file:
       - .env # Load all ~30 config variables
     volumes:
@@ -81,7 +81,7 @@ services:
     networks:
       - backend
 
-  # YouTube Extractor Python service
+  # YouTube Extractor Python service (Fallback layer)
   yt-extractor:
     platform: linux/amd64
     build:
@@ -90,6 +90,8 @@ services:
     image: yt-extractor:latest
     container_name: yt-extractor
     restart: always
+    ports:
+      - "8300:8300" # Expose for external access
     environment:
       - PYTHONUNBUFFERED=1
     # logging:
@@ -106,7 +108,35 @@ services:
     networks:
       - backend
 
-  # Nginx reverse proxy with SSL
+  # YouTube Extractor Android (NewPipe-based) - Primary layer
+  yt-extractor-android:
+    platform: linux/amd64
+    build:
+      context: ./yt-extractor-android
+      dockerfile: Dockerfile
+    image: yt-extractor-android:latest
+    container_name: yt-extractor-android
+    restart: always
+    ports:
+      - "8100:8100" # Expose for external access
+    environment:
+      - SERVER_PORT=8100
+      - JAVA_OPTS=-XX:+UseContainerSupport -XX:MaxRAMPercentage=75.0
+    # logging:
+    #   driver: "none"
+    depends_on:
+      gost:
+        condition: service_started
+    healthcheck:
+      test: [ "CMD", "curl", "-f", "http://localhost:8100/api/youtube/health" ]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
+    networks:
+      - backend
+
+  # Nginx reverse proxy with SSL for yt-downloader domain
   nginx:
     platform: linux/amd64
     build:
@@ -120,7 +150,6 @@ services:
       - "443:443"
     environment:
       - DOWNLOAD_DOMAIN=${DOWNLOAD_SUBDOMAIN}.${BASE_DOMAIN}
-      - EXTRACTOR_DOMAIN=${EXTRACTOR_SUBDOMAIN}.${BASE_DOMAIN}
       - EMAIL=${EMAIL}
     volumes:
       - letsencrypt:/etc/letsencrypt
@@ -129,8 +158,6 @@ services:
     #   driver: "none"
     depends_on:
       yt-downloader:
-        condition: service_healthy
-      yt-extractor:
         condition: service_healthy
     networks:
       - backend

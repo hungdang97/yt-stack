@@ -1,0 +1,28 @@
+# Build artifacts
+build/
+.gradle/
+
+# IDE
+.idea/
+.vscode/
+*.iml
+*.ipr
+*.iws
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Logs
+*.log
+logs/
+
+# Python (if any)
+venv/
+__pycache__/
+*.pyc
+
+# Temporary files
+*.tmp
+*.swp
+*~
