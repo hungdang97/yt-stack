@@ -91,11 +91,9 @@ func main() {
 	subdomain := fmt.Sprintf("%v", cfg["subdomain"])
 
 	downloadDomain := fmt.Sprintf("%s.%s", subdomain, baseDomain)
-	extractDomain := fmt.Sprintf("ext-%s.%s", subdomain, baseDomain)
 
 	log.Println("Verifying DNS records...")
 	waitForDNS(downloadDomain)
-	waitForDNS(extractDomain)
 	log.Println("✓ DNS records verified")
 
 	// 4. Build & Deploy service
