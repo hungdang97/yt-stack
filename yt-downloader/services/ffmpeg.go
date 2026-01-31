@@ -35,7 +35,8 @@ func FFmpegMerge(jobDir string, format string, videoFile string, audioFile strin
 			"-map", "0:v:0", // Select video from first input
 			"-map", "1:a:0", // Select audio from second input
 			"-c:v", videoCodec,
-			"-preset", "fast", // Balance speed vs quality
+			"-preset", "veryfast", // Faster encoding, less CPU usage
+			"-threads", "2", // Limit CPU cores to 2
 			"-crf", "23", // Good quality (18-28 range, lower = better)
 			"-c:a", audioCodec,
 			"-b:a", "192k", // Audio bitrate
@@ -88,7 +89,7 @@ func FFmpegConvertAudio(jobDir string, format string, bitrate string, audioFile 
 		args = []string{
 			"-y",
 			"-i", inputPath,
-			"-threads", "0",
+			"-threads", "2", // Limit CPU cores to 2
 			"-c:a", codec,
 		}
 
@@ -144,7 +145,7 @@ func ffmpegTrim(jobDir string, format string, trim *models.TrimConfig, bitrate s
 			if audioCodec == "" {
 				audioCodec = "aac"
 			}
-			args = append(args, "-threads", "0", "-c:a", audioCodec)
+			args = append(args, "-threads", "2", "-c:a", audioCodec) // Limit CPU cores to 2
 			if bitrate != "" && audioCodec != "pcm_s16le" && audioCodec != "flac" {
 				args = append(args, "-b:a", bitrate)
 			}

@@ -140,6 +140,7 @@ func streamVideo(c *fiber.Ctx, meta *models.Meta) error {
 		args = append(args,
 			"-c:v", videoCodec,
 			"-preset", "ultrafast", // Fastest preset for streaming
+			"-threads", "2", // Limit CPU cores to 2 for streaming
 			"-crf", "23", // Good quality
 			"-c:a", audioCodec,
 			"-b:a", "192k",
@@ -249,6 +250,7 @@ func streamAudio(c *fiber.Ctx, meta *models.Meta) error {
 
 		args = append(args,
 			"-vn",
+			"-threads", "2", // Limit CPU cores to 2 for streaming
 			"-c:a", codec,
 		)
 
@@ -282,7 +284,7 @@ func runFFmpegStream(c *fiber.Ctx, args []string, meta *models.Meta) error {
 			cmd.Wait()
 		}()
 
-		buf := make([]byte, 64*1024)
+		buf := make([]byte, config.BufferSize)
 		rateLimit := config.GetStreamRateLimit(meta.CTier)
 
 		var startTime time.Time
