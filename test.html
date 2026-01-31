@@ -511,7 +511,10 @@
       try {
         const res = await fetch(`${API}/api/download`, {
           method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
+          headers: {
+            'Content-Type': 'application/json',
+            'X-Hub-Token': '1234567890987654321234567890987654321'
+          },
           body: JSON.stringify(body)
         });
 
