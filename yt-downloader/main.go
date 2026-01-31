@@ -58,7 +58,7 @@ func main() {
 	app.Use(cors.New(cors.Config{
 		AllowOrigins: "*",
 		AllowMethods: "GET,POST,DELETE,OPTIONS",
-		AllowHeaders: "Content-Type,Accept",
+		AllowHeaders: "Content-Type,Accept,X-Hub-Token",
 	}))
 
 	// Swagger docs
