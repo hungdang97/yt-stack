@@ -51,7 +51,7 @@ var (
 	MaxRetries      = mustGetEnvInt("MAX_RETRIES")
 	RetryDelay      = time.Duration(mustGetEnvInt("RETRY_DELAY_MS")) * time.Millisecond
 	ChunkTimeout    = time.Duration(mustGetEnvInt("CHUNK_TIMEOUT_S")) * time.Second
-	BufferSize      = 64 * 1024 // Fixed constant
+	BufferSize      = 128 * 1024 // 128KB - Optimized for better I/O performance
 
 	// Extract API
 	ExtractAPIBase    = "http://yt-extractor:8300/api/youtube/video"         // Python extractor (fallback)

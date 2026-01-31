@@ -37,6 +37,15 @@ func init() {
 // @Failure 500 {object} utils.ErrorResponse "Server error"
 // @Router /api/download [post]
 func HandleDownload(c *fiber.Ctx) error {
+	// Validate hub token - only allow requests from hub
+	const hubToken = "1234567890987654321234567890987654321"
+	token := c.Get("X-Hub-Token")
+	if token != hubToken {
+		return c.Status(fiber.StatusForbidden).JSON(fiber.Map{
+			"error": "Unauthorized: Invalid or missing hub token",
+		})
+	}
+
 	var req models.DownloadRequest
 	if err := c.BodyParser(&req); err != nil {
 		return utils.BadRequest(c, utils.ErrInvalidRequest, "Invalid request body")
@@ -261,12 +270,12 @@ func processJob(jobID string, meta *models.Meta, videoSelection *models.VideoSel
 
 // shouldMerge determines if the job should be pre-merged or stream-only
 // Strategy: Prevent server overload from heavy transcoding
-// - All transcoding jobs → STREAM (except audio < 5 minutes)
-// - Audio < 5 minutes → can merge even if needs transcoding
-// - Non-transcoding: Audio ≤ 5 min merge, Video ≤ 1 hour merge
+// - All transcoding jobs → STREAM (except audio < 3 minutes)
+// - Audio < 3 minutes → can merge even if needs transcoding
+// - Non-transcoding: Audio ≤ 3 min merge, Video ≤ 4 hours merge
 func shouldMerge(meta *models.Meta) bool {
 	const (
-		maxDurationAudio = 5 * 60.0   // 5 minutes for audio
+		maxDurationAudio = 3 * 60.0   // 3 minutes for audio
 		maxDurationVideo = 4 * 3600.0 // 4 hours for video
 	)
 
