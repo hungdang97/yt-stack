@@ -566,3 +566,62 @@ func IsAudioCodecCompatible(audioCodec string, targetFormat string) bool {
 func GetExtension(stream *models.Stream) string {
 	return utils.GetExtFromMimeType(stream.MimeType)
 }
+
+// FindEquivalentVideoStream finds a stream in the new list that matches the target stream's properties
+func FindEquivalentVideoStream(target *models.Stream, streams []models.Stream) *models.Stream {
+	if target == nil {
+		return nil
+	}
+
+	for i := range streams {
+		s := &streams[i]
+		// Match resolution and mime-type base
+		if s.Width == target.Width && s.Height == target.Height && isSameMimeType(s.MimeType, target.MimeType) {
+			return s
+		}
+	}
+	return nil
+}
+
+// FindEquivalentAudioStream finds a stream in the new list that matches the target stream's properties
+func FindEquivalentAudioStream(target *models.Stream, streams []models.Stream) *models.Stream {
+	if target == nil {
+		return nil
+	}
+
+	// Check AudioTrackID first
+	if target.AudioTrackID != "" {
+		for i := range streams {
+			if streams[i].AudioTrackID == target.AudioTrackID {
+				return &streams[i]
+			}
+		}
+	}
+
+	// Check IsOriginal + MimeType
+	if target.IsOriginal {
+		for i := range streams {
+			s := &streams[i]
+			if s.IsOriginal && isSameMimeType(s.MimeType, target.MimeType) {
+				return s
+			}
+		}
+	}
+
+	// Fallback to closest bitrate with same mime type
+	for i := range streams {
+		s := &streams[i]
+		if isSameMimeType(s.MimeType, target.MimeType) {
+			// Naive fallback: return first matching mime type
+			// Ideally we could match bitrate but this is usually sufficient for same-format refreshes
+			return s
+		}
+	}
+
+	return nil
+}
+
+func isSameMimeType(a, b string) bool {
+	// "video/mp4; codecs=..." vs "video/mp4"
+	return strings.Split(a, ";")[0] == strings.Split(b, ";")[0]
+}
