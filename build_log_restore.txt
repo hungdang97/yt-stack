@@ -1,0 +1,107 @@
+time="2026-02-01T17:44:51+07:00" level=warning msg="The \"DOWNLOAD_SUBDOMAIN\" variable is not set. Defaulting to a blank string."
+time="2026-02-01T17:44:51+07:00" level=warning msg="The \"BASE_DOMAIN\" variable is not set. Defaulting to a blank string."
+ Service yt-extractor-android  Building
+#0 building with "desktop-linux" instance using docker driver
+
+#1 [yt-extractor-android internal] load build definition from Dockerfile
+#1 transferring dockerfile: 1.50kB done
+#1 DONE 0.0s
+
+#2 [yt-extractor-android internal] load metadata for docker.io/library/amazoncorretto:17-alpine
+#2 DONE 3.4s
+
+#3 [yt-extractor-android internal] load .dockerignore
+#3 transferring context: 278B done
+#3 DONE 0.0s
+
+#4 [yt-extractor-android builder  1/10] FROM docker.io/library/amazoncorretto:17-alpine@sha256:9e6c3ad8117166620f8617c0611c54ab4912ef5775763265367f315cf6aecfdf
+#4 DONE 0.0s
+
+#5 [yt-extractor-android internal] load build context
+#5 transferring context: 739.99kB 0.0s done
+#5 DONE 0.0s
+
+#6 [yt-extractor-android builder  6/10] COPY settings.gradle .
+#6 CACHED
+
+#7 [yt-extractor-android builder  7/10] RUN chmod +x gradlew
+#7 CACHED
+
+#8 [yt-extractor-android builder  2/10] WORKDIR /app
+#8 CACHED
+
+#9 [yt-extractor-android builder  4/10] COPY gradle gradle
+#9 CACHED
+
+#10 [yt-extractor-android builder  5/10] COPY build.gradle .
+#10 CACHED
+
+#11 [yt-extractor-android builder  3/10] COPY gradlew .
+#11 CACHED
+
+#12 [yt-extractor-android builder  8/10] RUN ./gradlew dependencies --no-daemon || true
+#12 CACHED
+
+#13 [yt-extractor-android builder  9/10] COPY src src
+#13 DONE 0.1s
+
+#14 [yt-extractor-android builder 10/10] RUN ./gradlew clean bootJar -x test --no-daemon
+#14 2.514 To honour the JVM settings for this build a single-use Daemon process will be forked. For more on this, please refer to https://docs.gradle.org/8.12.1/userguide/gradle_daemon.html#sec:disabling_the_daemon in the Gradle documentation.
+#14 5.411 Daemon will be stopped at the end of the build 
+#14 22.12 > Task :clean
+#14 22.12 > Task :protobufDummy UP-TO-DATE
+#14 46.31 > Task :extractIncludeProto
+#14 46.41 > Task :extractProto
+#14 52.59 Caught exception: Couldn't poll for events, error = 4
+#14 52.81 Error while receiving file changes
+#14 52.82 net.rubygrapefruit.platform.NativeException: Couldn't poll for events, error = 4
+#14 52.82 	at org.gradle.fileevents.internal.AbstractNativeFileEventFunctions$NativeFileWatcher.executeRunLoop0(Native Method)
+#14 52.82 	at org.gradle.fileevents.internal.AbstractNativeFileEventFunctions$NativeFileWatcher.executeRunLoop(AbstractNativeFileEventFunctions.java:32)
+#14 52.82 	at org.gradle.fileevents.internal.AbstractFileEventFunctions$AbstractFileWatcher$1.run(AbstractFileEventFunctions.java:154)
+#14 52.82 > Task :generateProto
+#14 71.43 
+#14 71.43 > Task :compileJava
+#14 71.43 Note: Some input files use unchecked or unsafe operations.
+#14 71.43 Note: Recompile with -Xlint:unchecked for details.
+#14 76.71 
+#14 76.71 > Task :processResources
+#14 76.71 > Task :classes
+#14 76.91 > Task :resolveMainClassName
+#14 78.81 > Task :bootJar
+#14 78.81 
+#14 78.81 [Incubating] Problems report is available at: file:///app/build/reports/problems/problems-report.html
+#14 78.81 
+#14 78.81 Deprecated Gradle features were used in this build, making it incompatible with Gradle 9.0.
+#14 78.81 
+#14 78.81 You can use '--warning-mode all' to show the individual deprecation warnings and determine if they come from your own scripts or plugins.
+#14 78.81 
+#14 78.81 For more on this, please refer to https://docs.gradle.org/8.12.1/userguide/command_line_interface.html#sec:command_line_warnings in the Gradle documentation.
+#14 78.81 
+#14 78.81 BUILD SUCCESSFUL in 1m 18s
+#14 78.81 8 actionable tasks: 8 executed
+#14 DONE 79.4s
+
+#15 [yt-extractor-android stage-1 3/6] RUN addgroup -g 1001 appuser &&   adduser -D -u 1001 -G appuser appuser
+#15 CACHED
+
+#16 [yt-extractor-android stage-1 2/6] RUN apk add --no-cache curl
+#16 CACHED
+
+#17 [yt-extractor-android stage-1 4/6] WORKDIR /app
+#17 CACHED
+
+#18 [yt-extractor-android stage-1 5/6] COPY --from=builder /app/build/libs/*.jar app.jar
+#18 DONE 0.1s
+
+#19 [yt-extractor-android stage-1 6/6] RUN chown -R appuser:appuser /app
+#19 DONE 0.2s
+
+#20 [yt-extractor-android] exporting to image
+#20 exporting layers 0.1s done
+#20 writing image sha256:61f92255b7b3a4f3d1826985f573cd3a54df2431a58b8b6e0aaf839766316304 done
+#20 naming to docker.io/library/yt-extractor-android:latest done
+#20 DONE 0.1s
+
+#21 [yt-extractor-android] resolving provenance for metadata file
+ Service yt-extractor-android  Built
+#21 DONE 0.0s

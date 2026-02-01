@@ -1,6 +1,7 @@
 package services
 
 import (
+	"context"
 	"encoding/json"
 	"fmt"
 	"io"
@@ -14,60 +15,114 @@ import (
 	"yt-downloader-go/utils"
 )
 
-// Extract fetches video metadata with 4-layer cascading fallback:
-// 1. Python Extractor + Cloudflare Proxy (cookie pool + proxy)
+// Extract fetches video metadata with 3-layer cascading fallback:
+// 1. Android Extractor + Cloudflare Proxy (Enforced)
 // 2. Python Extractor + Direct IP (cookie pool, no proxy)
-// 3. Android Extractor + Cloudflare Proxy (NewPipe + proxy)
-// 4. Android Extractor + Direct IP (NewPipe, no proxy)
+// 3. Python Extractor + Cloudflare Proxy (cookie pool + proxy)
 func Extract(videoID string) (*models.ExtractResponse, error) {
 	var lastErr error
 
-	// Layer 1: Python Extractor + Cloudflare Proxy
-	result, err := extractFromAPI(videoID, config.ExtractAPIBase, config.WARPProxyURL)
+	// Layer 1: Android Extractor + Cloudflare Proxy (Enforced)
+	result, err := extractFromAPI(videoID, config.ExtractAPIAndroid, config.WARPProxyURL)
 	if err == nil && isValidExtractResponse(result) {
-		fmt.Printf("[%s] ✓ Extract success via Python (Cloudflare)\n", videoID)
-		return result, nil
-	}
-	lastErr = err
-	if err != nil {
-		fmt.Printf("[%s] Python+Cloudflare failed: %v\n", videoID, err)
+		if checkLinkHealth(result, true) {
+			fmt.Printf("[%s] ✓ Extract success via Android (Cloudflare)\n", videoID)
+			return result, nil
+		}
+		fmt.Printf("[%s] Android+Cloudflare link check failed\n", videoID)
+		lastErr = fmt.Errorf("link check failed")
+	} else if err != nil {
+		lastErr = err
+		fmt.Printf("[%s] Android+Cloudflare failed: %v\n", videoID, err)
 	}
 
 	// Layer 2: Python Extractor + Direct IP
 	result, err = extractFromAPI(videoID, config.ExtractAPIBase, "")
 	if err == nil && isValidExtractResponse(result) {
-		fmt.Printf("[%s] ✓ Extract success via Python (Direct IP)\n", videoID)
-		return result, nil
-	}
-	lastErr = err
-	if err != nil {
+		if checkLinkHealth(result, false) {
+			fmt.Printf("[%s] ✓ Extract success via Python (Direct IP)\n", videoID)
+			return result, nil
+		}
+		fmt.Printf("[%s] Python+Direct link check failed\n", videoID)
+		lastErr = fmt.Errorf("link check failed")
+	} else if err != nil {
+		lastErr = err
 		fmt.Printf("[%s] Python+Direct failed: %v\n", videoID, err)
 	}
 
-	// Layer 3: Android Extractor + Cloudflare Proxy
-	result, err = extractFromAPI(videoID, config.ExtractAPIAndroid, config.WARPProxyURL)
+	// Layer 3: Python Extractor + Cloudflare Proxy
+	result, err = extractFromAPI(videoID, config.ExtractAPIBase, config.WARPProxyURL)
 	if err == nil && isValidExtractResponse(result) {
-		fmt.Printf("[%s] ✓ Extract success via Android (Cloudflare)\n", videoID)
-		return result, nil
-	}
-	lastErr = err
-	if err != nil {
-		fmt.Printf("[%s] Android+Cloudflare failed: %v\n", videoID, err)
+		if checkLinkHealth(result, true) {
+			fmt.Printf("[%s] ✓ Extract success via Python (Cloudflare)\n", videoID)
+			return result, nil
+		}
+		fmt.Printf("[%s] Python+Cloudflare link check failed\n", videoID)
+		lastErr = fmt.Errorf("link check failed")
+	} else if err != nil {
+		lastErr = err
+		fmt.Printf("[%s] Python+Cloudflare failed: %v\n", videoID, err)
 	}
 
-	// Layer 4: Android Extractor + Direct IP
-	result, err = extractFromAPI(videoID, config.ExtractAPIAndroid, "")
-	if err == nil && isValidExtractResponse(result) {
-		fmt.Printf("[%s] ✓ Extract success via Android (Direct IP)\n", videoID)
-		return result, nil
-	}
-	lastErr = err
-	if err != nil {
-		fmt.Printf("[%s] Android+Direct failed: %v\n", videoID, err)
+	// All 3 layers failed
+	return nil, fmt.Errorf("all 3 extraction layers failed, last error: %w", lastErr)
+}
+
+// checkLinkHealth performs a HEAD request to verify the video link is accessible
+func checkLinkHealth(result *models.ExtractResponse, useProxy bool) bool {
+	if result == nil || len(result.AudioStreams) == 0 {
+		return false
 	}
 
-	// All 4 layers failed
-	return nil, fmt.Errorf("all 4 extraction layers failed, last error: %w", lastErr)
+	// Check the first audio stream
+	testURL := result.AudioStreams[0].URL
+	if testURL == "" {
+		return false
+	}
+
+	var client *http.Client
+	if useProxy {
+		client = config.DownloadClient
+	} else {
+		client = config.DownloadClientNoProxy
+	}
+
+	// Use a short timeout for the check
+	ctx := context.TODO() // We could use context.WithTimeout if not for the client already having one, but let's be safe
+	req, err := http.NewRequestWithContext(ctx, "HEAD", testURL, nil)
+	if err != nil {
+		fmt.Printf("[CheckLink] Error creating request: %v\n", err)
+		return false
+	}
+
+	req.Header.Set("User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36")
+
+	resp, err := client.Do(req)
+	if err != nil {
+		fmt.Printf("[CheckLink] Request failed (Proxy=%v): %v\n", useProxy, err)
+		return false
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode >= 200 && resp.StatusCode < 400 {
+		return true
+	}
+
+	// Some servers return 403 if HEAD is not allowed, try GET with Range: bytes=0-1
+	if resp.StatusCode == 403 || resp.StatusCode == 405 {
+		req.Method = "GET"
+		req.Header.Set("Range", "bytes=0-1")
+		resp, err := client.Do(req)
+		if err == nil {
+			defer resp.Body.Close()
+			if resp.StatusCode >= 200 && resp.StatusCode < 400 {
+				return true
+			}
+		}
+	}
+
+	fmt.Printf("[CheckLink] Bad status: %d (Proxy=%v)\n", resp.StatusCode, useProxy)
+	return false
 }
 
 // isValidExtractResponse validates that the response has required data
