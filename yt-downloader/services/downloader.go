@@ -7,6 +7,7 @@ import (
 	"net/http"
 	"os"
 	"path/filepath"
+	"strings"
 	"sync"
 	"sync/atomic"
 	"time"
@@ -248,10 +249,15 @@ func downloadChunkWithRetry(ctx context.Context, urlProvider *URLProvider, chunk
 }
 
 func is403(err error) bool {
+	if err == nil {
+		return false
+	}
 	if httpErr, ok := err.(*HTTPError); ok && httpErr.StatusCode == 403 {
 		return true
 	}
-	return false
+	// Fallback: check error string
+	msg := err.Error()
+	return strings.Contains(msg, "HTTP 403") || strings.Contains(msg, "status 403")
 }
 
 // streamToFile streams data from reader to file using buffer pool
