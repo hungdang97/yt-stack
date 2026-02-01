@@ -23,25 +23,71 @@ func (e *HTTPError) Error() string {
 	return fmt.Sprintf("HTTP %d: %s", e.StatusCode, e.Message)
 }
 
+// URLProvider manages the download URL and its refresh logic
+type URLProvider struct {
+	CurrentURL  string
+	RefreshFunc func() (string, error)
+	mu          sync.RWMutex
+}
+
+func (p *URLProvider) Get() string {
+	p.mu.RLock()
+	defer p.mu.RUnlock()
+	return p.CurrentURL
+}
+
+func (p *URLProvider) Refresh() (string, error) {
+	p.mu.Lock()
+	defer p.mu.Unlock()
+
+	if p.RefreshFunc == nil {
+		return "", fmt.Errorf("no refresh function provided")
+	}
+
+	newURL, err := p.RefreshFunc()
+	if err != nil {
+		return "", err
+	}
+
+	p.CurrentURL = newURL
+	return newURL, nil
+}
+
 // Download downloads a file using streaming (low memory)
 // threads: number of parallel download threads (0 = use config.DownloadThreads default)
-func Download(ctx context.Context, downloadURL string, destPath string, totalSize int64, threads int) error {
+func Download(ctx context.Context, urlProvider *URLProvider, destPath string, totalSize int64, threads int) error {
 	if threads <= 0 {
 		threads = config.DownloadThreads
 	}
 	if totalSize <= config.ChunkSize {
-		return downloadSingle(ctx, downloadURL, destPath, totalSize)
+		return downloadSingle(ctx, urlProvider, destPath, totalSize)
 	}
-	return downloadChunked(ctx, downloadURL, destPath, totalSize, threads)
+	return downloadChunked(ctx, urlProvider, destPath, totalSize, threads)
 }
 
 // downloadSingle streams small files directly to disk
-func downloadSingle(ctx context.Context, downloadURL string, destPath string, totalSize int64) error {
+func downloadSingle(ctx context.Context, urlProvider *URLProvider, destPath string, totalSize int64) error {
 	tmpPath := destPath + ".tmp"
+	maxRetries := 1
 
-	resp, err := fetchRange(ctx, downloadURL, 0, totalSize-1)
-	if err != nil {
-		return err
+	var resp *http.Response
+	var err error
+
+	for i := 0; i <= maxRetries; i++ {
+		currentURL := urlProvider.Get()
+		resp, err = fetchRange(ctx, currentURL, 0, totalSize-1)
+
+		if err != nil {
+			if is403(err) && i < maxRetries {
+				fmt.Printf("[Download] 403 in single download, refreshing...\n")
+				if _, refreshErr := urlProvider.Refresh(); refreshErr != nil {
+					return fmt.Errorf("refresh failed: %w", refreshErr)
+				}
+				continue
+			}
+			return err
+		}
+		break
 	}
 	defer resp.Body.Close()
 
@@ -54,7 +100,7 @@ func downloadSingle(ctx context.Context, downloadURL string, destPath string, to
 }
 
 // downloadChunked downloads large files using parallel workers with chunk files
-func downloadChunked(ctx context.Context, downloadURL string, destPath string, totalSize int64, threads int) error {
+func downloadChunked(ctx context.Context, urlProvider *URLProvider, destPath string, totalSize int64, threads int) error {
 	// Create chunks directory
 	chunksDir := destPath + ".chunks"
 	if err := os.MkdirAll(chunksDir, 0755); err != nil {
@@ -99,7 +145,7 @@ func downloadChunked(ctx context.Context, downloadURL string, destPath string, t
 
 				// Download chunk with retries
 				chunkPath := filepath.Join(chunksDir, fmt.Sprintf("chunk_%d", idx))
-				if err := downloadChunkWithRetry(ctx, downloadURL, chunkPath, start, end); err != nil {
+				if err := downloadChunkWithRetry(ctx, urlProvider, chunkPath, start, end); err != nil {
 					errChan <- fmt.Errorf("chunk %d failed: %w", idx, err)
 					return
 				}
@@ -135,35 +181,56 @@ func downloadChunked(ctx context.Context, downloadURL string, destPath string, t
 // Strategy: 2 attempts only
 // - Attempt 1: Cloudflare proxy
 // - Attempt 2: Direct IP (if attempt 1 fails)
-func downloadChunkWithRetry(ctx context.Context, downloadURL string, chunkPath string, start, end int64) error {
+func downloadChunkWithRetry(ctx context.Context, urlProvider *URLProvider, chunkPath string, start, end int64) error {
 	tmpPath := chunkPath + ".tmp"
 
 	// Attempt 1: Use Cloudflare proxy
-	resp, err := fetchRangeWithClient(ctx, downloadURL, start, end, true)
-	if err == nil {
-		err = streamToFile(resp.Body, tmpPath)
-		resp.Body.Close()
+	// Retry loop for 403
+	maxRetries := 1
+	var lastErr error
 
+	for i := 0; i <= maxRetries; i++ {
+		currentURL := urlProvider.Get()
+		resp, err := fetchRangeWithClient(ctx, currentURL, start, end, true)
 		if err == nil {
-			// Success - rename tmp to final
-			if err := os.Rename(tmpPath, chunkPath); err != nil {
-				return fmt.Errorf("rename failed: %w", err)
-			}
-			return nil
-		}
-		os.Remove(tmpPath)
-	}
+			err = streamToFile(resp.Body, tmpPath)
+			resp.Body.Close()
 
-	// Don't retry on 403
-	if httpErr, ok := err.(*HTTPError); ok && httpErr.StatusCode == 403 {
-		return err
+			if err == nil {
+				// Success - rename tmp to final
+				if err := os.Rename(tmpPath, chunkPath); err != nil {
+					return fmt.Errorf("rename failed: %w", err)
+				}
+				return nil
+			}
+			os.Remove(tmpPath)
+			lastErr = err
+		} else {
+			lastErr = err
+			// Check for 403
+			if is403(err) && i < maxRetries {
+				// fmt.Printf("Chunk 403, refreshing...\n")
+				if _, refreshErr := urlProvider.Refresh(); refreshErr != nil {
+					lastErr = fmt.Errorf("refresh failed: %w", refreshErr)
+					break
+				}
+				continue
+			}
+		}
+		// If not 403, break to fallback
+		if !is403(lastErr) {
+			break
+		}
 	}
 
 	// Attempt 2: Use direct IP (no proxy)
 	time.Sleep(config.RetryDelay)
-	resp, err = fetchRangeWithClient(ctx, downloadURL, start, end, false)
+	// Use potentially refreshed URL
+	currentURL := urlProvider.Get()
+
+	resp, err := fetchRangeWithClient(ctx, currentURL, start, end, false)
 	if err != nil {
-		return fmt.Errorf("chunk download failed after 2 attempts: %w", err)
+		return fmt.Errorf("chunk download failed after fallback: %w (last err: %v)", err, lastErr)
 	}
 	defer resp.Body.Close()
 
@@ -178,6 +245,13 @@ func downloadChunkWithRetry(ctx context.Context, downloadURL string, chunkPath s
 		return fmt.Errorf("rename failed: %w", err)
 	}
 	return nil
+}
+
+func is403(err error) bool {
+	if httpErr, ok := err.(*HTTPError); ok && httpErr.StatusCode == 403 {
+		return true
+	}
+	return false
 }
 
 // streamToFile streams data from reader to file using buffer pool

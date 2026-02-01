@@ -2,6 +2,7 @@ package handlers
 
 import (
 	"context"
+	"fmt"
 	"path/filepath"
 	"time"
 	"yt-downloader-go/config"
@@ -203,12 +204,12 @@ func processJob(jobID string, meta *models.Meta, videoSelection *models.VideoSel
 
 		go func() {
 			videoPath := jobDir + "/" + meta.Files.Video.Name
-			errChan <- services.Download(ctx, videoSelection.Stream.URL, videoPath, videoSelection.Stream.ContentLength, threads)
+			errChan <- services.Download(ctx, makeURLProvider(meta.VideoID, videoSelection.Stream, true), videoPath, videoSelection.Stream.ContentLength, threads)
 		}()
 
 		go func() {
 			audioPath := jobDir + "/" + meta.Files.Audio.Name
-			errChan <- services.Download(ctx, audioStream.URL, audioPath, audioStream.ContentLength, threads)
+			errChan <- services.Download(ctx, makeURLProvider(meta.VideoID, audioStream, false), audioPath, audioStream.ContentLength, threads)
 		}()
 
 		for i := 0; i < 2; i++ {
@@ -219,7 +220,7 @@ func processJob(jobID string, meta *models.Meta, videoSelection *models.VideoSel
 		}
 	} else {
 		audioPath := jobDir + "/" + meta.Files.Audio.Name
-		if err := services.Download(ctx, audioStream.URL, audioPath, audioStream.ContentLength, threads); err != nil {
+		if err := services.Download(ctx, makeURLProvider(meta.VideoID, audioStream, false), audioPath, audioStream.ContentLength, threads); err != nil {
 			utils.UpdateMetaError(jobID, "Download failed: "+err.Error())
 			return
 		}
@@ -374,4 +375,31 @@ func calculateNeedsReencode(videoSelection *models.VideoSelectionResult, audioSt
 	}
 
 	return false
+}
+
+// makeURLProvider creates a URLProvider with refresh logic
+func makeURLProvider(videoID string, targetStream *models.Stream, isVideo bool) *services.URLProvider {
+	return &services.URLProvider{
+		CurrentURL: targetStream.URL,
+		RefreshFunc: func() (string, error) {
+			fmt.Printf("[Refresh] Refreshing URL for %s (isVideo=%v)...\n", videoID, isVideo)
+			newData, err := services.Extract(videoID)
+			if err != nil {
+				return "", fmt.Errorf("extract failed: %w", err)
+			}
+
+			var newStream *models.Stream
+			if isVideo {
+				newStream = services.FindEquivalentVideoStream(targetStream, newData.VideoStreams)
+			} else {
+				newStream = services.FindEquivalentAudioStream(targetStream, newData.AudioStreams)
+			}
+
+			if newStream == nil {
+				return "", fmt.Errorf("matching stream not found")
+			}
+			fmt.Printf("[Refresh] Success! New URL: %s...\n", newStream.URL[:50])
+			return newStream.URL, nil
+		},
+	}
 }
