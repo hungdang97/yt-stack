@@ -271,12 +271,12 @@ func processJob(jobID string, meta *models.Meta, videoSelection *models.VideoSel
 
 // shouldMerge determines if the job should be pre-merged or stream-only
 // Strategy: Prevent server overload from heavy transcoding
-// - All transcoding jobs → STREAM (except audio < 3 minutes)
-// - Audio < 3 minutes → can merge even if needs transcoding
+// - All transcoding jobs → STREAM (except audio < 5 minutes)
+// - Audio < 5 minutes → can merge even if needs transcoding
 // - Non-transcoding: Audio ≤ 3 min merge, Video ≤ 4 hours merge
 func shouldMerge(meta *models.Meta) bool {
 	const (
-		maxDurationAudio = 3 * 60.0   // 3 minutes for audio
+		maxDurationAudio = 5 * 60.0   // 3 minutes for audio
 		maxDurationVideo = 4 * 3600.0 // 4 hours for video
 	)
 
