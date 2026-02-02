@@ -73,23 +73,47 @@ func downloadSingle(ctx context.Context, urlProvider *URLProvider, destPath stri
 
 	var resp *http.Response
 	var err error
+	var lastErr error
 
+	// Attempt 1: Direct IP
+	// Try with retries and refresh for Direct IP
 	for i := 0; i <= maxRetries; i++ {
 		currentURL := urlProvider.Get()
-		resp, err = fetchRange(ctx, currentURL, 0, totalSize-1)
+		// Try Direct IP (useProxy = false)
+		resp, err = fetchRangeWithClient(ctx, currentURL, 0, totalSize-1, false)
 
 		if err != nil {
+			lastErr = err
 			if is403(err) && i < maxRetries {
-				fmt.Printf("[Download] 403 in single download, refreshing...\n")
+				fmt.Printf("[Download] 403 in single download (Direct IP), refreshing...\n")
 				if _, refreshErr := urlProvider.Refresh(); refreshErr != nil {
 					return fmt.Errorf("refresh failed: %w", refreshErr)
 				}
 				continue
 			}
-			return err
+			// Break to fallback if non-403 error or max retries reached
+			break
 		}
-		break
+
+		// Success
+		goto Success
 	}
+
+	// Attempt 2: Cloudflare Proxy (Fallback)
+	fmt.Printf("[Download] Direct IP failed for single download, falling back to Proxy. Last err: %v\n", lastErr)
+
+	// Try Proxy once with potentially refreshed URL
+	{
+		currentURL := urlProvider.Get()
+		// Try Proxy (useProxy = true)
+		resp, err = fetchRangeWithClient(ctx, currentURL, 0, totalSize-1, true)
+		if err != nil {
+			// If proxy fails too, return the proxy error (or wrap both)
+			return fmt.Errorf("single download failed (Proxy fallback): %w (Direct err: %v)", err, lastErr)
+		}
+	}
+
+Success:
 	defer resp.Body.Close()
 
 	if err := streamToFile(resp.Body, tmpPath); err != nil {
@@ -179,20 +203,22 @@ func downloadChunked(ctx context.Context, urlProvider *URLProvider, destPath str
 }
 
 // downloadChunkWithRetry downloads a single chunk with retry logic
-// Strategy: 2 attempts only
-// - Attempt 1: Cloudflare proxy
-// - Attempt 2: Direct IP (if attempt 1 fails)
+// Strategy: 2 attempts
+// - Attempt 1: Direct IP (with retries & refresh)
+// - Attempt 2: Cloudflare proxy (fallback)
 func downloadChunkWithRetry(ctx context.Context, urlProvider *URLProvider, chunkPath string, start, end int64) error {
 	tmpPath := chunkPath + ".tmp"
 
-	// Attempt 1: Use Cloudflare proxy
+	// Attempt 1: Use Direct IP
 	// Retry loop for 403
 	maxRetries := config.MaxRetries
 	var lastErr error
+	var success bool
 
 	for i := 0; i <= maxRetries; i++ {
 		currentURL := urlProvider.Get()
-		resp, err := fetchRangeWithClient(ctx, currentURL, start, end, true)
+		// useProxy = false for Direct IP
+		resp, err := fetchRangeWithClient(ctx, currentURL, start, end, false)
 		if err == nil {
 			err = streamToFile(resp.Body, tmpPath)
 			resp.Body.Close()
@@ -202,7 +228,8 @@ func downloadChunkWithRetry(ctx context.Context, urlProvider *URLProvider, chunk
 				if err := os.Rename(tmpPath, chunkPath); err != nil {
 					return fmt.Errorf("rename failed: %w", err)
 				}
-				return nil
+				success = true
+				break
 			}
 			os.Remove(tmpPath)
 			lastErr = err
@@ -210,7 +237,7 @@ func downloadChunkWithRetry(ctx context.Context, urlProvider *URLProvider, chunk
 			lastErr = err
 			// Check for 403
 			if is403(err) && i < maxRetries {
-				// fmt.Printf("Chunk 403, refreshing...\n")
+				// fmt.Printf("Chunk 403 (Direct), refreshing...\n")
 				if _, refreshErr := urlProvider.Refresh(); refreshErr != nil {
 					lastErr = fmt.Errorf("refresh failed: %w", refreshErr)
 					break
@@ -224,21 +251,28 @@ func downloadChunkWithRetry(ctx context.Context, urlProvider *URLProvider, chunk
 		}
 	}
 
-	// Attempt 2: Use direct IP (no proxy)
+	if success {
+		return nil
+	}
+
+	// Attempt 2: Use Cloudflare Proxy (fallback)
+	// fmt.Printf("Direct IP failed for chunk, falling back to Proxy...\n")
 	time.Sleep(config.RetryDelay)
+
 	// Use potentially refreshed URL
 	currentURL := urlProvider.Get()
 
-	resp, err := fetchRangeWithClient(ctx, currentURL, start, end, false)
+	// useProxy = true for Cloudflare
+	resp, err := fetchRangeWithClient(ctx, currentURL, start, end, true)
 	if err != nil {
-		return fmt.Errorf("chunk download failed after fallback: %w (last err: %v)", err, lastErr)
+		return fmt.Errorf("chunk download failed after fallback (Proxy): %w (Direct err: %v)", err, lastErr)
 	}
 	defer resp.Body.Close()
 
 	err = streamToFile(resp.Body, tmpPath)
 	if err != nil {
 		os.Remove(tmpPath)
-		return fmt.Errorf("chunk download failed: %w", err)
+		return fmt.Errorf("chunk download failed (stream): %w", err)
 	}
 
 	// Success - rename tmp to final
