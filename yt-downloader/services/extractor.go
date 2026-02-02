@@ -14,25 +14,14 @@ import (
 	"yt-downloader-go/utils"
 )
 
-// Extract fetches video metadata with 3-layer cascading fallback:
-// 1. Android Extractor + Cloudflare Proxy (Enforced)
-// 2. Python Extractor + Direct IP (cookie pool, no proxy)
-// 3. Python Extractor + Cloudflare Proxy (cookie pool + proxy)
+// Extract fetches video metadata with 2-layer cascading fallback:
+// 1. Python Extractor + Direct IP (cookie pool, no proxy)
+// 2. Python Extractor + Cloudflare Proxy (cookie pool + proxy)
 func Extract(videoID string) (*models.ExtractResponse, error) {
 	var lastErr error
 
-	// Layer 1: Android Extractor + Cloudflare Proxy (Enforced)
-	result, err := extractFromAPI(videoID, config.ExtractAPIAndroid, config.WARPProxyURL)
-	if err == nil && isValidExtractResponse(result) {
-		fmt.Printf("[%s] ✓ Extract success via Android (Cloudflare)\n", videoID)
-		return result, nil
-	} else if err != nil {
-		lastErr = err
-		fmt.Printf("[%s] Android+Cloudflare failed: %v\n", videoID, err)
-	}
-
-	// Layer 2: Python Extractor + Direct IP
-	result, err = extractFromAPI(videoID, config.ExtractAPIBase, "")
+	// Layer 1: Python Extractor + Direct IP
+	result, err := extractFromAPI(videoID, config.ExtractAPIBase, "")
 	if err == nil && isValidExtractResponse(result) {
 		fmt.Printf("[%s] ✓ Extract success via Python (Direct IP)\n", videoID)
 		return result, nil
@@ -41,7 +30,7 @@ func Extract(videoID string) (*models.ExtractResponse, error) {
 		fmt.Printf("[%s] Python+Direct failed: %v\n", videoID, err)
 	}
 
-	// Layer 3: Python Extractor + Cloudflare Proxy
+	// Layer 2: Python Extractor + Cloudflare Proxy
 	result, err = extractFromAPI(videoID, config.ExtractAPIBase, config.WARPProxyURL)
 	if err == nil && isValidExtractResponse(result) {
 		fmt.Printf("[%s] ✓ Extract success via Python (Cloudflare)\n", videoID)
@@ -51,8 +40,8 @@ func Extract(videoID string) (*models.ExtractResponse, error) {
 		fmt.Printf("[%s] Python+Cloudflare failed: %v\n", videoID, err)
 	}
 
-	// All 3 layers failed
-	return nil, fmt.Errorf("all 3 extraction layers failed, last error: %w", lastErr)
+	// Both layers failed
+	return nil, fmt.Errorf("both extraction layers failed, last error: %w", lastErr)
 }
 
 // isValidExtractResponse validates that the response has required data
