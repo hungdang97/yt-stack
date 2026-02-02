@@ -69,7 +69,7 @@ func Download(ctx context.Context, urlProvider *URLProvider, destPath string, to
 // downloadSingle streams small files directly to disk
 func downloadSingle(ctx context.Context, urlProvider *URLProvider, destPath string, totalSize int64) error {
 	tmpPath := destPath + ".tmp"
-	maxRetries := 1
+	maxRetries := config.MaxRetries
 
 	var resp *http.Response
 	var err error
@@ -187,7 +187,7 @@ func downloadChunkWithRetry(ctx context.Context, urlProvider *URLProvider, chunk
 
 	// Attempt 1: Use Cloudflare proxy
 	// Retry loop for 403
-	maxRetries := 1
+	maxRetries := config.MaxRetries
 	var lastErr error
 
 	for i := 0; i <= maxRetries; i++ {
@@ -252,12 +252,7 @@ func is403(err error) bool {
 	if err == nil {
 		return false
 	}
-	if httpErr, ok := err.(*HTTPError); ok && httpErr.StatusCode == 403 {
-		return true
-	}
-	// Fallback: check error string
-	msg := err.Error()
-	return strings.Contains(msg, "HTTP 403") || strings.Contains(msg, "status 403")
+	return strings.Contains(err.Error(), "403")
 }
 
 // streamToFile streams data from reader to file using buffer pool
@@ -330,7 +325,11 @@ func fetchRange(ctx context.Context, downloadURL string, start, end int64) (*htt
 // useProxy=true: use Cloudflare proxy, useProxy=false: direct IP
 func fetchRangeWithClient(ctx context.Context, downloadURL string, start, end int64, useProxy bool) (*http.Response, error) {
 	// Add range to URL as query parameter (YouTube style)
-	rangeURL := fmt.Sprintf("%s&range=%d-%d", downloadURL, start, end)
+	separator := "&"
+	if !strings.Contains(downloadURL, "?") {
+		separator = "?"
+	}
+	rangeURL := fmt.Sprintf("%s%srange=%d-%d", downloadURL, separator, start, end)
 
 	req, err := http.NewRequestWithContext(ctx, "GET", rangeURL, nil)
 	if err != nil {
