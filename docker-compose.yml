@@ -78,6 +78,11 @@ services:
       timeout: 10s
       retries: 3
       start_period: 10s
+    deploy:
+      resources:
+        limits:
+          # Limit to 3.8 CPU cores (95% of 4 cores)
+          cpus: '3.8'
     networks:
       - backend
 
