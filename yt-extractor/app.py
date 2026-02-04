@@ -7,6 +7,9 @@ from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
 import os
 import logging
+import tempfile
+import http.cookiejar
+from datetime import datetime, timedelta
 
 # Configure logging
 logging.basicConfig(
@@ -87,6 +90,37 @@ async def startup():
     await cookie_pool.warm_up()
 
 
+def parse_cookies_to_netscape(cookie_string):
+    """
+    Parse cookie string to Netscape cookie file format.
+
+    Input format: "name1=value1; name2=value2; ..."
+    Output: Netscape cookie file content
+    """
+    if not cookie_string:
+        return None
+
+    lines = ["# Netscape HTTP Cookie File\n"]
+
+    # Parse cookie string
+    for cookie in cookie_string.split(';'):
+        cookie = cookie.strip()
+        if not cookie or '=' not in cookie:
+            continue
+
+        name, value = cookie.split('=', 1)
+        name = name.strip()
+        value = value.strip()
+
+        # Netscape format: domain flag domain path secure expiration name value
+        # For YouTube cookies, use .youtube.com domain
+        expiration = int((datetime.now() + timedelta(days=365)).timestamp())
+        line = f".youtube.com\tTRUE\t/\tTRUE\t{expiration}\t{name}\t{value}\n"
+        lines.append(line)
+
+    return ''.join(lines)
+
+
 def build_proxy_url(proxy):
     """
     Build proxy URL with authentication.
@@ -118,8 +152,8 @@ def build_proxy_url(proxy):
     return proxy
 
 
-def build_ydl_opts(cookies, proxy=None):
-    """Build yt-dlp options with cookies and optional proxy."""
+def build_ydl_opts(cookie_file_path, proxy=None):
+    """Build yt-dlp options with cookie file and optional proxy."""
     opts = {
         'quiet': True,
         'no_warnings': True,
@@ -128,7 +162,7 @@ def build_ydl_opts(cookies, proxy=None):
         'no_check_formats': True,
         'formats': 'none',
         'dump_single_json': True,
-        'http_headers': {'Cookie': cookies},
+        'cookiefile': cookie_file_path,  # ✅ Use cookie file instead of headers
         'extractor_args': {
             'youtube': {
                 'skip': ['hls', 'dash', 'translated_subs'],
@@ -138,6 +172,10 @@ def build_ydl_opts(cookies, proxy=None):
         },
         # Deno JavaScript runtime (found via PATH)
         'js_runtime': 'deno',
+        # Add rate limiting
+        'sleep_interval': 1,
+        'max_sleep_interval': 3,
+        'sleep_interval_requests': 0.5,
     }
     if proxy:
         opts['proxy'] = proxy
@@ -147,9 +185,22 @@ def build_ydl_opts(cookies, proxy=None):
 def extract_sync(video_id: str, proxy: str, profile: str, cookies: str):
     """Blocking extraction - runs in thread pool."""
     url = f'https://www.youtube.com/watch?v={video_id}'
-    ydl_opts = build_ydl_opts(cookies, proxy)
 
+    # Create temporary cookie file
+    cookie_content = parse_cookies_to_netscape(cookies)
+    if not cookie_content:
+        return None, "Invalid cookie format"
+
+    cookie_file = None
     try:
+        # Write cookies to temporary file
+        cookie_file = tempfile.NamedTemporaryFile(mode='w', suffix='.txt', delete=False)
+        cookie_file.write(cookie_content)
+        cookie_file.close()
+
+        # Build yt-dlp options with cookie file
+        ydl_opts = build_ydl_opts(cookie_file.name, proxy)
+
         with yt_dlp.YoutubeDL(ydl_opts) as ydl:
             info = ydl.extract_info(url, download=False)
             result = map_yt_dlp_to_api(info)
@@ -165,7 +216,7 @@ def extract_sync(video_id: str, proxy: str, profile: str, cookies: str):
                 if not has_audio:
                     missing.append('audio')
                 error_msg = f"Missing streams: {', '.join(missing)}"
-                
+
                 # Treat missing streams as a potential cookie/bot issue
                 # logger.error(f"[{video_id}] Missing streams: {error_msg} | proxy={proxy}")
                 return None, error_msg
@@ -174,6 +225,13 @@ def extract_sync(video_id: str, proxy: str, profile: str, cookies: str):
     except Exception as e:
         # logger.error(f"[{video_id}] Extraction failed: {str(e)} | proxy={proxy}")
         return None, str(e)
+    finally:
+        # Cleanup temporary cookie file
+        if cookie_file:
+            try:
+                os.unlink(cookie_file.name)
+            except:
+                pass
 
 
 @app.get('/api/youtube/video/{video_id}')
