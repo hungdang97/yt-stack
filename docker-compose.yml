@@ -81,8 +81,8 @@ services:
     deploy:
       resources:
         limits:
-          # Limit to 3.8 CPU cores (95% of 4 cores)
-          cpus: '3.8'
+          # Limit to 3.6 CPU cores (90% of 4 cores)
+          cpus: '3.6'
     networks:
       - backend
 
