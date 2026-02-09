@@ -162,20 +162,15 @@ def build_ydl_opts(cookie_file_path, proxy=None):
         'no_check_formats': True,
         'formats': 'none',
         'dump_single_json': True,
-        'cookiefile': cookie_file_path,  # ✅ Use cookie file instead of headers
+        'cookiefile': cookie_file_path, 
         'extractor_args': {
             'youtube': {
                 'skip': ['hls', 'dash', 'translated_subs'],
                 'player_skip': ['webpage', 'configs'],
-                'player_client': ['TVHTML5'],
             }
         },
         # Deno JavaScript runtime (found via PATH)
         'js_runtime': 'deno',
-        # Add rate limiting
-        'sleep_interval': 1,
-        'max_sleep_interval': 3,
-        'sleep_interval_requests': 0.5,
     }
     if proxy:
         opts['proxy'] = proxy
@@ -203,27 +198,24 @@ def extract_sync(video_id: str, proxy: str, profile: str, cookies: str):
 
         with yt_dlp.YoutubeDL(ydl_opts) as ydl:
             info = ydl.extract_info(url, download=False)
-            result = map_yt_dlp_to_api(info)
 
-            # Check if both audio and video streams exist
-            has_video = bool(result.get('videoStreams'))
-            has_audio = bool(result.get('audioStreams'))
+        result = map_yt_dlp_to_api(info)
 
-            if not has_video or not has_audio:
-                missing = []
-                if not has_video:
-                    missing.append('video')
-                if not has_audio:
-                    missing.append('audio')
-                error_msg = f"Missing streams: {', '.join(missing)}"
+        # Check if both audio and video streams exist
+        has_video = bool(result.get('videoStreams'))
+        has_audio = bool(result.get('audioStreams'))
 
-                # Treat missing streams as a potential cookie/bot issue
-                # logger.error(f"[{video_id}] Missing streams: {error_msg} | proxy={proxy}")
-                return None, error_msg
+        if not has_video or not has_audio:
+            missing = []
+            if not has_video:
+                missing.append('video')
+            if not has_audio:
+                missing.append('audio')
+            error_msg = f"Missing streams: {', '.join(missing)}"
+            return None, error_msg
 
-            return result, None
+        return result, None
     except Exception as e:
-        # logger.error(f"[{video_id}] Extraction failed: {str(e)} | proxy={proxy}")
         return None, str(e)
     finally:
         # Cleanup temporary cookie file
