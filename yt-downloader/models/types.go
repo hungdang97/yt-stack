@@ -3,12 +3,13 @@ package models
 // DownloadRequest represents the incoming download request
 // @Description Download request payload
 type DownloadRequest struct {
-	URL    string       `json:"url" example:"https://youtube.com/watch?v=dQw4w9WgXcQ"`
-	OS     string       `json:"os,omitempty" example:"windows" enums:"ios,android,macos,windows,linux"`
-	CTier  int          `json:"ctier,omitempty" example:"1"` // Customer tier: 1=Premium (4 threads), others=Standard (1 thread)
-	Output OutputConfig `json:"output"`
-	Audio  AudioConfig  `json:"audio,omitempty"`
-	Trim   *TrimConfig  `json:"trim,omitempty"`
+	URL           string       `json:"url" example:"https://youtube.com/watch?v=dQw4w9WgXcQ"`
+	OS            string       `json:"os,omitempty" example:"windows" enums:"ios,android,macos,windows,linux"`
+	CTier         int          `json:"ctier,omitempty" example:"1"` // Customer tier: 1=Premium (4 threads), others=Standard (1 thread)
+	Output        OutputConfig `json:"output"`
+	Audio         AudioConfig  `json:"audio,omitempty"`
+	Trim          *TrimConfig  `json:"trim,omitempty"`
+	FilenameStyle string       `json:"filenameStyle,omitempty" example:"basic" enums:"classic,basic,pretty,nerdy"`
 }
 
 // OutputConfig specifies output format and quality
@@ -76,6 +77,7 @@ type Meta struct {
 	VideoID       string      `json:"videoId"`
 	CTier         int         `json:"ctier,omitempty"` // Customer tier (1=Tier1, others=Standard)
 	Title         string      `json:"title"`
+	Author        string      `json:"author,omitempty"`
 	Duration      float64     `json:"duration"`
 	Files         FilesInfo   `json:"files"`
 	OutputType    string      `json:"outputType"` // video or audio
@@ -83,6 +85,7 @@ type Meta struct {
 	Quality       string      `json:"quality,omitempty"`
 	Bitrate       string      `json:"bitrate,omitempty"`
 	Trim          *TrimConfig `json:"trim,omitempty"`
+	FilenameStyle string      `json:"filenameStyle,omitempty"` // classic, basic, pretty, nerdy
 	Output        string      `json:"output,omitempty"`
 	StreamOnly    bool        `json:"streamOnly,omitempty"`    // true = skip merge, stream only
 	NeedsReencode bool        `json:"needsReencode,omitempty"` // true = video needs re-encoding for format compatibility
@@ -102,6 +105,7 @@ type FileInfo struct {
 // ExtractResponse from YouTube Extract API
 type ExtractResponse struct {
 	Title                   string   `json:"title"`
+	Author                  string   `json:"uploaderName"`
 	Duration                float64  `json:"duration"`
 	VideoStreams            []Stream `json:"videoStreams"`
 	AudioStreams            []Stream `json:"audioStreams"`
