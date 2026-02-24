@@ -172,6 +172,9 @@ func streamVideo(c *fiber.Ctx, meta *models.Meta) error {
 		args = append(args, "-movflags", "frag_keyframe+empty_moov+faststart")
 	}
 
+	// Add metadata tags if enabled
+	args = appendMetadataArgs(args, meta)
+
 	args = append(args, "pipe:1")
 
 	return runFFmpegStream(c, args, meta)
@@ -259,8 +262,13 @@ func streamAudio(c *fiber.Ctx, meta *models.Meta) error {
 			args = append(args, "-b:a", bitrate)
 		}
 
-		args = append(args, "-f", getFFmpegFormat(format), "pipe:1")
+		args = append(args, "-f", getFFmpegFormat(format))
 	}
+
+	// Add metadata tags if enabled
+	args = appendMetadataArgs(args, meta)
+
+	args = append(args, "pipe:1")
 
 	return runFFmpegStream(c, args, meta)
 }
@@ -357,4 +365,20 @@ func canCopyAudioStream(inputExt, outputFormat string) bool {
 		return true
 	}
 	return false
+}
+
+// appendMetadataArgs adds metadata flags to ffmpeg arguments if enabled
+func appendMetadataArgs(args []string, meta *models.Meta) []string {
+	if !meta.EnableMetadata {
+		return args
+	}
+
+	if meta.Title != "" {
+		args = append(args, "-metadata", fmt.Sprintf("title=%s", meta.Title))
+	}
+	if meta.Author != "" {
+		args = append(args, "-metadata", fmt.Sprintf("artist=%s", meta.Author))
+	}
+
+	return args
 }
