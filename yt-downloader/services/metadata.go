@@ -57,9 +57,13 @@ func FFmpegEmbedMetadata(jobDir string, meta *models.Meta) error {
 		args = append(args, "-metadata", fmt.Sprintf("artist=%s", meta.Author))
 	}
 
-	// Set thumbnail disposition for MP4/M4A
+	// Set thumbnail disposition and ID3v2 for MP3
 	if canEmbedThumb {
-		args = append(args, "-disposition:v:1", "attached_pic")
+		if format == "mp3" {
+			args = append(args, "-id3v2_version", "3")
+		} else {
+			args = append(args, "-disposition:v:1", "attached_pic")
+		}
 	}
 
 	args = append(args, tempOutput)
@@ -83,23 +87,15 @@ func FFmpegEmbedMetadata(jobDir string, meta *models.Meta) error {
 }
 
 // canEmbedThumbnail checks if the format supports embedded thumbnail
+// Updated: Always attempt to embed, let FFmpeg decide
 func canEmbedThumbnail(format string) bool {
-	switch format {
-	case "mp4", "m4a":
-		return true
-	default:
-		return false
-	}
+	return true
 }
 
 // canEmbedTextMetadata checks if the format supports text metadata
+// Updated: Always attempt to embed, let FFmpeg decide
 func canEmbedTextMetadata(format string) bool {
-	switch format {
-	case "mp4", "m4a", "mp3", "flac", "ogg", "opus", "mkv", "webm":
-		return true
-	default:
-		return false
-	}
+	return true
 }
 
 // downloadThumbnail downloads thumbnail image to jobDir
