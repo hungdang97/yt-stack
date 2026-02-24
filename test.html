@@ -241,6 +241,66 @@
       font-size: 0.85rem;
       color: #1e40af;
     }
+
+    .filename-style-group {
+      margin-bottom: 16px;
+    }
+
+    .style-tabs {
+      display: flex;
+      gap: 0;
+      border: 1px solid #cbd5e1;
+      border-radius: 6px;
+      overflow: hidden;
+      margin-bottom: 10px;
+    }
+
+    .style-tab {
+      flex: 1;
+      padding: 8px 4px;
+      text-align: center;
+      font-size: 0.8rem;
+      font-weight: 500;
+      background: #fff;
+      color: #64748b;
+      cursor: pointer;
+      border: none;
+      border-right: 1px solid #cbd5e1;
+      transition: all 0.15s;
+    }
+
+    .style-tab:last-child {
+      border-right: none;
+    }
+
+    .style-tab:hover {
+      background: #f1f5f9;
+    }
+
+    .style-tab.active {
+      background: #1e293b;
+      color: #fff;
+    }
+
+    .filename-preview {
+      background: #f8fafc;
+      border: 1px solid #e2e8f0;
+      border-radius: 6px;
+      padding: 10px 12px;
+      font-family: 'SF Mono', 'Fira Code', monospace;
+      font-size: 0.8rem;
+      color: #334155;
+      word-break: break-all;
+      line-height: 1.5;
+    }
+
+    .filename-preview .label {
+      font-family: system-ui, -apple-system, sans-serif;
+      font-size: 0.75rem;
+      color: #94a3b8;
+      display: block;
+      margin-bottom: 2px;
+    }
   </style>
 </head>
 
@@ -330,6 +390,20 @@
     </div>
   </div>
 
+  <div class="filename-style-group">
+    <label>Filename Style</label>
+    <div class="style-tabs" id="styleTabs">
+      <button class="style-tab" data-style="classic">classic</button>
+      <button class="style-tab active" data-style="basic">basic</button>
+      <button class="style-tab" data-style="pretty">pretty</button>
+      <button class="style-tab" data-style="nerdy">nerdy</button>
+    </div>
+    <div class="filename-preview" id="filenamePreview">
+      <span class="label">Preview:</span>
+      <span id="previewText">Video Title - Author (1080p).mp4</span>
+    </div>
+  </div>
+
   <button id="downloadBtn">Download</button>
 
   <div id="status">
@@ -399,6 +473,8 @@
       trimFields: document.getElementById('trimFields'),
       trimStart: document.getElementById('trimStart'),
       trimEnd: document.getElementById('trimEnd'),
+      styleTabs: document.getElementById('styleTabs'),
+      previewText: document.getElementById('previewText'),
       downloadBtn: document.getElementById('downloadBtn'),
       status: document.getElementById('status'),
       statusTitle: document.getElementById('statusTitle'),
@@ -415,6 +491,68 @@
       errorBox: document.getElementById('errorBox'),
       downloadLink: document.getElementById('downloadLink')
     };
+
+    // Current filename style
+    let currentStyle = 'basic';
+
+    // Style tab click
+    els.styleTabs.addEventListener('click', (e) => {
+      const tab = e.target.closest('.style-tab');
+      if (!tab) return;
+      els.styleTabs.querySelectorAll('.style-tab').forEach(t => t.classList.remove('active'));
+      tab.classList.add('active');
+      currentStyle = tab.dataset.style;
+      updateFilenamePreview();
+    });
+
+    // Filename preview helper: format time as m꞉ss
+    function fmtTime(sec) {
+      const total = Math.floor(sec);
+      const h = Math.floor(total / 3600);
+      const m = Math.floor((total % 3600) / 60);
+      const s = total % 60;
+      if (h > 0) return `${h}꞉${String(m).padStart(2, '0')}꞉${String(s).padStart(2, '0')}`;
+      return `${m}꞉${String(s).padStart(2, '0')}`;
+    }
+
+    // Generate filename preview
+    function updateFilenamePreview() {
+      const isVideo = els.type.value === 'video';
+      const format = els.format.value || (isVideo ? 'mp4' : 'mp3');
+      const quality = isVideo ? (els.quality.value || '1080p') : '';
+      const bitrate = !isVideo ? (els.bitrate.value || '192k') : '';
+      const hasTrim = els.enableTrim.checked;
+      const trimStart = parseFloat(els.trimStart.value) || 0;
+      const trimEnd = parseFloat(els.trimEnd.value) || 60;
+
+      const title = 'Video Title';
+      const author = 'Author';
+      const videoId = 'dQw4w9WgXcQ';
+      let filename = '';
+
+      if (currentStyle === 'classic') {
+        let parts = ['youtube', videoId];
+        if (isVideo && quality) parts.push(quality);
+        else if (!isVideo) parts.push('audio');
+        if (hasTrim) parts.push(`${Math.floor(trimStart)}-${Math.floor(trimEnd)}s`);
+        filename = parts.join('_') + '.' + format;
+      } else {
+        // basic / pretty / nerdy
+        let name = `${title} - ${author}`;
+        let infoParts = [];
+        if (isVideo && quality) infoParts.push(quality);
+        if (!isVideo && bitrate) infoParts.push(bitrate);
+        if (currentStyle === 'pretty' || currentStyle === 'nerdy') infoParts.push('youtube');
+        if (currentStyle === 'nerdy') infoParts.push(videoId);
+
+        filename = name;
+        if (infoParts.length > 0) filename += ` (${infoParts.join(', ')})`;
+        if (hasTrim) filename += ` [${fmtTime(trimStart)}-${fmtTime(trimEnd)}]`;
+        filename += '.' + format;
+      }
+
+      els.previewText.textContent = filename;
+    }
 
     // Platform change
     els.platform.addEventListener('change', () => {
@@ -435,15 +573,26 @@
         els.format.innerHTML += `<option value="${f}">${f.toUpperCase()}</option>`;
       });
       els.qualityGroup.classList.toggle('show', isVideo);
+      updateFilenamePreview();
     });
 
     // Trim toggle
     els.enableTrim.addEventListener('change', () => {
       els.trimFields.classList.toggle('show', els.enableTrim.checked);
+      updateFilenamePreview();
     });
+
+    // Update preview on any form change
+    ['trimStart', 'trimEnd'].forEach(id => {
+      document.getElementById(id).addEventListener('input', updateFilenamePreview);
+    });
+    els.format.addEventListener('change', updateFilenamePreview);
+    els.quality.addEventListener('change', updateFilenamePreview);
+    els.bitrate.addEventListener('change', updateFilenamePreview);
 
     // Init
     els.type.dispatchEvent(new Event('change'));
+    updateFilenamePreview();
 
     // Format duration
     function formatDuration(sec) {
@@ -484,7 +633,8 @@
       const body = {
         url,
         output: { type: els.type.value, format: els.format.value },
-        audio: { bitrate: els.bitrate.value }
+        audio: { bitrate: els.bitrate.value },
+        filenameStyle: currentStyle
       };
 
       // Add audio language if specified
