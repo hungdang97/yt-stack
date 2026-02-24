@@ -1,6 +1,6 @@
 services:
   # ============================================================
-  # WARP Pool - 3 instances with separate identities/IPs
+  # WARP Pool - 5 instances with separate identities/IPs
   # Each has its own volume → unique Cloudflare registration
   # ============================================================
   warp-1:
@@ -84,9 +84,63 @@ services:
     networks:
       - backend
 
+  warp-4:
+    image: caomingjun/warp:latest
+    container_name: warp-4
+    restart: always
+    device_cgroup_rules:
+      - 'c 10:200 rwm'
+    cap_add:
+      - NET_ADMIN
+      - MKNOD
+      - AUDIT_WRITE
+    sysctls:
+      - net.ipv6.conf.all.disable_ipv6=0
+      - net.ipv4.conf.all.src_valid_mark=1
+    volumes:
+      - warp_data_4:/var/lib/cloudflare-warp
+    environment:
+      - WARP_SLEEP=2
+      - GOST_ARGS=-L :40000
+    healthcheck:
+      test: [ "CMD", "curl", "-fsS", "--max-time", "10", "--socks5", "127.0.0.1:40000", "https://www.cloudflare.com/cdn-cgi/trace" ]
+      interval: 30s
+      timeout: 15s
+      retries: 3
+      start_period: 40s
+    networks:
+      - backend
+
+  warp-5:
+    image: caomingjun/warp:latest
+    container_name: warp-5
+    restart: always
+    device_cgroup_rules:
+      - 'c 10:200 rwm'
+    cap_add:
+      - NET_ADMIN
+      - MKNOD
+      - AUDIT_WRITE
+    sysctls:
+      - net.ipv6.conf.all.disable_ipv6=0
+      - net.ipv4.conf.all.src_valid_mark=1
+    volumes:
+      - warp_data_5:/var/lib/cloudflare-warp
+    environment:
+      - WARP_SLEEP=2
+      - GOST_ARGS=-L :40000
+    healthcheck:
+      test: [ "CMD", "curl", "-fsS", "--max-time", "10", "--socks5", "127.0.0.1:40000", "https://www.cloudflare.com/cdn-cgi/trace" ]
+      interval: 30s
+      timeout: 15s
+      retries: 3
+      start_period: 40s
+    networks:
+      - backend
+
   # ============================================================
   # Gost - Load balanced HTTP proxy across WARP pool
-  # strategy=round: round-robin across 3 WARPs
+  # strategy=round: round-robin across 5 WARPs
   # max_fails=3: mark node dead after 3 consecutive failures
   # fail_timeout=180s: retry dead node after 3 minutes
   # ============================================================
@@ -101,6 +155,10 @@ services:
         condition: service_healthy
       warp-3:
         condition: service_healthy
+      warp-4:
+        condition: service_healthy
+      warp-5:
+        condition: service_healthy
     ports:
       - "1111:1111" # WARP proxy (public, load balanced)
       - "2222:2222" # Direct proxy (public)
@@ -110,7 +168,7 @@ services:
       - DIRECT_USER=${DIRECT_USER}
       - DIRECT_PASS=${DIRECT_PASS}
     command: >
-      -L=http://${WARP_USER}:${WARP_PASS}@:1111?probeResist=code:400 -F=socks5://warp-1:40000?ip=warp-1:40000,warp-2:40000,warp-3:40000&strategy=round&max_fails=3&fail_timeout=180s -L=http://${DIRECT_USER}:${DIRECT_PASS}@:2222?probeResist=code:400
+      -L=http://${WARP_USER}:${WARP_PASS}@:1111?probeResist=code:400 -F=socks5://warp-1:40000?ip=warp-1:40000,warp-2:40000,warp-3:40000,warp-4:40000,warp-5:40000&strategy=round&max_fails=3&fail_timeout=180s -L=http://${DIRECT_USER}:${DIRECT_PASS}@:2222?probeResist=code:400
     networks:
       - backend
 
@@ -203,6 +261,8 @@ volumes:
   warp_data_1:
   warp_data_2:
   warp_data_3:
+  warp_data_4:
+  warp_data_5:
   yt_storage:
   letsencrypt:
   certbot_webroot:
