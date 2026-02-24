@@ -10,19 +10,28 @@ import (
 var (
 	// Characters not allowed in filenames
 	invalidChars = regexp.MustCompile(`[<>:"/\\|?*\x00-\x1f]`)
-	// Multiple spaces/underscores
+	// Multiple spaces/underscores (for classic style)
 	multipleSpaces = regexp.MustCompile(`[\s_]+`)
+	// Multiple spaces only (for human-readable styles)
+	multiSpacesOnly = regexp.MustCompile(`\s{2,}`)
 )
 
-// SanitizeFilename removes invalid characters from filename
+// SanitizeFilename removes invalid characters and replaces spaces with underscores (for classic style)
 func SanitizeFilename(name string) string {
-	// Replace invalid characters with underscore
 	name = invalidChars.ReplaceAllString(name, "_")
-	// Replace multiple spaces/underscores with single underscore
 	name = multipleSpaces.ReplaceAllString(name, "_")
-	// Trim leading/trailing underscores and spaces
 	name = strings.Trim(name, "_ ")
-	// Limit length
+	if len(name) > 200 {
+		name = name[:200]
+	}
+	return name
+}
+
+// SanitizeHumanFilename removes invalid characters but keeps spaces (for basic/pretty/nerdy styles)
+func SanitizeHumanFilename(name string) string {
+	name = invalidChars.ReplaceAllString(name, "")
+	name = multiSpacesOnly.ReplaceAllString(name, " ")
+	name = strings.TrimSpace(name)
 	if len(name) > 200 {
 		name = name[:200]
 	}
@@ -99,11 +108,11 @@ func generateNerdy(meta *models.Meta) string {
 
 // buildHumanName returns "Title - Author" or just "Title"
 func buildHumanName(meta *models.Meta) string {
-	title := SanitizeFilename(meta.Title)
+	title := SanitizeHumanFilename(meta.Title)
 	if title == "" {
 		title = "output"
 	}
-	author := SanitizeFilename(meta.Author)
+	author := SanitizeHumanFilename(meta.Author)
 	if author != "" {
 		return fmt.Sprintf("%s - %s", title, author)
 	}
@@ -163,7 +172,7 @@ func buildFinalName(name, info, trim, format string) string {
 		result += " " + info
 	}
 	result += trim
-	return fmt.Sprintf("%s.%s", SanitizeFilename(result), format)
+	return fmt.Sprintf("%s.%s", SanitizeHumanFilename(result), format)
 }
 
 // GetExtFromMimeType extracts file extension from MIME type
