@@ -120,11 +120,13 @@ func HandleDownload(c *fiber.Ctx) error {
 		VideoID:       videoID,
 		CTier:         req.CTier,
 		Title:         extractData.Title,
+		Author:        extractData.Author,
 		Duration:      extractData.Duration,
 		OutputType:    req.Output.Type,
 		Format:        req.Output.Format,
 		Bitrate:       bitrate,
 		Trim:          req.Trim,
+		FilenameStyle: req.FilenameStyle,
 		Files:         models.FilesInfo{},
 		NeedsReencode: calculateNeedsReencode(videoSelection, audioStream, req.Output.Format),
 	}
