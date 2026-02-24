@@ -44,26 +44,27 @@ func FFmpegEmbedMetadata(jobDir string, meta *models.Meta) error {
 	args = append(args, "-map", "0") // map all streams from input
 	if canEmbedThumb {
 		args = append(args, "-map", "1") // map thumbnail
+
+		// Specific disposition based on format
+		switch format {
+		case "mp3":
+			args = append(args, "-id3v2_version", "3")
+		case "mp4", "m4a":
+			args = append(args, "-disposition:v:1", "attached_pic")
+		case "flac", "ogg":
+			args = append(args, "-disposition:v", "attached_pic")
+		}
 	}
 
 	// Copy all codecs (no re-encoding)
 	args = append(args, "-c", "copy")
 
-	// Add metadata tags
+	// Add metadata tags (TEXT)
 	if meta.Title != "" {
 		args = append(args, "-metadata", fmt.Sprintf("title=%s", meta.Title))
 	}
 	if meta.Author != "" {
 		args = append(args, "-metadata", fmt.Sprintf("artist=%s", meta.Author))
-	}
-
-	// Set thumbnail disposition and ID3v2 for MP3
-	if canEmbedThumb {
-		if format == "mp3" {
-			args = append(args, "-id3v2_version", "3")
-		} else {
-			args = append(args, "-disposition:v:1", "attached_pic")
-		}
 	}
 
 	args = append(args, tempOutput)
@@ -87,9 +88,15 @@ func FFmpegEmbedMetadata(jobDir string, meta *models.Meta) error {
 }
 
 // canEmbedThumbnail checks if the format supports embedded thumbnail
-// Updated: Always attempt to embed, let FFmpeg decide
 func canEmbedThumbnail(format string) bool {
-	return true
+	switch format {
+	case "mp4", "m4a", "mp3", "flac", "ogg":
+		return true // Fully supported containers for cover art
+	case "webm", "opus", "mkv":
+		return false // WebM/MKV officially don't support simple attached_pic copying without complex re-muxing
+	default:
+		return false
+	}
 }
 
 // canEmbedTextMetadata checks if the format supports text metadata
