@@ -1,10 +1,8 @@
-version: '3.8'
-
 services:
-  # Cloudflare WARP - provides SOCKS5 proxy on port 40000
-  warp:
+  # WARP Pool - 3 instances with separate identities/IPs
+  warp-1:
     image: caomingjun/warp:latest
-    container_name: warp
+    container_name: warp-1
     restart: always
     cap_add:
       - NET_ADMIN
@@ -12,37 +10,84 @@ services:
       - net.ipv6.conf.all.disable_ipv6=0
       - net.ipv4.conf.all.src_valid_mark=1
     volumes:
-      - warp_data:/var/lib/cloudflare-warp
+      - warp_data_1:/var/lib/cloudflare-warp
     environment:
       - WARP_SLEEP=2
     healthcheck:
-      test: ["CMD", "curl", "-fsS", "--socks5", "127.0.0.1:40000", "https://www.cloudflare.com/cdn-cgi/trace"]
+      test: [ "CMD", "curl", "-fsS", "--max-time", "10", "--socks5", "127.0.0.1:40000", "https://www.cloudflare.com/cdn-cgi/trace" ]
       interval: 30s
-      timeout: 10s
+      timeout: 15s
       retries: 3
       start_period: 40s
     networks:
       - proxy_network
 
-  # Gost - HTTP proxy with authentication
+  warp-2:
+    image: caomingjun/warp:latest
+    container_name: warp-2
+    restart: always
+    cap_add:
+      - NET_ADMIN
+    sysctls:
+      - net.ipv6.conf.all.disable_ipv6=0
+      - net.ipv4.conf.all.src_valid_mark=1
+    volumes:
+      - warp_data_2:/var/lib/cloudflare-warp
+    environment:
+      - WARP_SLEEP=2
+    healthcheck:
+      test: [ "CMD", "curl", "-fsS", "--max-time", "10", "--socks5", "127.0.0.1:40000", "https://www.cloudflare.com/cdn-cgi/trace" ]
+      interval: 30s
+      timeout: 15s
+      retries: 3
+      start_period: 40s
+    networks:
+      - proxy_network
+
+  warp-3:
+    image: caomingjun/warp:latest
+    container_name: warp-3
+    restart: always
+    cap_add:
+      - NET_ADMIN
+    sysctls:
+      - net.ipv6.conf.all.disable_ipv6=0
+      - net.ipv4.conf.all.src_valid_mark=1
+    volumes:
+      - warp_data_3:/var/lib/cloudflare-warp
+    environment:
+      - WARP_SLEEP=2
+    healthcheck:
+      test: [ "CMD", "curl", "-fsS", "--max-time", "10", "--socks5", "127.0.0.1:40000", "https://www.cloudflare.com/cdn-cgi/trace" ]
+      interval: 30s
+      timeout: 15s
+      retries: 3
+      start_period: 40s
+    networks:
+      - proxy_network
+
+  # Gost - Load balanced HTTP proxy across WARP pool
   gost:
     image: ginuerzh/gost:latest
     container_name: gost
     restart: always
     depends_on:
-      warp:
+      warp-1:
+        condition: service_healthy
+      warp-2:
+        condition: service_healthy
+      warp-3:
         condition: service_healthy
     ports:
-      - "1111:1111"  # WARP proxy (public)
-      - "2222:2222"  # Direct proxy (public)
-    volumes:
-      - ./gost.json:/etc/gost/gost.json:ro
+      - "1111:1111" # WARP proxy (load balanced)
+      - "2222:2222" # Direct proxy
     environment:
       - WARP_USER=${WARP_USER}
       - WARP_PASS=${WARP_PASS}
       - DIRECT_USER=${DIRECT_USER}
       - DIRECT_PASS=${DIRECT_PASS}
-    command: -C /etc/gost/gost.json
+    command: >
+      -L=http://${WARP_USER}:${WARP_PASS}@:1111?probeResist=code:400 -F=socks5://warp-1:40000?ip=warp-1:40000,warp-2:40000,warp-3:40000&strategy=round&max_fails=3&fail_timeout=180s -L=http://${DIRECT_USER}:${DIRECT_PASS}@:2222?probeResist=code:400
     networks:
       - proxy_network
 
@@ -51,4 +96,8 @@ networks:
     driver: bridge
 
 volumes:
-  warp_data:
+  warp_data_1:
+  warp_data_2:
+  warp_data_3:
+
+
