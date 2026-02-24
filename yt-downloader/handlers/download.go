@@ -114,21 +114,23 @@ func HandleDownload(c *fiber.Ctx) error {
 
 	// Prepare metadata
 	meta := &models.Meta{
-		ID:            jobID,
-		Status:        models.StatusPending,
-		CreatedAt:     time.Now().UnixMilli(),
-		VideoID:       videoID,
-		CTier:         req.CTier,
-		Title:         extractData.Title,
-		Author:        extractData.Author,
-		Duration:      extractData.Duration,
-		OutputType:    req.Output.Type,
-		Format:        req.Output.Format,
-		Bitrate:       bitrate,
-		Trim:          req.Trim,
-		FilenameStyle: req.FilenameStyle,
-		Files:         models.FilesInfo{},
-		NeedsReencode: calculateNeedsReencode(videoSelection, audioStream, req.Output.Format),
+		ID:             jobID,
+		Status:         models.StatusPending,
+		CreatedAt:      time.Now().UnixMilli(),
+		VideoID:        videoID,
+		CTier:          req.CTier,
+		Title:          extractData.Title,
+		Author:         extractData.Author,
+		Duration:       extractData.Duration,
+		OutputType:     req.Output.Type,
+		Format:         req.Output.Format,
+		Bitrate:        bitrate,
+		Trim:           req.Trim,
+		FilenameStyle:  req.FilenameStyle,
+		EnableMetadata: req.EnableMetadata,
+		ThumbnailURL:   extractData.ThumbnailURL,
+		Files:          models.FilesInfo{},
+		NeedsReencode:  calculateNeedsReencode(videoSelection, audioStream, req.Output.Format),
 	}
 
 	// Set file info
@@ -264,6 +266,16 @@ func processJob(jobID string, meta *models.Meta, videoSelection *models.VideoSel
 				utils.UpdateMetaError(jobID, "Trim failed: "+err.Error())
 				return
 			}
+		}
+	}
+
+	// Embed metadata (title, artist, thumbnail) if enabled
+	if meta.EnableMetadata {
+		// Update meta.Output before embedding so FFmpegEmbedMetadata knows the file
+		meta.Output = outputFile
+		if err := services.FFmpegEmbedMetadata(jobDir, meta); err != nil {
+			fmt.Printf("[%s] Warning: metadata embedding failed: %v\n", jobID, err)
+			// Non-fatal: continue without metadata
 		}
 	}
 
