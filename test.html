@@ -301,6 +301,72 @@
       display: block;
       margin-bottom: 2px;
     }
+
+    .metadata-group {
+      margin-bottom: 16px;
+    }
+
+    .toggle-row {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      background: #f1f5f9;
+      padding: 12px 14px;
+      border-radius: 8px;
+    }
+
+    .toggle-row label {
+      margin: 0;
+      font-size: 0.9rem;
+      color: #334155;
+    }
+
+    .toggle-switch {
+      position: relative;
+      width: 44px;
+      height: 24px;
+    }
+
+    .toggle-switch input {
+      opacity: 0;
+      width: 0;
+      height: 0;
+    }
+
+    .toggle-slider {
+      position: absolute;
+      inset: 0;
+      background: #cbd5e1;
+      border-radius: 24px;
+      cursor: pointer;
+      transition: background 0.2s;
+    }
+
+    .toggle-slider::before {
+      content: '';
+      position: absolute;
+      width: 18px;
+      height: 18px;
+      left: 3px;
+      bottom: 3px;
+      background: white;
+      border-radius: 50%;
+      transition: transform 0.2s;
+    }
+
+    .toggle-switch input:checked+.toggle-slider {
+      background: #3b82f6;
+    }
+
+    .toggle-switch input:checked+.toggle-slider::before {
+      transform: translateX(20px);
+    }
+
+    .metadata-hint {
+      font-size: 0.75rem;
+      color: #94a3b8;
+      margin-top: 6px;
+    }
   </style>
 </head>
 
@@ -404,6 +470,18 @@
     </div>
   </div>
 
+  <div class="metadata-group">
+    <div class="toggle-row">
+      <label>Embed file metadata</label>
+      <label class="toggle-switch">
+        <input type="checkbox" id="enableMetadata">
+        <span class="toggle-slider"></span>
+      </label>
+    </div>
+    <div class="metadata-hint">Title, artist, and thumbnail will be added to the file (MP4/M4A only for thumbnail).
+    </div>
+  </div>
+
   <button id="downloadBtn">Download</button>
 
   <div id="status">
@@ -475,6 +553,7 @@
       trimEnd: document.getElementById('trimEnd'),
       styleTabs: document.getElementById('styleTabs'),
       previewText: document.getElementById('previewText'),
+      enableMetadata: document.getElementById('enableMetadata'),
       downloadBtn: document.getElementById('downloadBtn'),
       status: document.getElementById('status'),
       statusTitle: document.getElementById('statusTitle'),
@@ -634,7 +713,8 @@
         url,
         output: { type: els.type.value, format: els.format.value },
         audio: { bitrate: els.bitrate.value },
-        filenameStyle: currentStyle
+        filenameStyle: currentStyle,
+        enableMetadata: els.enableMetadata.checked
       };
 
       // Add audio language if specified
