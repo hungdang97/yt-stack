@@ -229,6 +229,25 @@ services:
     networks:
       - backend
 
+  # TikTok Extractor service
+  tik-extractor:
+    build:
+      context: ./tik-extractor
+      dockerfile: Dockerfile.api
+    container_name: tik-extractor
+    restart: unless-stopped
+    ports:
+      - "5555:5555" # Expose TikTok API
+    volumes:
+      - tik_volume:/app/Volume
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
+    networks:
+      - backend
+
   # Nginx reverse proxy with SSL for yt-downloader domain
   nginx:
     platform: linux/amd64
@@ -264,5 +283,6 @@ volumes:
   warp_data_4:
   warp_data_5:
   yt_storage:
+  tik_volume:
   letsencrypt:
   certbot_webroot:
