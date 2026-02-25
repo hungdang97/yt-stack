@@ -2,8 +2,10 @@ package utils
 
 import (
 	"fmt"
+	"net/url"
 	"regexp"
 	"slices"
+	"strings"
 	"yt-downloader-go/config"
 	"yt-downloader-go/models"
 )
@@ -25,9 +27,30 @@ func (e ValidationError) Error() string {
 	return fmt.Sprintf("%s: %s", e.Field, e.Message)
 }
 
-// ExtractVideoID extracts the video ID from a YouTube URL
-func ExtractVideoID(url string) (string, error) {
-	matches := youtubeURLPattern.FindStringSubmatch(url)
+// ValidateURL validates that a URL is a valid HTTP/HTTPS URL.
+// Accepts any URL supported by yt-dlp (YouTube, Vimeo, TikTok, SoundCloud, etc.)
+func ValidateURL(rawURL string) error {
+	if rawURL == "" {
+		return ValidationError{Field: "url", Message: "URL is required"}
+	}
+	parsed, err := url.Parse(rawURL)
+	if err != nil {
+		return ValidationError{Field: "url", Message: "Invalid URL format"}
+	}
+	scheme := strings.ToLower(parsed.Scheme)
+	if scheme != "http" && scheme != "https" {
+		return ValidationError{Field: "url", Message: "URL must use http or https scheme"}
+	}
+	if parsed.Host == "" {
+		return ValidationError{Field: "url", Message: "URL must have a valid host"}
+	}
+	return nil
+}
+
+// ExtractVideoID extracts the video ID from a YouTube URL.
+// Returns the video ID (11 chars) or an error if the URL is not a YouTube URL.
+func ExtractVideoID(rawURL string) (string, error) {
+	matches := youtubeURLPattern.FindStringSubmatch(rawURL)
 	if len(matches) < 2 {
 		return "", ValidationError{Field: "url", Message: "Invalid YouTube URL"}
 	}
@@ -36,11 +59,8 @@ func ExtractVideoID(url string) (string, error) {
 
 // ValidateDownloadRequest validates the download request
 func ValidateDownloadRequest(req *models.DownloadRequest) error {
-	// Validate URL
-	if req.URL == "" {
-		return ValidationError{Field: "url", Message: "URL is required"}
-	}
-	if _, err := ExtractVideoID(req.URL); err != nil {
+	// Validate URL - accept any HTTP/HTTPS URL (all yt-dlp platforms)
+	if err := ValidateURL(req.URL); err != nil {
 		return err
 	}
 

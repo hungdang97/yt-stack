@@ -8,7 +8,6 @@ from pathlib import Path
 import os
 import logging
 import tempfile
-import http.cookiejar
 from datetime import datetime, timedelta
 
 # Configure logging
@@ -33,6 +32,20 @@ app = FastAPI()
 
 # Thread pool for blocking yt-dlp operations
 executor = ThreadPoolExecutor(max_workers=10)
+
+# YouTube domains for cookie detection
+YOUTUBE_DOMAINS = ('youtube.com', 'youtu.be', 'www.youtube.com', 'm.youtube.com')
+
+
+def is_youtube_url(url: str) -> bool:
+    """Check if the URL is a YouTube URL."""
+    try:
+        from urllib.parse import urlparse
+        parsed = urlparse(url)
+        host = parsed.netloc.lower()
+        return any(host == d or host.endswith('.' + d) for d in YOUTUBE_DOMAINS)
+    except Exception:
+        return False
 
 
 class CookiePool:
@@ -70,7 +83,6 @@ class CookiePool:
                 async with self._lock:
                     self.pool.clear()
                     await self._refill()
-                # logger.debug("Cookie pool refreshed")
             except Exception as e:
                 logger.error(f"Cookie pool refresh failed: {e}")
 
@@ -152,67 +164,67 @@ def build_proxy_url(proxy):
     return proxy
 
 
-def build_ydl_opts(cookie_file_path, proxy=None):
-    """Build yt-dlp options with cookie file and optional proxy."""
+def build_ydl_opts(cookie_file_path=None, proxy=None):
+    """Build yt-dlp options. Cookie file is optional (only for YouTube)."""
     opts = {
         'quiet': True,
         'no_warnings': True,
         'skip_download': True,
-        'extract_flat': True,
+        'extract_flat': False,
         'no_check_formats': True,
-        'formats': 'none',
         'dump_single_json': True,
-        'cookiefile': cookie_file_path, 
-        'extractor_args': {
-            'youtube': {
-                'skip': ['hls', 'dash', 'translated_subs'],
-                'player_skip': ['webpage', 'configs'],
-            }
-        },
         # Deno JavaScript runtime (found via PATH)
         'js_runtime': 'deno',
     }
+    if cookie_file_path:
+        opts['cookiefile'] = cookie_file_path
     if proxy:
         opts['proxy'] = proxy
     return opts
 
 
-def extract_sync(video_id: str, proxy: str, profile: str, cookies: str):
-    """Blocking extraction - runs in thread pool."""
-    url = f'https://www.youtube.com/watch?v={video_id}'
+def build_ydl_opts_youtube(cookie_file_path, proxy=None):
+    """Build yt-dlp options specifically for YouTube with cookie and skip optimizations."""
+    opts = build_ydl_opts(cookie_file_path, proxy)
+    opts['extractor_args'] = {
+        'youtube': {
+            'skip': ['hls', 'dash', 'translated_subs'],
+            'player_skip': ['webpage', 'configs'],
+        }
+    }
+    return opts
 
-    # Create temporary cookie file
-    cookie_content = parse_cookies_to_netscape(cookies)
-    if not cookie_content:
-        return None, "Invalid cookie format"
 
+def extract_sync(url: str, proxy: str, profile: str, cookies: str):
+    """Blocking extraction - runs in thread pool. Accepts full URL."""
     cookie_file = None
     try:
-        # Write cookies to temporary file
-        cookie_file = tempfile.NamedTemporaryFile(mode='w', suffix='.txt', delete=False)
-        cookie_file.write(cookie_content)
-        cookie_file.close()
+        use_youtube_opts = is_youtube_url(url)
 
-        # Build yt-dlp options with cookie file
-        ydl_opts = build_ydl_opts(cookie_file.name, proxy)
+        if use_youtube_opts:
+            # Write cookies to temporary file for YouTube
+            cookie_content = parse_cookies_to_netscape(cookies)
+            if not cookie_content:
+                return None, "Invalid cookie format"
+            cookie_file = tempfile.NamedTemporaryFile(mode='w', suffix='.txt', delete=False)
+            cookie_file.write(cookie_content)
+            cookie_file.close()
+            ydl_opts = build_ydl_opts_youtube(cookie_file.name, proxy)
+        else:
+            # Non-YouTube: no cookies needed, use generic opts
+            ydl_opts = build_ydl_opts(cookie_file_path=None, proxy=proxy)
 
         with yt_dlp.YoutubeDL(ydl_opts) as ydl:
             info = ydl.extract_info(url, download=False)
 
         result = map_yt_dlp_to_api(info)
 
-        # Check if both audio and video streams exist
+        # Validate: must have at least one stream (video OR audio)
         has_video = bool(result.get('videoStreams'))
         has_audio = bool(result.get('audioStreams'))
 
-        if not has_video or not has_audio:
-            missing = []
-            if not has_video:
-                missing.append('video')
-            if not has_audio:
-                missing.append('audio')
-            error_msg = f"Missing streams: {', '.join(missing)}"
-            return None, error_msg
+        if not has_video and not has_audio:
+            return None, "No streams found"
 
         return result, None
     except Exception as e:
@@ -226,48 +238,79 @@ def extract_sync(video_id: str, proxy: str, profile: str, cookies: str):
                 pass
 
 
-@app.get('/api/youtube/video/{video_id}')
-async def extract(video_id: str, proxy: str = Query(None)):
-    logger.info(f"[{video_id}] Extraction request received | proxy={proxy}")
+# ─────────────────────────────────────────────────────────────
+# NEW generic endpoint: accepts any yt-dlp supported URL
+# ─────────────────────────────────────────────────────────────
+
+@app.get('/api/video')
+async def extract_generic(url: str = Query(..., description="Full URL of the video"), proxy: str = Query(None)):
+    """Extract metadata for any yt-dlp supported URL."""
+    log_key = url[:80]
+    logger.info(f"[{log_key}] Extraction request received | proxy={proxy}")
     proxy_url = build_proxy_url(proxy)
-    
-    # Retry mechanism: Attempt 1 + 1 Retry = 2 Attempts
-    max_attempts = 2
-    last_error = None
-    
-    for attempt in range(1, max_attempts + 1):
-        profile, cookies = await cookie_pool.get()
-        if not cookies:
-            logger.error(f"[{video_id}] No active cookie available")
-            return JSONResponse({'error': 'No active cookie'}, status_code=503)
 
-        logger.info(f"[{video_id}] Attempt {attempt}/{max_attempts} | Using cookie: {profile}")
+    url_is_youtube = is_youtube_url(url)
 
-        # Run blocking yt-dlp in thread pool
+    # For YouTube: use cookie pool with retry; for others: single attempt, no cookies
+    if url_is_youtube:
+        max_attempts = 2
+        last_error = None
+
+        for attempt in range(1, max_attempts + 1):
+            profile, cookies = await cookie_pool.get()
+            if not cookies:
+                logger.error(f"[{log_key}] No active cookie available")
+                return JSONResponse({'error': 'No active cookie'}, status_code=503)
+
+            logger.info(f"[{log_key}] Attempt {attempt}/{max_attempts} | Using cookie: {profile}")
+
+            loop = asyncio.get_event_loop()
+            result, error = await loop.run_in_executor(
+                executor, extract_sync, url, proxy_url, profile, cookies
+            )
+
+            if not error:
+                logger.info(f"[{log_key}] Extraction successful | video={len(result.get('videoStreams', []))} | audio={len(result.get('audioStreams', []))}")
+                return result
+
+            last_error = error
+            is_bad = cookie_db.is_bad(error)
+
+            if is_bad:
+                logger.warning(f"[{log_key}] Attempt {attempt} failed with BAD COOKIE error: {error}. Invalidating {profile}.")
+                cookie_db.invalidate(profile)
+            else:
+                logger.error(f"[{log_key}] Attempt {attempt} failed with non-cookie error: {error}. No retry.")
+                break
+
+        logger.error(f"[{log_key}] Extraction finally failed after {attempt} attempts: {last_error}")
+        return JSONResponse({'error': last_error}, status_code=500)
+
+    else:
+        # Non-YouTube: single attempt, no cookie pool
+        logger.info(f"[{log_key}] Non-YouTube URL, extracting without cookies")
         loop = asyncio.get_event_loop()
         result, error = await loop.run_in_executor(
-            executor, extract_sync, video_id, proxy_url, profile, cookies
+            executor, extract_sync, url, proxy_url, None, None
         )
 
         if not error:
-            logger.info(f"[{video_id}] Extraction successful | video={len(result.get('videoStreams', []))} | audio={len(result.get('audioStreams', []))}")
+            logger.info(f"[{log_key}] Extraction successful | video={len(result.get('videoStreams', []))} | audio={len(result.get('audioStreams', []))}")
             return result
-        
-        # Handle Error
-        last_error = error
-        is_bad = cookie_db.is_bad(error) or "Missing streams" in error
-        
-        if is_bad:
-            logger.warning(f"[{video_id}] Attempt {attempt} failed with BAD COOKIE error: {error}. Invalidating {profile}.")
-            cookie_db.invalidate(profile)
-            # Loop continues to next attempt
-        else:
-            logger.error(f"[{video_id}] Attempt {attempt} failed with non-cookie error: {error}. No retry.")
-            break # Non-cookie error (e.g. 404, network), do not retry randomly
 
-    # If we exhausted retries or broke early
-    logger.error(f"[{video_id}] Extraction finally failed after {attempt} attempts: {last_error}")
-    return JSONResponse({'error': last_error}, status_code=500)
+        logger.error(f"[{log_key}] Extraction failed: {error}")
+        return JSONResponse({'error': error}, status_code=500)
+
+
+# ─────────────────────────────────────────────────────────────
+# LEGACY YouTube endpoint (backward compat) — accepts video_id
+# ─────────────────────────────────────────────────────────────
+
+@app.get('/api/youtube/video/{video_id}')
+async def extract(video_id: str, proxy: str = Query(None)):
+    """Legacy YouTube-only endpoint. Delegates to generic endpoint."""
+    youtube_url = f'https://www.youtube.com/watch?v={video_id}'
+    return await extract_generic(url=youtube_url, proxy=proxy)
 
 
 @app.get('/health')

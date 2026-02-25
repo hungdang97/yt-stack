@@ -14,22 +14,23 @@ import (
 	"yt-downloader-go/utils"
 )
 
-// Extract fetches video metadata using Cloudflare proxy only
-// Python Extractor + Cloudflare Proxy (cookie pool + proxy)
-func Extract(videoID string) (*models.ExtractResponse, error) {
+// Extract fetches video/audio metadata using the Python extractor.
+// Accepts any URL supported by yt-dlp (YouTube, Vimeo, TikTok, SoundCloud, etc.)
+func Extract(inputURL string) (*models.ExtractResponse, error) {
 	// Use Cloudflare Proxy only
-	result, err := extractFromAPI(videoID, config.ExtractAPIBase, config.WARPProxyURL)
+	result, err := extractFromAPI(inputURL, config.ExtractAPIBase, config.WARPProxyURL)
 	if err == nil && isValidExtractResponse(result) {
-		fmt.Printf("[%s] ✓ Extract success via Python (Cloudflare)\n", videoID)
+		fmt.Printf("[%s] ✓ Extract success via Python (Cloudflare)\n", inputURL[:min(60, len(inputURL))])
 		return result, nil
 	}
 
 	// Extraction failed
-	fmt.Printf("[%s] Python+Cloudflare failed: %v\n", videoID, err)
+	fmt.Printf("[%s] Python+Cloudflare failed: %v\n", inputURL[:min(60, len(inputURL))], err)
 	return nil, fmt.Errorf("extraction failed: %w", err)
 }
 
-// isValidExtractResponse validates that the response has required data
+// isValidExtractResponse validates that the response has required data.
+// Accepts audio-only (e.g. SoundCloud) or video-only responses.
 func isValidExtractResponse(resp *models.ExtractResponse) bool {
 	if resp == nil {
 		return false
@@ -40,22 +41,24 @@ func isValidExtractResponse(resp *models.ExtractResponse) bool {
 		return false
 	}
 
-	// Must have at least one video stream and one audio stream
-	if len(resp.VideoStreams) == 0 || len(resp.AudioStreams) == 0 {
+	// Must have at least one stream (video OR audio) — non-YouTube may have audio-only
+	if len(resp.VideoStreams) == 0 && len(resp.AudioStreams) == 0 {
 		return false
 	}
 
 	return true
 }
 
-// extractFromAPI performs the actual extraction from specified API with optional proxy
-func extractFromAPI(videoID string, apiBase string, proxy string) (*models.ExtractResponse, error) {
-	// Build API URL
-	apiURL := fmt.Sprintf("%s/%s", apiBase, videoID)
+// extractFromAPI performs the actual extraction from specified API with optional proxy.
+// Uses query parameter ?url= to pass the full input URL.
+func extractFromAPI(inputURL string, apiBase string, proxy string) (*models.ExtractResponse, error) {
+	// Build API URL with encoded input URL as query parameter
+	encodedURL := url.QueryEscape(inputURL)
+	apiURL := fmt.Sprintf("%s?url=%s", apiBase, encodedURL)
 	if proxy != "" {
 		// URL encode proxy to handle special characters (: @ /)
 		proxyEncoded := url.QueryEscape(proxy)
-		apiURL = fmt.Sprintf("%s?proxy=%s", apiURL, proxyEncoded)
+		apiURL = fmt.Sprintf("%s&proxy=%s", apiURL, proxyEncoded)
 	}
 
 	req, err := http.NewRequest("GET", apiURL, nil)
