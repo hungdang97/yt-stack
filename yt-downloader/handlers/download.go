@@ -57,20 +57,15 @@ func HandleDownload(c *fiber.Ctx) error {
 		return utils.BadRequest(c, utils.ErrValidationError, err.Error())
 	}
 
-	// Validate URL (accepts any yt-dlp supported platform: YouTube, Vimeo, TikTok, SoundCloud, etc.)
-	if err := utils.ValidateURL(req.URL); err != nil {
+	// Extract video ID
+	videoID, err := utils.ExtractVideoID(req.URL)
+	if err != nil {
 		return utils.BadRequest(c, utils.ErrInvalidURL, err.Error())
 	}
 
-	extractData, err := services.Extract(req.URL)
+	extractData, err := services.Extract(videoID)
 	if err != nil {
 		return utils.InternalError(c, "Failed to fetch video metadata")
-	}
-
-	// Extract video ID for metadata (YouTube only; fallback to full URL)
-	videoID, _ := utils.ExtractVideoID(req.URL)
-	if videoID == "" {
-		videoID = req.URL // non-YouTube: use full URL as identifier
 	}
 
 	// Set default values
@@ -397,12 +392,12 @@ func calculateNeedsReencode(videoSelection *models.VideoSelectionResult, audioSt
 }
 
 // makeURLProvider creates a URLProvider with refresh logic
-func makeURLProvider(inputURL string, targetStream *models.Stream, isVideo bool) *services.URLProvider {
+func makeURLProvider(videoID string, targetStream *models.Stream, isVideo bool) *services.URLProvider {
 	return &services.URLProvider{
 		CurrentURL: targetStream.URL,
 		RefreshFunc: func() (string, error) {
-			fmt.Printf("[Refresh] Refreshing URL for %s (isVideo=%v)...\n", inputURL, isVideo)
-			newData, err := services.Extract(inputURL)
+			fmt.Printf("[Refresh] Refreshing URL for %s (isVideo=%v)...\n", videoID, isVideo)
+			newData, err := services.Extract(videoID)
 			if err != nil {
 				return "", fmt.Errorf("extract failed: %w", err)
 			}
