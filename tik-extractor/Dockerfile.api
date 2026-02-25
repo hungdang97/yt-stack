@@ -1,0 +1,41 @@
+# ---- Stage 1: Builder ----
+FROM python:3.12-bullseye AS builder
+
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    build-essential \
+    && rm -rf /var/lib/apt/lists/*
+
+WORKDIR /app
+
+COPY requirements.txt .
+
+RUN pip install --no-cache-dir --prefix="/install" -r requirements.txt
+
+# ---- Stage 2: Final Image ----
+FROM python:3.12-slim
+
+WORKDIR /app
+
+LABEL name="DouK-Downloader-API" \
+    authors="JoeanAmier" \
+    repository="https://github.com/JoeanAmier/TikTokDownloader"
+
+# Copy installed dependencies
+COPY --from=builder /install /usr/local
+
+# Copy application code
+COPY src /app/src
+COPY locale /app/locale
+COPY static /app/static
+COPY license /app/license
+COPY main.py /app/main.py
+COPY start_api.py /app/start_api.py
+
+# Expose Web API port
+EXPOSE 5555
+
+# Volume for persistent data (downloads, settings, db)
+VOLUME /app/Volume
+
+# Run Web API mode directly (no interactive)
+CMD ["python", "start_api.py"]
