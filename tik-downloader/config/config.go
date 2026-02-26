@@ -44,6 +44,10 @@ var (
 	SignedURLExpiration = time.Duration(getEnvIntOrDefault("SIGNED_URL_EXPIRATION_MIN", 30)) * time.Minute
 	HubToken            = getEnvOrDefault("HUB_TOKEN", "1234567890987654321234567890987654321")
 
+	// MongoDB
+	MongoURI = getEnvOrDefault("MONGO_URI", "mongodb://cookie:cookie123456789@85.10.196.119:27017/cookie")
+	MongoDB  = getEnvOrDefault("MONGO_DB", "cookie")
+
 	// Download
 	DownloadTimeout = time.Duration(getEnvIntOrDefault("DOWNLOAD_TIMEOUT_S", 120)) * time.Second
 	MaxFileSize     = int64(getEnvIntOrDefault("MAX_FILE_SIZE_MB", 500)) * 1024 * 1024
