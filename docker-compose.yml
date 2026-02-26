@@ -271,6 +271,8 @@ services:
       - HUB_TOKEN=${HUB_TOKEN}
       - CLEANUP_INTERVAL=*/5 * * * *
       - MAX_JOB_AGE_MIN=15
+      - MONGO_URI=${MONGO_URI}
+      - MONGO_DB=${MONGO_DB:-tik_downloader}
     volumes:
       - tik_storage:/app/storage
     depends_on:
