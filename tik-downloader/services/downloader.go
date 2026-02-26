@@ -12,7 +12,7 @@ import (
 )
 
 // Download downloads a file from URL to the job's storage directory
-func Download(ctx context.Context, jobID string, downloadURL string, filename string) (int64, error) {
+func Download(ctx context.Context, jobID string, downloadURL string, filename string, cookie string) (int64, error) {
 	destPath := filepath.Join(utils.GetJobDir(jobID), filename)
 
 	fmt.Printf("[%s] Downloading %s\n", jobID, filename)
@@ -22,9 +22,12 @@ func Download(ctx context.Context, jobID string, downloadURL string, filename st
 		return 0, fmt.Errorf("failed to create request: %w", err)
 	}
 
-	// TikTok may need specific headers
+	// TikTok CDN requires cookie + headers for auth
 	req.Header.Set("User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36")
 	req.Header.Set("Referer", "https://www.tiktok.com/")
+	if cookie != "" {
+		req.Header.Set("Cookie", cookie)
+	}
 
 	resp, err := config.DownloadClient.Do(req)
 	if err != nil {

@@ -70,7 +70,7 @@ func HandleDownload(c *fiber.Ctx) error {
 	var downloadURL, outputFilename string
 	switch req.Type {
 	case "video":
-		downloadURL = videoData.Downloads
+		downloadURL = videoData.Data.Downloads
 		outputFilename = "output.mp4"
 		if downloadURL == "" {
 			return c.Status(fiber.StatusNotFound).JSON(fiber.Map{
@@ -78,7 +78,7 @@ func HandleDownload(c *fiber.Ctx) error {
 			})
 		}
 	case "audio":
-		downloadURL = videoData.MusicURL
+		downloadURL = videoData.Data.MusicURL
 		outputFilename = "output.mp3"
 		if downloadURL == "" {
 			return c.Status(fiber.StatusNotFound).JSON(fiber.Map{
@@ -103,10 +103,10 @@ func HandleDownload(c *fiber.Ctx) error {
 	}
 
 	// Parse duration
-	duration := services.ParseDuration(videoData.Duration)
+	duration := services.ParseDuration(videoData.Data.Duration)
 
 	// Get title
-	title := videoData.Desc
+	title := videoData.Data.Desc
 	if title == "" {
 		title = "TikTok Video " + videoID
 	}
@@ -120,10 +120,10 @@ func HandleDownload(c *fiber.Ctx) error {
 		OutputType:   req.Type,
 		Output:       outputFilename,
 		CreatedAt:    time.Now().UnixMilli(),
-		VideoURL:     videoData.Downloads,
-		MusicURL:     videoData.MusicURL,
-		ThumbnailURL: videoData.StaticCover,
-		Author:       videoData.Nickname,
+		VideoURL:     videoData.Data.Downloads,
+		MusicURL:     videoData.Data.MusicURL,
+		ThumbnailURL: videoData.Data.StaticCover,
+		Author:       videoData.Data.Nickname,
 		SourceURL:    req.URL,
 	}
 
@@ -134,8 +134,8 @@ func HandleDownload(c *fiber.Ctx) error {
 		})
 	}
 
-	// Start background download
-	go processJob(jobID, downloadURL, outputFilename)
+	// Start background download (with cookie for CDN auth)
+	go processJob(jobID, downloadURL, outputFilename, videoData.Params.Cookie)
 
 	// Return response
 	response := models.DownloadResponse{
@@ -149,11 +149,11 @@ func HandleDownload(c *fiber.Ctx) error {
 }
 
 // processJob runs the download in background
-func processJob(jobID, downloadURL, outputFilename string) {
+func processJob(jobID, downloadURL, outputFilename, cookie string) {
 	ctx, cancel := context.WithTimeout(context.Background(), config.DownloadTimeout)
 	defer cancel()
 
-	fileSize, err := services.Download(ctx, jobID, downloadURL, outputFilename)
+	fileSize, err := services.Download(ctx, jobID, downloadURL, outputFilename, cookie)
 	if err != nil {
 		fmt.Printf("[%s] ✗ Download failed: %v\n", jobID, err)
 		utils.UpdateMetaError(jobID, err.Error())
