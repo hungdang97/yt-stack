@@ -248,7 +248,49 @@ services:
     networks:
       - backend
 
-  # Nginx reverse proxy with SSL for yt-downloader domain
+  # TikTok Downloader service
+  tik-downloader:
+    platform: linux/amd64
+    build:
+      context: ./tik-downloader
+      dockerfile: Dockerfile
+    image: tik-downloader:latest
+    container_name: tik-downloader
+    restart: always
+    ports:
+      - "5002:5002"
+    environment:
+      - PORT=5002
+      - STORAGE_DIR=./storage
+      - SIGNED_URL_SECRET=${SIGNED_URL_SECRET}
+      - SIGNED_URL_EXPIRATION_MIN=${SIGNED_URL_EXPIRATION_MIN:-30}
+      - BASE_DOMAIN=${BASE_DOMAIN}
+      - DOWNLOAD_SUBDOMAIN=${DOWNLOAD_SUBDOMAIN}
+      - PATH_PREFIX=/tik
+      - TIK_EXTRACTOR_URL=http://tik-extractor:5555
+      - HUB_TOKEN=${HUB_TOKEN}
+      - CLEANUP_INTERVAL=*/5 * * * *
+      - MAX_JOB_AGE_MIN=15
+    volumes:
+      - tik_storage:/app/storage
+    depends_on:
+      tik-extractor:
+        condition: service_started
+    healthcheck:
+      test: [ "CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://localhost:5002/health" ]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 10s
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
+    networks:
+      - backend
+
+  # Nginx reverse proxy with SSL
   nginx:
     platform: linux/amd64
     build:
@@ -269,6 +311,8 @@ services:
     depends_on:
       yt-downloader:
         condition: service_healthy
+      tik-downloader:
+        condition: service_healthy
     networks:
       - backend
 
@@ -284,5 +328,6 @@ volumes:
   warp_data_5:
   yt_storage:
   tik_volume:
+  tik_storage:
   letsencrypt:
   certbot_webroot:

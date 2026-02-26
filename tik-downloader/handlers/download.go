@@ -1,0 +1,169 @@
+package handlers
+
+import (
+	"context"
+	"fmt"
+	"tik-downloader/config"
+	"tik-downloader/models"
+	"tik-downloader/services"
+	"tik-downloader/utils"
+	"time"
+
+	"github.com/gofiber/fiber/v2"
+	gonanoid "github.com/matoous/go-nanoid/v2"
+)
+
+// HandleDownload handles POST /api/download
+func HandleDownload(c *fiber.Ctx) error {
+	// Verify Hub token
+	hubToken := c.Get("X-Hub-Token")
+	if hubToken != config.HubToken {
+		return c.Status(fiber.StatusUnauthorized).JSON(fiber.Map{
+			"error": "Unauthorized",
+		})
+	}
+
+	// Parse request
+	var req models.DownloadRequest
+	if err := c.BodyParser(&req); err != nil {
+		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{
+			"error": "Invalid request body",
+		})
+	}
+
+	// Validate URL
+	if req.URL == "" {
+		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{
+			"error": "URL is required",
+		})
+	}
+
+	// Validate type
+	if req.Type == "" {
+		req.Type = "video" // Default to video
+	}
+	if req.Type != "video" && req.Type != "audio" {
+		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{
+			"error": "Type must be 'video' or 'audio'",
+		})
+	}
+
+	// Extract video ID from URL
+	videoID, err := utils.ExtractVideoID(req.URL)
+	if err != nil {
+		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{
+			"error": fmt.Sprintf("Invalid TikTok URL: %v", err),
+		})
+	}
+
+	fmt.Printf("[TikTok] Download request: %s (type=%s, id=%s)\n", req.URL, req.Type, videoID)
+
+	// Extract video metadata from tik-extractor
+	videoData, err := services.Extract(videoID)
+	if err != nil {
+		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{
+			"error": fmt.Sprintf("Failed to extract video info: %v", err),
+		})
+	}
+
+	// Determine download URL and output filename
+	var downloadURL, outputFilename string
+	switch req.Type {
+	case "video":
+		downloadURL = videoData.Downloads
+		outputFilename = "output.mp4"
+		if downloadURL == "" {
+			return c.Status(fiber.StatusNotFound).JSON(fiber.Map{
+				"error": "No video download URL available",
+			})
+		}
+	case "audio":
+		downloadURL = videoData.MusicURL
+		outputFilename = "output.mp3"
+		if downloadURL == "" {
+			return c.Status(fiber.StatusNotFound).JSON(fiber.Map{
+				"error": "No audio download URL available",
+			})
+		}
+	}
+
+	// Generate job ID
+	jobID, err := gonanoid.New(config.JobIDLength)
+	if err != nil {
+		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{
+			"error": "Failed to generate job ID",
+		})
+	}
+
+	// Create job directory
+	if err := utils.CreateJobDir(jobID); err != nil {
+		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{
+			"error": "Failed to create job directory",
+		})
+	}
+
+	// Parse duration
+	duration := services.ParseDuration(videoData.Duration)
+
+	// Get title
+	title := videoData.Desc
+	if title == "" {
+		title = "TikTok Video " + videoID
+	}
+
+	// Create meta
+	meta := &models.Meta{
+		ID:           jobID,
+		Status:       models.StatusDownloading,
+		Title:        title,
+		Duration:     duration,
+		OutputType:   req.Type,
+		Output:       outputFilename,
+		CreatedAt:    time.Now().UnixMilli(),
+		VideoURL:     videoData.Downloads,
+		MusicURL:     videoData.MusicURL,
+		ThumbnailURL: videoData.StaticCover,
+		Author:       videoData.Nickname,
+		SourceURL:    req.URL,
+	}
+
+	if err := utils.WriteMeta(jobID, meta); err != nil {
+		utils.DeleteJobDir(jobID)
+		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{
+			"error": "Failed to write metadata",
+		})
+	}
+
+	// Start background download
+	go processJob(jobID, downloadURL, outputFilename)
+
+	// Return response
+	response := models.DownloadResponse{
+		StatusURL: utils.GenerateStatusURL(jobID),
+		Title:     title,
+		Duration:  duration,
+	}
+
+	fmt.Printf("[%s] Job created: %s → %s\n", jobID, req.Type, outputFilename)
+	return c.Status(fiber.StatusCreated).JSON(response)
+}
+
+// processJob runs the download in background
+func processJob(jobID, downloadURL, outputFilename string) {
+	ctx, cancel := context.WithTimeout(context.Background(), config.DownloadTimeout)
+	defer cancel()
+
+	fileSize, err := services.Download(ctx, jobID, downloadURL, outputFilename)
+	if err != nil {
+		fmt.Printf("[%s] ✗ Download failed: %v\n", jobID, err)
+		utils.UpdateMetaError(jobID, err.Error())
+		return
+	}
+
+	if err := utils.UpdateMetaCompleted(jobID, outputFilename, fileSize); err != nil {
+		fmt.Printf("[%s] ✗ Failed to update meta: %v\n", jobID, err)
+		return
+	}
+
+	fmt.Printf("[%s] ✓ Job completed: %s (%.2f MB)\n", jobID, outputFilename, float64(fileSize)/1024/1024)
+}
