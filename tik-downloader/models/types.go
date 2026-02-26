@@ -58,7 +58,7 @@ type Meta struct {
 }
 
 // ============================================
-// TIK-EXTRACTOR RESPONSE
+// TIK-EXTRACTOR API
 // ============================================
 
 // TikExtractRequest sent to tik-extractor POST /tiktok/detail
@@ -69,28 +69,54 @@ type TikExtractRequest struct {
 	Source   bool   `json:"source,omitempty"`
 }
 
-// TikExtractResponse from tik-extractor
+// TikExtractResponse is the full response from tik-extractor
 type TikExtractResponse struct {
-	Data []TikVideoData `json:"data"`
+	Message string           `json:"message"`
+	Data    TikVideoData     `json:"data"`
+	Params  TikExtractParams `json:"params"`
+	Time    string           `json:"time"`
+}
+
+// TikExtractParams contains the extraction parameters echoed back
+type TikExtractParams struct {
+	Cookie   string `json:"cookie"`
+	Proxy    string `json:"proxy"`
+	Source   bool   `json:"source"`
+	DetailID string `json:"detail_id"`
 }
 
 // TikVideoData represents a single video item from tik-extractor
 type TikVideoData struct {
-	ID           string `json:"id"`
-	Desc         string `json:"desc"`
-	Downloads    string `json:"downloads"` // Video download URL
-	MusicURL     string `json:"music_url"` // Audio URL
-	MusicTitle   string `json:"music_title"`
-	MusicAuthor  string `json:"music_author"`
-	Duration     string `json:"duration"` // "00:00:30" format
-	Height       int    `json:"height"`
-	Width        int    `json:"width"`
-	Type         string `json:"type"` // "视频" for video
-	StaticCover  string `json:"static_cover"`
-	DynamicCover string `json:"dynamic_cover"`
-	Nickname     string `json:"nickname"`
-	UniqueID     string `json:"unique_id"`
-	ShareURL     string `json:"share_url"`
-	DiggCount    int    `json:"digg_count"`
-	PlayCount    int    `json:"play_count"`
+	ID              string   `json:"id"`
+	Desc            string   `json:"desc"`
+	CreateTimestamp int64    `json:"create_timestamp"`
+	CreateTime      string   `json:"create_time"`
+	TextExtra       []string `json:"text_extra"`
+	Type            string   `json:"type"`
+	Height          int      `json:"height"`
+	Width           int      `json:"width"`
+	Downloads       string   `json:"downloads"`
+	Duration        string   `json:"duration"`
+	URI             string   `json:"uri"`
+	DynamicCover    string   `json:"dynamic_cover"`
+	StaticCover     string   `json:"static_cover"`
+	UID             string   `json:"uid"`
+	SecUID          string   `json:"sec_uid"`
+	UniqueID        string   `json:"unique_id"`
+	Signature       string   `json:"signature"`
+	UserAge         int      `json:"user_age"`
+	Nickname        string   `json:"nickname"`
+	Mark            string   `json:"mark"`
+	MusicAuthor     string   `json:"music_author"`
+	MusicTitle      string   `json:"music_title"`
+	MusicURL        string   `json:"music_url"`
+	DiggCount       int      `json:"digg_count"`
+	CommentCount    int      `json:"comment_count"`
+	CollectCount    int      `json:"collect_count"`
+	ShareCount      int      `json:"share_count"`
+	PlayCount       int      `json:"play_count"`
+	Tag             []string `json:"tag"`
+	Extra           string   `json:"extra"`
+	ShareURL        string   `json:"share_url"`
+	CollectionTime  string   `json:"collection_time"`
 }
