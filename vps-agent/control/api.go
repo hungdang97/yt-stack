@@ -66,6 +66,7 @@ func (api *ControlAPI) SetupRoutes() {
 	api.app.Get("/status", api.GetStatus)
 	api.app.Get("/control/build-status", api.GetBuildStatus)
 	api.app.Post("/control/restart", api.Restart)
+	api.app.Post("/control/restart/:service", api.RestartService)
 	api.app.Post("/control/stop", api.Stop)
 	api.app.Post("/control/update-agent", api.UpdateAgent)
 }
@@ -151,6 +152,37 @@ func (api *ControlAPI) runAsyncRestart() {
 	}
 
 	api.setStatus(StateSuccess, "Services restarted successfully")
+}
+
+// POST /control/restart/:service - Restart a single service (git pull → build → up)
+func (api *ControlAPI) RestartService(c *fiber.Ctx) error {
+	service := c.Params("service")
+
+	// Whitelist allowed services
+	allowed := map[string]bool{
+		"yt-downloader":  true,
+		"yt-extractor":   true,
+		"tik-downloader": true,
+		"tik-extractor":  true,
+		"nginx":          true,
+		"gost":           true,
+	}
+	if !allowed[service] {
+		return c.Status(400).JSON(fiber.Map{"error": fmt.Sprintf("Unknown service: %s", service)})
+	}
+
+	log.Printf("[Control] Restart requested for service: %s", service)
+
+	go func() {
+		api.setStatus(StateBuilding, fmt.Sprintf("Restarting service: %s", service))
+		if err := api.deployer.RestartService(service); err != nil {
+			api.setStatus(StateError, fmt.Sprintf("Restart %s failed: %v", service, err))
+			return
+		}
+		api.setStatus(StateSuccess, fmt.Sprintf("Service %s restarted successfully", service))
+	}()
+
+	return c.JSON(fiber.Map{"message": fmt.Sprintf("Restart %s started", service)})
 }
 
 // POST /control/stop
