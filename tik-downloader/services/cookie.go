@@ -45,9 +45,9 @@ func InitCookieProvider(repo cookieRepo) {
 	p.refresh()
 	globalProvider = p
 
-	// Background refresh every 5 minutes
+	// Background refresh every 5 seconds
 	go func() {
-		ticker := time.NewTicker(5 * time.Minute)
+		ticker := time.NewTicker(5 * time.Second)
 		defer ticker.Stop()
 		for {
 			select {

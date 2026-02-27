@@ -48,19 +48,8 @@ func Extract(videoID string) (*models.TikExtractResponse, error) {
 	}
 
 	if resp.StatusCode != http.StatusOK {
-		errorMessage := string(respBody)
-
-		// If API returns 401/403 or specific error about auth/cookie, invalidate it
-		isBadCookie := resp.StatusCode == 401 || resp.StatusCode == 403 ||
-			strings.Contains(strings.ToLower(errorMessage), "login") ||
-			strings.Contains(strings.ToLower(errorMessage), "bot") ||
-			strings.Contains(strings.ToLower(errorMessage), "sign")
-
-		if isBadCookie {
-			InvalidateCookie(cookieItem.ID)
-		}
-
-		return nil, fmt.Errorf("extractor API returned %d: %s", resp.StatusCode, errorMessage)
+		InvalidateCookie(cookieItem.ID)
+		return nil, fmt.Errorf("extractor API returned %d: %s", resp.StatusCode, string(respBody))
 	}
 
 	// Parse directly into typed struct
@@ -71,19 +60,8 @@ func Extract(videoID string) (*models.TikExtractResponse, error) {
 
 	video := &extractResp.Data
 	if video.Downloads == "" && video.MusicURL == "" {
-		errorMessage := extractResp.Message
-
-		// Some TikTok endpoints return empty data with "login required" message inside 200 OK
-		isBadCookie := strings.Contains(strings.ToLower(errorMessage), "login") ||
-			strings.Contains(strings.ToLower(errorMessage), "bot") ||
-			strings.Contains(strings.ToLower(errorMessage), "sign") ||
-			strings.Contains(strings.ToLower(errorMessage), "verify")
-
-		if isBadCookie {
-			InvalidateCookie(cookieItem.ID)
-		}
-
-		return nil, fmt.Errorf("no download URLs in response (message: %s)", errorMessage)
+		InvalidateCookie(cookieItem.ID)
+		return nil, fmt.Errorf("no download URLs in response (message: %s)", extractResp.Message)
 	}
 
 	// Ensure cookie is set for CDN download
