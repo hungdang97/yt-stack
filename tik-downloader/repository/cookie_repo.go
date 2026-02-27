@@ -13,7 +13,7 @@ import (
 // CookieDoc represents a TikTok cookie document in MongoDB
 type CookieDoc struct {
 	ID        primitive.ObjectID `bson:"_id,omitempty"`
-	Cookie    string             `bson:"cookie"`
+	Cookie    string             `bson:"cookie_string"`
 	Status    string             `bson:"status"` // "active" or "inactive"
 	CreatedAt time.Time          `bson:"created_at"`
 	UpdatedAt time.Time          `bson:"updated_at,omitempty"`
