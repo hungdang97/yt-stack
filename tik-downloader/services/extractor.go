@@ -19,6 +19,7 @@ func Extract(videoID string) (*models.TikExtractResponse, error) {
 	reqBody := models.TikExtractRequest{
 		DetailID: videoID,
 		Cookie:   cookieItem.Value,
+		Proxy:    config.WARPProxyURL,
 	}
 
 	bodyBytes, err := json.Marshal(reqBody)

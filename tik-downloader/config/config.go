@@ -3,6 +3,7 @@ package config
 import (
 	"fmt"
 	"net/http"
+	"net/url"
 	"os"
 	"strconv"
 	"time"
@@ -56,7 +57,20 @@ var (
 	// Job ID
 	JobIDLength = 21
 	JobIDRegex  = `^[a-zA-Z0-9_-]{21}$`
+
+	// Proxy Credentials
+	WARPUser = getEnvOrDefault("WARP_USER", "")
+	WARPPass = getEnvOrDefault("WARP_PASS", "")
+
+	// Derived Proxy URL
+	WARPProxyURL = ""
 )
+
+func initProxyURL() {
+	if WARPUser != "" && WARPPass != "" {
+		WARPProxyURL = fmt.Sprintf("http://%s:%s@gost:1111", WARPUser, WARPPass)
+	}
+}
 
 // ============================================
 // HTTP CLIENTS
@@ -68,11 +82,33 @@ var (
 )
 
 func init() {
+	initProxyURL()
+
 	ExtractClient = &http.Client{
+		Transport: &http.Transport{
+			MaxIdleConns:        100,
+			MaxIdleConnsPerHost: 10,
+			IdleConnTimeout:     90 * time.Second,
+		},
 		Timeout: TikExtractorTimeout,
 	}
+
+	downloadTransport := &http.Transport{
+		MaxIdleConns:        100,
+		MaxIdleConnsPerHost: 10,
+		IdleConnTimeout:     90 * time.Second,
+		DisableCompression:  true, // Save CPU on downloads
+	}
+
+	// Apply Proxy if configured
+	if WARPProxyURL != "" {
+		importURL, _ := url.Parse(WARPProxyURL)
+		downloadTransport.Proxy = http.ProxyURL(importURL)
+	}
+
 	DownloadClient = &http.Client{
-		Timeout: DownloadTimeout,
+		Transport: downloadTransport,
+		Timeout:   DownloadTimeout,
 	}
 }
 
