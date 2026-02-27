@@ -105,6 +105,7 @@ func (p *CookieProvider) refresh() {
 	// Transform new pool
 	newPool := []CookieItem{}
 	for _, doc := range docs {
+		log.Printf("[DEBUG] DB cookie: ID=%s, Cookie length=%d, Status=%s\n", doc.ID.Hex(), len(doc.Cookie), doc.Status)
 		newPool = append(newPool, CookieItem{
 			ID:    doc.ID.Hex(),
 			Value: doc.Cookie,

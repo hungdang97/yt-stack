@@ -15,6 +15,11 @@ import (
 // Extract calls tik-extractor API and returns the full response
 func Extract(videoID string) (*models.TikExtractResponse, error) {
 	cookieItem := GetCookie()
+	cookiePreview := cookieItem.Value
+	if len(cookiePreview) > 50 {
+		cookiePreview = cookiePreview[:50]
+	}
+	fmt.Printf("[DEBUG] Cookie ID=%s, Value length=%d, Preview=%q\n", cookieItem.ID, len(cookieItem.Value), cookiePreview)
 
 	reqBody := models.TikExtractRequest{
 		DetailID: videoID,
