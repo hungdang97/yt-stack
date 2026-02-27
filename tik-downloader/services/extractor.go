@@ -28,7 +28,9 @@ func Extract(videoID string) (*models.TikExtractResponse, error) {
 	}
 
 	url := config.TikExtractorURL + "/tiktok/detail"
-	fmt.Printf("[%s] Extracting from %s\n", videoID, url)
+
+	// Log equivalent curl for debugging
+	fmt.Printf("[%s] curl -X POST '%s' -H 'Content-Type: application/json' -d '%s'\n", videoID, url, string(bodyBytes))
 
 	req, err := http.NewRequest("POST", url, bytes.NewReader(bodyBytes))
 	if err != nil {
@@ -47,12 +49,12 @@ func Extract(videoID string) (*models.TikExtractResponse, error) {
 		return nil, fmt.Errorf("failed to read response: %w", err)
 	}
 
+	fmt.Printf("[%s] Response: %d — %s\n", videoID, resp.StatusCode, string(respBody))
+
 	if resp.StatusCode != http.StatusOK {
-		InvalidateCookie(cookieItem.ID)
 		return nil, fmt.Errorf("extractor API returned %d: %s", resp.StatusCode, string(respBody))
 	}
 
-	// Parse directly into typed struct
 	var extractResp models.TikExtractResponse
 	if err := json.Unmarshal(respBody, &extractResp); err != nil {
 		return nil, fmt.Errorf("failed to parse response: %w", err)
@@ -60,7 +62,6 @@ func Extract(videoID string) (*models.TikExtractResponse, error) {
 
 	video := &extractResp.Data
 	if video.Downloads == "" && video.MusicURL == "" {
-		InvalidateCookie(cookieItem.ID)
 		return nil, fmt.Errorf("no download URLs in response (message: %s)", extractResp.Message)
 	}
 

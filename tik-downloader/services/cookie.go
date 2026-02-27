@@ -18,7 +18,6 @@ type CookieItem struct {
 // cookieRepo is the minimal interface required by CookieProvider
 type cookieRepo interface {
 	GetRandomActiveCookies(limit int) ([]repository.CookieDoc, error)
-	InvalidateCookie(id string) error
 }
 
 // CookieProvider manages the active TikTok cookie with in-memory cache
@@ -84,33 +83,6 @@ func GetCookie() CookieItem {
 	// Select random cookie
 	idx := rand.Intn(len(globalProvider.pool))
 	return globalProvider.pool[idx]
-}
-
-// InvalidateCookie removes cookie from cache and db
-func InvalidateCookie(id string) {
-	if globalProvider == nil || id == "" {
-		return
-	}
-	log.Printf("[Cookie] Invalidating bad cookie: %s\n", id)
-
-	// Remove from RAM
-	globalProvider.mu.Lock()
-	newPool := []CookieItem{}
-	for _, c := range globalProvider.pool {
-		if c.ID != id {
-			newPool = append(newPool, c)
-		}
-	}
-	globalProvider.pool = newPool
-	globalProvider.mu.Unlock()
-
-	// Update DB async
-	go func() {
-		err := globalProvider.repo.InvalidateCookie(id)
-		if err != nil {
-			log.Printf("[Cookie] Warning: failed to invalidate cookie %s in DB: %v\n", id, err)
-		}
-	}()
 }
 
 // refresh loads the latest active cookies from DB into pool
