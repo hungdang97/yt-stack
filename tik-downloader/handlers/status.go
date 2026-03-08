@@ -39,10 +39,11 @@ func HandleStatus(c *fiber.Ctx) error {
 
 	// Build response
 	response := models.StatusResponse{
-		Status:   meta.Status,
-		Progress: utils.CalculateProgress(meta),
-		Title:    meta.Title,
-		Duration: meta.Duration,
+		Status:    meta.Status,
+		Progress:  utils.CalculateProgress(meta),
+		Title:     meta.Title,
+		Duration:  meta.Duration,
+		Thumbnail: meta.ThumbnailURL,
 	}
 
 	if meta.Status == models.StatusCompleted {

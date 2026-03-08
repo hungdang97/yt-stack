@@ -26,6 +26,7 @@ type StatusResponse struct {
 	Progress    int     `json:"progress"`
 	Title       string  `json:"title,omitempty"`
 	Duration    float64 `json:"duration,omitempty"`
+	Thumbnail   string  `json:"thumbnail,omitempty"`
 	DownloadURL string  `json:"downloadUrl,omitempty"`
 	Error       string  `json:"error,omitempty"`
 }
