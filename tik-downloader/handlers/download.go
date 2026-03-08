@@ -70,7 +70,7 @@ func HandleDownload(c *fiber.Ctx) error {
 	var downloadURL, outputFilename string
 	switch req.Type {
 	case "video":
-		downloadURL = videoData.Data.Downloads
+		downloadURL = videoData.Data.GetDownloads()
 		outputFilename = "output.mp4"
 		if downloadURL == "" {
 			return c.Status(fiber.StatusNotFound).JSON(fiber.Map{
@@ -120,7 +120,7 @@ func HandleDownload(c *fiber.Ctx) error {
 		OutputType:   req.Type,
 		Output:       outputFilename,
 		CreatedAt:    time.Now().UnixMilli(),
-		VideoURL:     videoData.Data.Downloads,
+		VideoURL:     videoData.Data.GetDownloads(),
 		MusicURL:     videoData.Data.MusicURL,
 		ThumbnailURL: videoData.Data.StaticCover,
 		Author:       videoData.Data.Nickname,
