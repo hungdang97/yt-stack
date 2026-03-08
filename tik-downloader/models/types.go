@@ -14,8 +14,10 @@ type DownloadRequest struct {
 // DownloadResponse returned to client
 type DownloadResponse struct {
 	StatusURL string  `json:"statusUrl"`
+	Type      string  `json:"type"` // "video" or "audio"
 	Title     string  `json:"title"`
 	Duration  float64 `json:"duration"` // seconds
+	Thumbnail string  `json:"thumbnail,omitempty"`
 }
 
 // StatusResponse for polling
