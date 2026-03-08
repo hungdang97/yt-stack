@@ -66,7 +66,7 @@ func Extract(videoID string) (*models.TikExtractResponse, error) {
 	}
 
 	video := &extractResp.Data
-	if video.Downloads == "" && video.MusicURL == "" {
+	if video.GetDownloads() == "" && video.MusicURL == "" {
 		return nil, fmt.Errorf("no download URLs in response (message: %s)", extractResp.Message)
 	}
 
@@ -77,7 +77,7 @@ func Extract(videoID string) (*models.TikExtractResponse, error) {
 
 	fmt.Printf("[%s] ✓ Extracted: %s (duration=%s, downloads=%v, music=%v)\n",
 		videoID, video.Desc, video.Duration,
-		video.Downloads != "", video.MusicURL != "")
+		video.GetDownloads() != "", video.MusicURL != "")
 
 	return &extractResp, nil
 }

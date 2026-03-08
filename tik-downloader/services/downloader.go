@@ -45,7 +45,7 @@ func Download(ctx context.Context, jobID string, videoID string, downloadURL str
 			if strings.Contains(filename, "mp3") || strings.Contains(filename, "audio") {
 				downloadURL = newData.Data.MusicURL
 			} else {
-				downloadURL = newData.Data.Downloads
+				downloadURL = newData.Data.GetDownloads()
 			}
 
 			if downloadURL == "" {

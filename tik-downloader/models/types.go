@@ -90,36 +90,57 @@ type TikExtractParams struct {
 
 // TikVideoData represents a single video item from tik-extractor
 type TikVideoData struct {
-	ID              string   `json:"id"`
-	Desc            string   `json:"desc"`
-	CreateTimestamp int64    `json:"create_timestamp"`
-	CreateTime      string   `json:"create_time"`
-	TextExtra       []string `json:"text_extra"`
-	Type            string   `json:"type"`
-	Height          int      `json:"height"`
-	Width           int      `json:"width"`
-	Downloads       string   `json:"downloads"`
-	Duration        string   `json:"duration"`
-	URI             string   `json:"uri"`
-	DynamicCover    string   `json:"dynamic_cover"`
-	StaticCover     string   `json:"static_cover"`
-	UID             string   `json:"uid"`
-	SecUID          string   `json:"sec_uid"`
-	UniqueID        string   `json:"unique_id"`
-	Signature       string   `json:"signature"`
-	UserAge         int      `json:"user_age"`
-	Nickname        string   `json:"nickname"`
-	Mark            string   `json:"mark"`
-	MusicAuthor     string   `json:"music_author"`
-	MusicTitle      string   `json:"music_title"`
-	MusicURL        string   `json:"music_url"`
-	DiggCount       int      `json:"digg_count"`
-	CommentCount    int      `json:"comment_count"`
-	CollectCount    int      `json:"collect_count"`
-	ShareCount      int      `json:"share_count"`
-	PlayCount       int      `json:"play_count"`
-	Tag             []string `json:"tag"`
-	Extra           string   `json:"extra"`
-	ShareURL        string   `json:"share_url"`
-	CollectionTime  string   `json:"collection_time"`
+	ID              string      `json:"id"`
+	Desc            string      `json:"desc"`
+	CreateTimestamp int64       `json:"create_timestamp"`
+	CreateTime      string      `json:"create_time"`
+	TextExtra       []string    `json:"text_extra"`
+	Type            string      `json:"type"`
+	Height          int         `json:"height"`
+	Width           int         `json:"width"`
+	DownloadsRaw    interface{} `json:"downloads"` // Can be string or []string depending on photo/video
+	Duration        string      `json:"duration"`
+	URI             string      `json:"uri"`
+	DynamicCover    string      `json:"dynamic_cover"`
+	StaticCover     string      `json:"static_cover"`
+	UID             string      `json:"uid"`
+	SecUID          string      `json:"sec_uid"`
+	UniqueID        string      `json:"unique_id"`
+	Signature       string      `json:"signature"`
+	UserAge         int         `json:"user_age"`
+	Nickname        string      `json:"nickname"`
+	Mark            string      `json:"mark"`
+	MusicAuthor     string      `json:"music_author"`
+	MusicTitle      string      `json:"music_title"`
+	MusicURL        string      `json:"music_url"`
+	DiggCount       int         `json:"digg_count"`
+	CommentCount    int         `json:"comment_count"`
+	CollectCount    int         `json:"collect_count"`
+	ShareCount      int         `json:"share_count"`
+	PlayCount       int         `json:"play_count"`
+	TagRaw          interface{} `json:"tag"` // Can be string or []string
+	Extra           string      `json:"extra"`
+	ShareURL        string      `json:"share_url"`
+	CollectionTime  string      `json:"collection_time"`
+}
+
+// GetDownloads safely extracts the first download URL regardless of string or array format
+func (t *TikVideoData) GetDownloads() string {
+	if t.DownloadsRaw == nil {
+		return ""
+	}
+
+	// Case 1: string
+	if str, ok := t.DownloadsRaw.(string); ok {
+		return str
+	}
+
+	// Case 2: []interface{} (array of strings, like photo slide JSON)
+	if arr, ok := t.DownloadsRaw.([]interface{}); ok && len(arr) > 0 {
+		if firstStr, ok := arr[0].(string); ok {
+			return firstStr
+		}
+	}
+
+	return ""
 }
