@@ -140,8 +140,10 @@ func HandleDownload(c *fiber.Ctx) error {
 	// Return response
 	response := models.DownloadResponse{
 		StatusURL: utils.GenerateStatusURL(jobID),
+		Type:      req.Type,
 		Title:     title,
 		Duration:  duration,
+		Thumbnail: videoData.Data.StaticCover,
 	}
 
 	fmt.Printf("[%s] Job created: %s → %s\n", jobID, req.Type, outputFilename)
