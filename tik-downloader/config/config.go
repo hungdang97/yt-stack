@@ -33,7 +33,7 @@ var (
 
 	// TikTok Extractor
 	TikExtractorURL     = getEnvOrDefault("TIK_EXTRACTOR_URL", "http://tik-extractor:5555")
-	TikExtractorTimeout = time.Duration(getEnvIntOrDefault("EXTRACT_API_TIMEOUT", 30)) * time.Second
+	TikExtractorTimeout = time.Duration(getEnvIntOrDefault("EXTRACT_API_TIMEOUT", 4)) * time.Second
 
 	// Cleanup
 	CleanupInterval  = getEnvOrDefault("CLEANUP_INTERVAL", "*/5 * * * *")
