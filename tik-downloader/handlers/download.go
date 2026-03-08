@@ -135,7 +135,7 @@ func HandleDownload(c *fiber.Ctx) error {
 	}
 
 	// Start background download (with cookie for CDN auth)
-	go processJob(jobID, downloadURL, outputFilename, videoData.Params.Cookie)
+	go processJob(jobID, videoID, downloadURL, outputFilename, videoData.Params.Cookie)
 
 	// Return response
 	response := models.DownloadResponse{
@@ -151,11 +151,11 @@ func HandleDownload(c *fiber.Ctx) error {
 }
 
 // processJob runs the download in background
-func processJob(jobID, downloadURL, outputFilename, cookie string) {
+func processJob(jobID, videoID, downloadURL, outputFilename, cookie string) {
 	ctx, cancel := context.WithTimeout(context.Background(), config.DownloadTimeout)
 	defer cancel()
 
-	fileSize, err := services.Download(ctx, jobID, downloadURL, outputFilename, cookie)
+	fileSize, err := services.Download(ctx, jobID, videoID, downloadURL, outputFilename, cookie)
 	if err != nil {
 		fmt.Printf("[%s] ✗ Download failed: %v\n", jobID, err)
 		utils.UpdateMetaError(jobID, err.Error())

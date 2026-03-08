@@ -53,6 +53,8 @@ var (
 	DownloadTimeout = time.Duration(getEnvIntOrDefault("DOWNLOAD_TIMEOUT_S", 120)) * time.Second
 	MaxFileSize     = int64(getEnvIntOrDefault("MAX_FILE_SIZE_MB", 500)) * 1024 * 1024
 	BufferSize      = 128 * 1024 // 128KB
+	MaxRetries      = getEnvIntOrDefault("MAX_RETRIES", 3)
+	RetryDelay      = time.Duration(getEnvIntOrDefault("RETRY_DELAY_MS", 1000)) * time.Millisecond
 
 	// Job ID
 	JobIDLength = 21
@@ -77,8 +79,9 @@ func initProxyURL() {
 // ============================================
 
 var (
-	ExtractClient  *http.Client
-	DownloadClient *http.Client
+	ExtractClient         *http.Client
+	DownloadClient        *http.Client // With WARP proxy (if configured)
+	DownloadClientNoProxy *http.Client // Direct IP, no proxy
 )
 
 func init() {
@@ -93,19 +96,29 @@ func init() {
 		Timeout: TikExtractorTimeout,
 	}
 
+	// Direct download transport (no proxy)
+	downloadTransportNoProxy := &http.Transport{
+		MaxIdleConns:        100,
+		MaxIdleConnsPerHost: 10,
+		IdleConnTimeout:     90 * time.Second,
+		DisableCompression:  true,
+	}
+	DownloadClientNoProxy = &http.Client{
+		Transport: downloadTransportNoProxy,
+		Timeout:   DownloadTimeout,
+	}
+
+	// Proxy download transport (WARP)
 	downloadTransport := &http.Transport{
 		MaxIdleConns:        100,
 		MaxIdleConnsPerHost: 10,
 		IdleConnTimeout:     90 * time.Second,
-		DisableCompression:  true, // Save CPU on downloads
+		DisableCompression:  true,
 	}
-
-	// Apply Proxy if configured
 	if WARPProxyURL != "" {
-		importURL, _ := url.Parse(WARPProxyURL)
-		downloadTransport.Proxy = http.ProxyURL(importURL)
+		proxyURL, _ := url.Parse(WARPProxyURL)
+		downloadTransport.Proxy = http.ProxyURL(proxyURL)
 	}
-
 	DownloadClient = &http.Client{
 		Transport: downloadTransport,
 		Timeout:   DownloadTimeout,
