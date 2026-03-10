@@ -1,0 +1,915 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>YT Downloader Test</title>
+  <style>
+    * {
+      box-sizing: border-box;
+      font-family: system-ui, -apple-system, sans-serif;
+    }
+
+    body {
+      max-width: 640px;
+      margin: 40px auto;
+      padding: 20px;
+      background: #f8fafc;
+      color: #1e293b;
+    }
+
+    h1 {
+      font-size: 1.5rem;
+      margin-bottom: 24px;
+      color: #0f172a;
+    }
+
+    .form-group {
+      margin-bottom: 16px;
+    }
+
+    label {
+      display: block;
+      margin-bottom: 6px;
+      font-weight: 500;
+      font-size: 0.9rem;
+      color: #475569;
+    }
+
+    input,
+    select {
+      width: 100%;
+      padding: 10px 12px;
+      border: 1px solid #cbd5e1;
+      border-radius: 6px;
+      font-size: 1rem;
+      background: #fff;
+    }
+
+    input:focus,
+    select:focus {
+      outline: none;
+      border-color: #3b82f6;
+      box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.1);
+    }
+
+    .row {
+      display: flex;
+      gap: 12px;
+    }
+
+    .row>* {
+      flex: 1;
+    }
+
+    button {
+      width: 100%;
+      padding: 12px;
+      background: #3b82f6;
+      color: white;
+      border: none;
+      border-radius: 6px;
+      cursor: pointer;
+      font-size: 1rem;
+      font-weight: 500;
+      transition: background 0.2s;
+    }
+
+    button:hover {
+      background: #2563eb;
+    }
+
+    button:disabled {
+      background: #94a3b8;
+      cursor: not-allowed;
+    }
+
+    #status {
+      margin-top: 24px;
+      padding: 16px;
+      background: #fff;
+      border-radius: 8px;
+      border: 1px solid #e2e8f0;
+      display: none;
+    }
+
+    #status.show {
+      display: block;
+    }
+
+    .status-header {
+      font-weight: 600;
+      margin-bottom: 8px;
+    }
+
+    .status-info {
+      font-size: 0.9rem;
+      color: #64748b;
+      margin-bottom: 12px;
+    }
+
+    .progress-container {
+      margin: 16px 0;
+    }
+
+    .progress-label {
+      display: flex;
+      justify-content: space-between;
+      font-size: 0.85rem;
+      color: #64748b;
+      margin-bottom: 4px;
+    }
+
+    .progress {
+      height: 8px;
+      background: #e2e8f0;
+      border-radius: 4px;
+      overflow: hidden;
+    }
+
+    .progress-bar {
+      height: 100%;
+      background: #3b82f6;
+      transition: width 0.3s ease;
+      border-radius: 4px;
+    }
+
+    .progress-bar.done {
+      background: #22c55e;
+    }
+
+    .detail-progress {
+      margin-top: 12px;
+      display: flex;
+      gap: 16px;
+      font-size: 0.85rem;
+    }
+
+    .detail-item {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      color: #64748b;
+    }
+
+    .detail-bar {
+      width: 60px;
+      height: 4px;
+      background: #e2e8f0;
+      border-radius: 2px;
+      overflow: hidden;
+    }
+
+    .detail-bar-fill {
+      height: 100%;
+      background: #3b82f6;
+      transition: width 0.3s;
+    }
+
+    .error {
+      color: #dc2626;
+    }
+
+    .success {
+      color: #16a34a;
+    }
+
+    .warning {
+      color: #d97706;
+      background: #fef3c7;
+      padding: 8px 12px;
+      border-radius: 6px;
+      font-size: 0.85rem;
+      margin-top: 8px;
+    }
+
+    .download-link {
+      margin-top: 16px;
+    }
+
+    .download-link a {
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      background: #22c55e;
+      color: white;
+      padding: 10px 20px;
+      border-radius: 6px;
+      text-decoration: none;
+      font-weight: 500;
+    }
+
+    .download-link a:hover {
+      background: #16a34a;
+    }
+
+    #trimFields {
+      display: none;
+      margin-top: 8px;
+    }
+
+    #trimFields.show {
+      display: block;
+    }
+
+    #qualityGroup {
+      display: none;
+    }
+
+    #qualityGroup.show {
+      display: block;
+    }
+
+    .checkbox-label {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      cursor: pointer;
+    }
+
+    .checkbox-label input {
+      width: auto;
+    }
+
+    .info-box {
+      background: #eff6ff;
+      border: 1px solid #bfdbfe;
+      padding: 10px 12px;
+      border-radius: 6px;
+      margin-bottom: 16px;
+      font-size: 0.85rem;
+      color: #1e40af;
+    }
+
+    .filename-style-group {
+      margin-bottom: 16px;
+    }
+
+    .style-tabs {
+      display: flex;
+      gap: 0;
+      border: 1px solid #cbd5e1;
+      border-radius: 6px;
+      overflow: hidden;
+      margin-bottom: 10px;
+    }
+
+    .style-tab {
+      flex: 1;
+      padding: 8px 4px;
+      text-align: center;
+      font-size: 0.8rem;
+      font-weight: 500;
+      background: #fff;
+      color: #64748b;
+      cursor: pointer;
+      border: none;
+      border-right: 1px solid #cbd5e1;
+      transition: all 0.15s;
+    }
+
+    .style-tab:last-child {
+      border-right: none;
+    }
+
+    .style-tab:hover {
+      background: #f1f5f9;
+    }
+
+    .style-tab.active {
+      background: #1e293b;
+      color: #fff;
+    }
+
+    .filename-preview {
+      background: #f8fafc;
+      border: 1px solid #e2e8f0;
+      border-radius: 6px;
+      padding: 10px 12px;
+      font-family: 'SF Mono', 'Fira Code', monospace;
+      font-size: 0.8rem;
+      color: #334155;
+      word-break: break-all;
+      line-height: 1.5;
+    }
+
+    .filename-preview .label {
+      font-family: system-ui, -apple-system, sans-serif;
+      font-size: 0.75rem;
+      color: #94a3b8;
+      display: block;
+      margin-bottom: 2px;
+    }
+
+    .metadata-group {
+      margin-bottom: 16px;
+    }
+
+    .toggle-row {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      background: #f1f5f9;
+      padding: 12px 14px;
+      border-radius: 8px;
+    }
+
+    .toggle-row label {
+      margin: 0;
+      font-size: 0.9rem;
+      color: #334155;
+    }
+
+    .toggle-switch {
+      position: relative;
+      width: 44px;
+      height: 24px;
+    }
+
+    .toggle-switch input {
+      opacity: 0;
+      width: 0;
+      height: 0;
+    }
+
+    .toggle-slider {
+      position: absolute;
+      inset: 0;
+      background: #cbd5e1;
+      border-radius: 24px;
+      cursor: pointer;
+      transition: background 0.2s;
+    }
+
+    .toggle-slider::before {
+      content: '';
+      position: absolute;
+      width: 18px;
+      height: 18px;
+      left: 3px;
+      bottom: 3px;
+      background: white;
+      border-radius: 50%;
+      transition: transform 0.2s;
+    }
+
+    .toggle-switch input:checked+.toggle-slider {
+      background: #3b82f6;
+    }
+
+    .toggle-switch input:checked+.toggle-slider::before {
+      transform: translateX(20px);
+    }
+
+    .metadata-hint {
+      font-size: 0.75rem;
+      color: #94a3b8;
+      margin-top: 6px;
+    }
+  </style>
+</head>
+
+<body>
+  <h1 id="pageTitle">YT Downloader Test - Updated</h1>
+
+  <div class="form-group">
+    <label>URL</label>
+    <input type="text" id="url" placeholder="YouTube / TikTok / Instagram URL">
+  </div>
+
+  <div id="detectedPlatform" class="info-box" style="display: none;"></div>
+
+  <div class="row">
+    <div class="form-group">
+      <label>Platform</label>
+      <select id="platform">
+        <option value="">Auto</option>
+        <option value="ios">iOS</option>
+        <option value="android">Android</option>
+        <option value="macos">macOS</option>
+        <option value="windows">Windows</option>
+        <option value="linux">Linux</option>
+      </select>
+    </div>
+    <div class="form-group">
+      <label>Type</label>
+      <select id="type">
+        <option value="video">Video</option>
+        <option value="audio">Audio</option>
+        <option value="image" id="imageOption" style="display: none;">Image</option>
+      </select>
+    </div>
+  </div>
+
+  <div id="ytFields">
+  <div id="platformInfo" class="info-box" style="display: none;"></div>
+
+  <div class="row">
+    <div class="form-group">
+      <label>Format</label>
+      <select id="format"></select>
+    </div>
+    <div class="form-group" id="qualityGroup">
+      <label>Quality</label>
+      <select id="quality">
+        <option value="">Auto (Best)</option>
+        <option value="2160p">4K (2160p)</option>
+        <option value="1440p">1440p</option>
+        <option value="1080p">1080p</option>
+        <option value="720p">720p</option>
+        <option value="480p">480p</option>
+        <option value="360p">360p</option>
+      </select>
+    </div>
+  </div>
+
+  <div class="row">
+    <div class="form-group">
+      <label>Audio Language (optional)</label>
+      <input type="text" id="audioLanguage" placeholder="e.g., vi, en, ko, ja" maxlength="5">
+    </div>
+    <div class="form-group">
+      <label>Audio Bitrate</label>
+      <select id="bitrate">
+        <option value="192k">192 kbps</option>
+        <option value="128k">128 kbps</option>
+        <option value="320k">320 kbps</option>
+        <option value="64k">64 kbps</option>
+      </select>
+    </div>
+  </div>
+
+  <div class="form-group">
+    <label class="checkbox-label">
+      <input type="checkbox" id="enableTrim">
+      <span>Enable Trim</span>
+    </label>
+  </div>
+
+  <div id="trimFields">
+    <div class="row">
+      <div class="form-group">
+        <label>Start (seconds)</label>
+        <input type="number" id="trimStart" value="0" min="0">
+      </div>
+      <div class="form-group">
+        <label>End (seconds)</label>
+        <input type="number" id="trimEnd" value="60" min="1">
+      </div>
+    </div>
+  </div>
+
+  <div class="filename-style-group">
+    <label>Filename Style</label>
+    <div class="style-tabs" id="styleTabs">
+      <button class="style-tab" data-style="classic">classic</button>
+      <button class="style-tab active" data-style="basic">basic</button>
+      <button class="style-tab" data-style="pretty">pretty</button>
+      <button class="style-tab" data-style="nerdy">nerdy</button>
+    </div>
+    <div class="filename-preview" id="filenamePreview">
+      <span class="label">Preview:</span>
+      <span id="previewText">Video Title - Author (1080p).mp4</span>
+    </div>
+  </div>
+
+  <div class="metadata-group">
+    <div class="toggle-row">
+      <label>Embed file metadata</label>
+      <label class="toggle-switch">
+        <input type="checkbox" id="enableMetadata">
+        <span class="toggle-slider"></span>
+      </label>
+    </div>
+    <div class="metadata-hint">Title, artist, and thumbnail will be added to the file (MP4/M4A only for thumbnail).
+    </div>
+  </div>
+  </div><!-- end ytFields -->
+
+  <button id="downloadBtn">Download</button>
+
+  <div id="status">
+    <div class="status-header" id="statusTitle"></div>
+    <div class="status-info" id="statusInfo"></div>
+
+    <div class="progress-container">
+      <div class="progress-label">
+        <span id="statusPhase">Downloading...</span>
+        <span id="statusPercent">0%</span>
+      </div>
+      <div class="progress">
+        <div class="progress-bar" id="progressBar"></div>
+      </div>
+    </div>
+
+    <div class="detail-progress" id="detailProgress" style="display: none;">
+      <div class="detail-item">
+        <span>Video:</span>
+        <div class="detail-bar">
+          <div class="detail-bar-fill" id="videoProgress"></div>
+        </div>
+        <span id="videoPercent">0d%</span>
+      </div>
+      <div class="detail-item">
+        <span>Audio:</span>
+        <div class="detail-bar">
+          <div class="detail-bar-fill" id="audioProgress"></div>
+        </div>
+        <span id="audioPercent">0%</span>
+      </div>
+    </div>
+
+    <div id="warningBox" class="warning" style="display: none;"></div>
+    <div id="errorBox" class="error" style="display: none;"></div>
+    <div id="downloadLink" class="download-link"></div>
+  </div>
+
+  <script>
+    const API = 'https://vps-c80682fb.ytconvert.org';
+    let currentStatusUrl = null;
+    let pollInterval = null;
+    let detectedService = 'youtube'; // 'youtube' | 'tiktok' | 'instagram'
+
+    // Detect service from URL
+    function detectService(url) {
+      if (/instagram\.com/.test(url)) return 'instagram';
+      if (/tiktok\.com/.test(url)) return 'tiktok';
+      return 'youtube';
+    }
+
+    // Update UI based on detected service
+    function updateServiceUI(service) {
+      detectedService = service;
+      const isYT = service === 'youtube';
+      const isTik = service === 'tiktok';
+      const isInsta = service === 'instagram';
+
+      // Show/hide YouTube-specific fields
+      document.getElementById('ytFields').style.display = isYT ? '' : 'none';
+
+      // Show/hide image option (Instagram only)
+      document.getElementById('imageOption').style.display = isInsta ? '' : 'none';
+
+      // Reset type if image was selected but not Instagram
+      if (!isInsta && els.type.value === 'image') {
+        els.type.value = 'video';
+        els.type.dispatchEvent(new Event('change'));
+      }
+
+      // Update detected platform info
+      const dp = document.getElementById('detectedPlatform');
+      if (isTik) {
+        dp.textContent = 'TikTok detected → /tik/api/download';
+        dp.style.display = 'block';
+      } else if (isInsta) {
+        dp.textContent = 'Instagram detected → /insta/api/download (audio = extract from video via FFmpeg)';
+        dp.style.display = 'block';
+      } else {
+        dp.style.display = 'none';
+      }
+    }
+
+    // Listen for URL changes
+    document.getElementById('url').addEventListener('input', (e) => {
+      const url = e.target.value.trim();
+      if (url) updateServiceUI(detectService(url));
+      else updateServiceUI('youtube');
+    });
+
+    const platformInfo = {
+      ios: 'iOS: Max 1080p, H.264 codec, AAC audio',
+      android: 'Android: Up to 4K, AV1/VP9/H.264, Opus/AAC',
+      macos: 'macOS: Max 1080p, H.264 codec, AAC audio',
+      windows: 'Windows: Up to 4K, AV1/VP9/H.264, Opus/AAC',
+      linux: 'Linux: Up to 4K, AV1/VP9/H.264, Opus/AAC'
+    };
+
+    const videoFormats = ['mp4', 'webm', 'mkv'];
+    const audioFormats = ['mp3', 'm4a', 'wav', 'opus', 'flac', 'ogg'];
+
+    // Elements 
+    const els = {
+      url: document.getElementById('url'),
+      platform: document.getElementById('platform'),
+      platformInfo: document.getElementById('platformInfo'),
+      type: document.getElementById('type'),
+      format: document.getElementById('format'),
+      quality: document.getElementById('quality'),
+      qualityGroup: document.getElementById('qualityGroup'),
+      audioLanguage: document.getElementById('audioLanguage'),
+      bitrate: document.getElementById('bitrate'),
+      enableTrim: document.getElementById('enableTrim'),
+      trimFields: document.getElementById('trimFields'),
+      trimStart: document.getElementById('trimStart'),
+      trimEnd: document.getElementById('trimEnd'),
+      styleTabs: document.getElementById('styleTabs'),
+      previewText: document.getElementById('previewText'),
+      enableMetadata: document.getElementById('enableMetadata'),
+      downloadBtn: document.getElementById('downloadBtn'),
+      status: document.getElementById('status'),
+      statusTitle: document.getElementById('statusTitle'),
+      statusInfo: document.getElementById('statusInfo'),
+      statusPhase: document.getElementById('statusPhase'),
+      statusPercent: document.getElementById('statusPercent'),
+      progressBar: document.getElementById('progressBar'),
+      detailProgress: document.getElementById('detailProgress'),
+      videoProgress: document.getElementById('videoProgress'),
+      audioProgress: document.getElementById('audioProgress'),
+      videoPercent: document.getElementById('videoPercent'),
+      audioPercent: document.getElementById('audioPercent'),
+      warningBox: document.getElementById('warningBox'),
+      errorBox: document.getElementById('errorBox'),
+      downloadLink: document.getElementById('downloadLink')
+    };
+
+    // Current filename style
+    let currentStyle = 'basic';
+
+    // Style tab click
+    els.styleTabs.addEventListener('click', (e) => {
+      const tab = e.target.closest('.style-tab');
+      if (!tab) return;
+      els.styleTabs.querySelectorAll('.style-tab').forEach(t => t.classList.remove('active'));
+      tab.classList.add('active');
+      currentStyle = tab.dataset.style;
+      updateFilenamePreview();
+    });
+
+    // Filename preview helper: format time as m꞉ss
+    function fmtTime(sec) {
+      const total = Math.floor(sec);
+      const h = Math.floor(total / 3600);
+      const m = Math.floor((total % 3600) / 60);
+      const s = total % 60;
+      if (h > 0) return `${h}꞉${String(m).padStart(2, '0')}꞉${String(s).padStart(2, '0')}`;
+      return `${m}꞉${String(s).padStart(2, '0')}`;
+    }
+
+    // Generate filename preview
+    function updateFilenamePreview() {
+      const isVideo = els.type.value === 'video';
+      const format = els.format.value || (isVideo ? 'mp4' : 'mp3');
+      const quality = isVideo ? (els.quality.value || '1080p') : '';
+      const bitrate = !isVideo ? (els.bitrate.value || '192k') : '';
+      const hasTrim = els.enableTrim.checked;
+      const trimStart = parseFloat(els.trimStart.value) || 0;
+      const trimEnd = parseFloat(els.trimEnd.value) || 60;
+
+      const title = 'Video Title';
+      const author = 'Author';
+      const videoId = 'dQw4w9WgXcQ';
+      let filename = '';
+
+      if (currentStyle === 'classic') {
+        let parts = ['youtube', videoId];
+        if (isVideo && quality) parts.push(quality);
+        else if (!isVideo) parts.push('audio');
+        if (hasTrim) parts.push(`${Math.floor(trimStart)}-${Math.floor(trimEnd)}s`);
+        filename = parts.join('_') + '.' + format;
+      } else {
+        // basic / pretty / nerdy
+        let name = `${title} - ${author}`;
+        let infoParts = [];
+        if (isVideo && quality) infoParts.push(quality);
+        if (!isVideo && bitrate) infoParts.push(bitrate);
+        if (currentStyle === 'pretty' || currentStyle === 'nerdy') infoParts.push('youtube');
+        if (currentStyle === 'nerdy') infoParts.push(videoId);
+
+        filename = name;
+        if (infoParts.length > 0) filename += ` (${infoParts.join(', ')})`;
+        if (hasTrim) filename += ` [${fmtTime(trimStart)}-${fmtTime(trimEnd)}]`;
+        filename += '.' + format;
+      }
+
+      els.previewText.textContent = filename;
+    }
+
+    // Platform change
+    els.platform.addEventListener('change', () => {
+      const p = els.platform.value;
+      if (p && platformInfo[p]) {
+        els.platformInfo.textContent = platformInfo[p];
+        els.platformInfo.style.display = 'block';
+      } else {
+        els.platformInfo.style.display = 'none';
+      }
+    });
+
+    // Type change
+    els.type.addEventListener('change', () => {
+      const isVideo = els.type.value === 'video';
+      els.format.innerHTML = '';
+      (isVideo ? videoFormats : audioFormats).forEach(f => {
+        els.format.innerHTML += `<option value="${f}">${f.toUpperCase()}</option>`;
+      });
+      els.qualityGroup.classList.toggle('show', isVideo);
+      updateFilenamePreview();
+    });
+
+    // Trim toggle
+    els.enableTrim.addEventListener('change', () => {
+      els.trimFields.classList.toggle('show', els.enableTrim.checked);
+      updateFilenamePreview();
+    });
+
+    // Update preview on any form change
+    ['trimStart', 'trimEnd'].forEach(id => {
+      document.getElementById(id).addEventListener('input', updateFilenamePreview);
+    });
+    els.format.addEventListener('change', updateFilenamePreview);
+    els.quality.addEventListener('change', updateFilenamePreview);
+    els.bitrate.addEventListener('change', updateFilenamePreview);
+
+    // Init
+    els.type.dispatchEvent(new Event('change'));
+    updateFilenamePreview();
+
+    // Format duration
+    function formatDuration(sec) {
+      const m = Math.floor(sec / 60);
+      const s = Math.floor(sec % 60);
+      return `${m}:${s.toString().padStart(2, '0')}`;
+    }
+
+    // Get error message from response
+    function getErrorMessage(data) {
+      if (data.error && data.error.message) {
+        return data.error.message;
+      }
+      return 'Unknown error';
+    }
+
+    // Reset status UI
+    function resetStatus() {
+      els.progressBar.style.width = '0%';
+      els.progressBar.classList.remove('done');
+      els.statusPhase.textContent = 'Starting...';
+      els.statusPercent.textContent = '0%';
+      els.detailProgress.style.display = 'none';
+      els.videoProgress.style.width = '0%';
+      els.audioProgress.style.width = '0%';
+      els.videoPercent.textContent = '0%';
+      els.audioPercent.textContent = '0%';
+      els.warningBox.style.display = 'none';
+      els.errorBox.style.display = 'none';
+      els.downloadLink.innerHTML = '';
+    }
+
+    // Download click
+    els.downloadBtn.addEventListener('click', async () => {
+      const url = els.url.value.trim();
+      if (!url) return alert('Please enter a URL');
+
+      // Determine API endpoint based on detected service
+      let apiEndpoint, body;
+
+      if (detectedService === 'tiktok') {
+        apiEndpoint = `${API}/tik/api/download`;
+        body = { url, type: els.type.value };
+      } else if (detectedService === 'instagram') {
+        apiEndpoint = `${API}/insta/api/download`;
+        body = { url, type: els.type.value };
+      } else {
+        // YouTube (default)
+        apiEndpoint = `${API}/api/download`;
+        body = {
+          url,
+          output: { type: els.type.value, format: els.format.value },
+          audio: { bitrate: els.bitrate.value },
+          filenameStyle: currentStyle,
+          enableMetadata: els.enableMetadata.checked
+        };
+        const audioLang = els.audioLanguage.value.trim();
+        if (audioLang) body.audio.trackId = audioLang;
+        if (els.platform.value) body.os = els.platform.value;
+        if (els.type.value === 'video' && els.quality.value) body.output.quality = els.quality.value;
+        if (els.enableTrim.checked) {
+          body.trim = {
+            start: parseFloat(els.trimStart.value) || 0,
+            end: parseFloat(els.trimEnd.value) || 60
+          };
+        }
+      }
+
+      els.downloadBtn.disabled = true;
+      els.status.classList.add('show');
+      resetStatus();
+
+      try {
+        const res = await fetch(apiEndpoint, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'X-Hub-Token': '1234567890987654321234567890987654321'
+          },
+          body: JSON.stringify(body)
+        });
+
+        const data = await res.json();
+        if (!res.ok) throw new Error(data.error || getErrorMessage(data));
+
+        currentStatusUrl = data.statusUrl;
+        els.statusTitle.textContent = data.title;
+
+        // Build status info
+        let infoText = '';
+        if (data.duration) infoText += `Duration: ${formatDuration(data.duration)}`;
+        if (data.selectedQuality) infoText += ` | Quality: ${data.selectedQuality}`;
+        if (data.availableAudioLanguages && data.availableAudioLanguages.length > 0) {
+          infoText += ` | Available Languages: ${data.availableAudioLanguages.join(', ')}`;
+        }
+        els.statusInfo.textContent = infoText;
+
+        // Show warnings (YouTube only)
+        const warnings = [];
+        if (data.qualityChanged && data.qualityChangeReason) {
+          warnings.push(data.qualityChangeReason);
+        }
+        if (data.audioLanguageChanged && data.audioLanguageChangeReason) {
+          warnings.push(data.audioLanguageChangeReason);
+        }
+        if (warnings.length > 0) {
+          els.warningBox.innerHTML = warnings.join('<br>');
+          els.warningBox.style.display = 'block';
+        }
+
+        pollInterval = setInterval(checkStatus, 1000);
+      } catch (err) {
+        els.errorBox.textContent = err.message;
+        els.errorBox.style.display = 'block';
+        els.downloadBtn.disabled = false;
+      }
+    });
+
+    // Check status
+    async function checkStatus() {
+      if (!currentStatusUrl) return;
+
+      try {
+        const res = await fetch(currentStatusUrl);
+        const data = await res.json();
+        if (!res.ok) throw new Error(getErrorMessage(data));
+
+        // Update progress
+        els.progressBar.style.width = `${data.progress}%`;
+        els.statusPercent.textContent = `${data.progress}%`;
+
+        // Show detail progress for video downloads (only when pending)
+        if (data.status === 'pending' && data.detail) {
+          if (data.detail.video !== undefined || data.detail.audio !== undefined) {
+            els.detailProgress.style.display = 'flex';
+            if (data.detail.video !== undefined) {
+              els.videoProgress.style.width = `${data.detail.video}%`;
+              els.videoPercent.textContent = `${data.detail.video}%`;
+            }
+            if (data.detail.audio !== undefined) {
+              els.audioProgress.style.width = `${data.detail.audio}%`;
+              els.audioPercent.textContent = `${data.detail.audio}%`;
+            }
+          }
+          els.statusPhase.textContent = 'Downloading...';
+        } else if (data.status === 'downloading') {
+          els.statusPhase.textContent = 'Downloading...';
+        } else if (data.status === 'processing') {
+          els.statusPhase.textContent = 'Extracting audio...';
+        } else if (data.status === 'extracting') {
+          els.statusPhase.textContent = 'Extracting metadata...';
+        } else if (data.status === 'completed') {
+          // Completed
+          clearInterval(pollInterval);
+          els.progressBar.style.width = '100%';
+          els.progressBar.classList.add('done');
+          els.statusPhase.textContent = 'Complete!';
+          els.statusPercent.textContent = '100%';
+          els.detailProgress.style.display = 'none';
+
+          if (data.downloadUrl) {
+            const filename = data.downloadUrl.split('/').pop().split('?')[0];
+            els.downloadLink.innerHTML = `<a href="${data.downloadUrl}" download>
+              <svg width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+                <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4M7 10l5 5 5-5M12 15V3"/>
+              </svg>
+              Download ${decodeURIComponent(filename)}
+            </a>`;
+          }
+          els.downloadBtn.disabled = false;
+        } else if (data.status === 'error') {
+          // Error
+          clearInterval(pollInterval);
+          els.statusPhase.textContent = 'Error';
+          els.errorBox.textContent = data.error || data.jobError || 'Unknown error';
+          els.errorBox.style.display = 'block';
+          els.downloadBtn.disabled = false;
+        }
+      } catch (err) {
+        clearInterval(pollInterval);
+        els.errorBox.textContent = err.message;
+        els.errorBox.style.display = 'block';
+        els.downloadBtn.disabled = false;
+      }
+    }
+  </script>
+</body>
+
+</html>
