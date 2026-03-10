@@ -227,7 +227,6 @@ func streamAudio(c *fiber.Ctx, meta *models.Meta) error {
 		args = append(args,
 			"-c:a", "copy",
 			"-f", getFFmpegFormat(format),
-			"pipe:1",
 		)
 	} else {
 		codec := config.AudioCodecMap[format]
@@ -263,6 +262,11 @@ func streamAudio(c *fiber.Ctx, meta *models.Meta) error {
 		}
 
 		args = append(args, "-f", getFFmpegFormat(format))
+	}
+
+	// Add movflags for streamable M4A (similar to MP4)
+	if format == "m4a" {
+		args = append(args, "-movflags", "frag_keyframe+empty_moov+faststart")
 	}
 
 	// Add metadata tags if enabled
