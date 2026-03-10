@@ -1,5 +1,7 @@
 package models
 
+import "encoding/json"
+
 // ============================================
 // REQUEST / RESPONSE
 // ============================================
@@ -88,7 +90,7 @@ type InstaExtractResponse struct {
 	Title                string           `json:"title"`
 	AccessibilityCaption string           `json:"accessibility_caption"`
 	OwnerUsername        string           `json:"owner_username"`
-	OwnerID              int64            `json:"owner_id"`
+	OwnerID              json.Number      `json:"owner_id"`
 	Location             interface{}      `json:"location"`
 	MediaCount           int              `json:"media_count"`
 	Media                []InstaMediaItem `json:"media"`
