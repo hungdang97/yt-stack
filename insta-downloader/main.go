@@ -8,7 +8,10 @@ import (
 	"syscall"
 
 	"insta-downloader/config"
+	"insta-downloader/database"
 	"insta-downloader/handlers"
+	"insta-downloader/repository"
+	"insta-downloader/services"
 	"insta-downloader/utils"
 
 	"github.com/gofiber/fiber/v2"
@@ -27,6 +30,21 @@ func main() {
 
 	// Ensure storage directory exists
 	os.MkdirAll(config.StorageDir, 0755)
+
+	// Initialize MongoDB
+	log.Printf("Connecting to MongoDB: %s / %s", config.MongoURI, config.MongoDB)
+	mongoDB, err := database.InitMongoDB(config.MongoURI, config.MongoDB)
+	if err != nil {
+		log.Fatalf("Failed to connect to MongoDB: %v", err)
+	}
+	defer mongoDB.Close()
+	log.Println("✓ MongoDB connected")
+
+	// Initialize cookie repository and provider
+	cookieRepo := repository.NewCookieRepository(mongoDB.CookieCollection())
+	services.InitCookieProvider(cookieRepo)
+	defer services.StopCookieProvider()
+	log.Println("✓ Cookie provider initialized")
 
 	// Start cleanup scheduler
 	cleanupCron := utils.StartCleanupScheduler()
