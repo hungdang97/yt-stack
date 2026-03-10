@@ -294,6 +294,30 @@ services:
     networks:
       - backend
 
+  # Instagram Extractor service
+  insta-extractor:
+    build:
+      context: ./insta-extractor
+      dockerfile: Dockerfile
+    image: insta-extractor:latest
+    container_name: insta-extractor
+    restart: always
+    ports:
+      - "8000:8000"
+    healthcheck:
+      test: [ "CMD", "wget", "--no-verbose", "--tries=1", "-O", "/dev/null", "http://localhost:8000/health" ]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 10s
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
+    networks:
+      - backend
+
   # Nginx reverse proxy with SSL
   nginx:
     platform: linux/amd64
