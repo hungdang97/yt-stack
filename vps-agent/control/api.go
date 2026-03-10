@@ -160,12 +160,14 @@ func (api *ControlAPI) RestartService(c *fiber.Ctx) error {
 
 	// Whitelist allowed services
 	allowed := map[string]bool{
-		"yt-downloader":  true,
-		"yt-extractor":   true,
-		"tik-downloader": true,
-		"tik-extractor":  true,
-		"nginx":          true,
-		"gost":           true,
+		"yt-downloader":    true,
+		"yt-extractor":     true,
+		"tik-downloader":   true,
+		"tik-extractor":    true,
+		"insta-downloader": true,
+		"insta-extractor":  true,
+		"nginx":            true,
+		"gost":             true,
 	}
 	if !allowed[service] {
 		return c.Status(400).JSON(fiber.Map{"error": fmt.Sprintf("Unknown service: %s", service)})

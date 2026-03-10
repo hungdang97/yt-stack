@@ -2,21 +2,32 @@ package metrics
 
 import (
 	"bufio"
+	"encoding/json"
+	"fmt"
+	"net/http"
 	"os"
 	"path/filepath"
 	"strconv"
 	"strings"
+	"sync"
 	"syscall"
 	"time"
 )
 
+// ServiceInfo holds version and status for a single service
+type ServiceInfo struct {
+	Version string `json:"version"`
+	Status  string `json:"status"` // "ok", "down", "unknown"
+}
+
 // SystemMetrics holds system resource usage data
 type SystemMetrics struct {
-	CPUUsage  float64 `json:"cpu_usage"`  // 0-100%
-	RAMUsage  float64 `json:"ram_usage"`  // 0-100%
-	DiskUsage float64 `json:"disk_usage"` // 0-100%
-	Uptime    int64   `json:"uptime"`     // seconds
-	LastBuild int64   `json:"last_build"` // Unix timestamp of last success build
+	CPUUsage  float64                `json:"cpu_usage"`  // 0-100%
+	RAMUsage  float64                `json:"ram_usage"`  // 0-100%
+	DiskUsage float64                `json:"disk_usage"` // 0-100%
+	Uptime    int64                  `json:"uptime"`     // seconds
+	LastBuild int64                  `json:"last_build"` // Unix timestamp of last success build
+	Services  map[string]ServiceInfo `json:"services"`   // service name → version + status
 }
 
 var (
@@ -59,7 +70,69 @@ func Collect(projectDir string) (*SystemMetrics, error) {
 		m.DiskUsage = disk
 	}
 
+	// Collect service versions (parallel, 2s timeout per call, all localhost)
+	m.Services = collectServiceVersions()
+
 	return m, nil
+}
+
+// services to check health - name → local URL
+var serviceEndpoints = map[string]string{
+	"yt-downloader":    "http://localhost:5001/health",
+	"yt-extractor":     "http://localhost:8300/health",
+	"tik-downloader":   "http://localhost:5002/health",
+	"tik-extractor":    "http://localhost:5555/health",
+	"insta-downloader": "http://localhost:5003/health",
+	"insta-extractor":  "http://localhost:8000/health",
+}
+
+var healthClient = &http.Client{Timeout: 2 * time.Second}
+
+func collectServiceVersions() map[string]ServiceInfo {
+	results := make(map[string]ServiceInfo)
+	var mu sync.Mutex
+	var wg sync.WaitGroup
+
+	for name, url := range serviceEndpoints {
+		wg.Add(1)
+		go func(name, url string) {
+			defer wg.Done()
+			info := checkServiceHealth(name, url)
+			mu.Lock()
+			results[name] = info
+			mu.Unlock()
+		}(name, url)
+	}
+
+	wg.Wait()
+	return results
+}
+
+func checkServiceHealth(name, url string) ServiceInfo {
+	resp, err := healthClient.Get(url)
+	if err != nil {
+		return ServiceInfo{Status: "down"}
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != 200 {
+		return ServiceInfo{Status: fmt.Sprintf("error:%d", resp.StatusCode)}
+	}
+
+	var data map[string]interface{}
+	if err := json.NewDecoder(resp.Body).Decode(&data); err != nil {
+		return ServiceInfo{Status: "ok"}
+	}
+
+	version := ""
+	if v, ok := data["version"].(string); ok {
+		version = v
+	}
+
+	return ServiceInfo{
+		Version: version,
+		Status:  "ok",
+	}
 }
 
 // getCPUUsage reads /proc/stat and calculates CPU usage percentage
