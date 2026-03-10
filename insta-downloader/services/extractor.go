@@ -19,6 +19,9 @@ func Extract(postURL string) (*models.InstaExtractResponse, error) {
 	if config.WARPProxyURL != "" {
 		params.Set("proxy", config.WARPProxyURL)
 	}
+	if config.InstaDefaultCookie != "" {
+		params.Set("cookie", config.InstaDefaultCookie)
+	}
 
 	fullURL := extractURL + "?" + params.Encode()
 	fmt.Printf("[Extract] GET %s\n", fullURL)

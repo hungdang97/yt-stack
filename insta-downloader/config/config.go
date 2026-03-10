@@ -30,6 +30,7 @@ var (
 	// Instagram Extractor
 	InstaExtractorURL     = getEnvOrDefault("INSTA_EXTRACTOR_URL", "http://insta-extractor:8000")
 	InstaExtractorTimeout = time.Duration(getEnvIntOrDefault("EXTRACT_API_TIMEOUT", 10)) * time.Second
+	InstaDefaultCookie    = getEnvOrDefault("INSTA_DEFAULT_COOKIE", "")
 
 	// Cleanup
 	CleanupInterval  = getEnvOrDefault("CLEANUP_INTERVAL", "*/5 * * * *")
