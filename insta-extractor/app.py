@@ -42,7 +42,7 @@ def parse_shortcode(url: str) -> str:
 
 @app.get("/health")
 def health():
-    return {"status": "ok"}
+    return {"status": "ok", "service": "insta-extractor", "version": "2.0.0"}
 
 
 @app.get("/extract", summary="Extract media from Instagram post")
