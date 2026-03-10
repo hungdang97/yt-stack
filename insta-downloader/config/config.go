@@ -30,7 +30,10 @@ var (
 	// Instagram Extractor
 	InstaExtractorURL     = getEnvOrDefault("INSTA_EXTRACTOR_URL", "http://insta-extractor:8000")
 	InstaExtractorTimeout = time.Duration(getEnvIntOrDefault("EXTRACT_API_TIMEOUT", 10)) * time.Second
-	InstaDefaultCookie    = getEnvOrDefault("INSTA_DEFAULT_COOKIE", "")
+
+	// MongoDB
+	MongoURI = getEnvOrDefault("MONGO_URI", "mongodb://cookie:cookie123456789@85.10.196.119:27017/cookie")
+	MongoDB  = getEnvOrDefault("MONGO_DB", "cookie")
 
 	// Cleanup
 	CleanupInterval  = getEnvOrDefault("CLEANUP_INTERVAL", "*/5 * * * *")
