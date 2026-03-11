@@ -272,8 +272,11 @@ func (api *ControlAPI) RestartService(c *fiber.Ctx) error {
 
 	log.Printf("[Control] Restart requested for service: %s", service)
 
+	// Set status SYNCHRONOUSLY before launching goroutine
+	// so that any immediate status poll will see "pulling" instead of "idle"
+	api.setServiceStatus(service, StatePulling, "Pulling latest code...")
+
 	go func() {
-		api.setServiceStatus(service, StatePulling, "Pulling latest code...")
 		if err := api.deployer.PullCode(); err != nil {
 			log.Printf("[Control] Warning: Git pull failed for %s: %v", service, err)
 		}
