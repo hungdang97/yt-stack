@@ -7,7 +7,6 @@ import (
 	"net"
 	"net/http"
 	"os"
-	"os/exec"
 	"path/filepath"
 	"strconv"
 	"strings"
@@ -93,14 +92,12 @@ var serviceEndpoints = map[string]string{
 // services to check health via TCP port (no /health endpoint)
 // format: name → "addr|docker_container|version_cmd"
 var tcpServices = map[string]tcpServiceConfig{
-	"nginx": {Addr: "localhost:80", Container: "nginx", VersionCmd: "nginx -v 2>&1"},
-	"gost":  {Addr: "localhost:1111", Container: "gost", VersionCmd: "gost -V 2>&1"},
+	"nginx": {Addr: "localhost:80"},
+	"gost":  {Addr: "localhost:1111"},
 }
 
 type tcpServiceConfig struct {
-	Addr       string
-	Container  string
-	VersionCmd string
+	Addr string
 }
 
 var healthClient = &http.Client{Timeout: 2 * time.Second}
@@ -146,29 +143,13 @@ func collectServiceVersions() map[string]ServiceInfo {
 func checkTCPHealth(cfg tcpServiceConfig) ServiceInfo {
 	conn, err := net.DialTimeout("tcp", cfg.Addr, 2*time.Second)
 	if err != nil {
-		return ServiceInfo{Status: "down"}
+		return ServiceInfo{Status: "down", Version: "1.0.0"}
 	}
 	conn.Close()
 
-	// Get version from docker exec
-	version := getDockerVersion(cfg.Container, cfg.VersionCmd)
-	return ServiceInfo{Status: "ok", Version: version}
+	return ServiceInfo{Status: "ok", Version: "1.0.0"}
 }
 
-func getDockerVersion(container, versionCmd string) string {
-	out, err := exec.Command("docker", "exec", container, "sh", "-c", versionCmd).Output()
-	if err != nil {
-		return ""
-	}
-	raw := strings.TrimSpace(string(out))
-	// Parse version from output: "nginx/1.25.3" → "1.25.3", "gost 2.11.5" → "2.11.5"
-	for _, sep := range []string{"/", " "} {
-		if idx := strings.LastIndex(raw, sep); idx >= 0 {
-			return strings.TrimSpace(raw[idx+1:])
-		}
-	}
-	return raw
-}
 
 func checkServiceHealth(name, url string) ServiceInfo {
 	resp, err := healthClient.Get(url)
