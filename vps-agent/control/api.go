@@ -111,10 +111,18 @@ func (api *ControlAPI) GetBuildStatus(c *fiber.Ctx) error {
 	stackStatus := api.currentStatus
 	api.statusMu.RUnlock()
 
+	// Only return services in AllServices whitelist
+	allowed := make(map[string]bool, len(AllServices))
+	for _, svc := range AllServices {
+		allowed[svc] = true
+	}
+
 	api.serviceStatusMu.RLock()
-	servicesCopy := make(map[string]BuildStatus, len(api.serviceStatuses))
+	servicesCopy := make(map[string]BuildStatus, len(AllServices))
 	for k, v := range api.serviceStatuses {
-		servicesCopy[k] = v
+		if allowed[k] {
+			servicesCopy[k] = v
+		}
 	}
 	api.serviceStatusMu.RUnlock()
 
