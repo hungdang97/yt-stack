@@ -24,12 +24,13 @@ type ServiceInfo struct {
 
 // SystemMetrics holds system resource usage data
 type SystemMetrics struct {
-	CPUUsage  float64                `json:"cpu_usage"`  // 0-100%
-	RAMUsage  float64                `json:"ram_usage"`  // 0-100%
-	DiskUsage float64                `json:"disk_usage"` // 0-100%
-	Uptime    int64                  `json:"uptime"`     // seconds
-	LastBuild int64                  `json:"last_build"` // Unix timestamp of last success build
-	Services  map[string]ServiceInfo `json:"services"`   // service name → version + status
+	AgentVersion string                 `json:"agent_version"`
+	CPUUsage     float64                `json:"cpu_usage"`  // 0-100%
+	RAMUsage     float64                `json:"ram_usage"`  // 0-100%
+	DiskUsage    float64                `json:"disk_usage"` // 0-100%
+	Uptime       int64                  `json:"uptime"`     // seconds
+	LastBuild    int64                  `json:"last_build"` // Unix timestamp of last success build
+	Services     map[string]ServiceInfo `json:"services"`   // service name → version + status
 }
 
 var (
@@ -42,7 +43,8 @@ var (
 // Uses native Linux /proc filesystem for cross-distro compatibility
 func Collect(projectDir string) (*SystemMetrics, error) {
 	m := &SystemMetrics{
-		Uptime: int64(time.Since(startTime).Seconds()),
+		AgentVersion: "1.0.0",
+		Uptime:       int64(time.Since(startTime).Seconds()),
 	}
 
 	// Read last build time from file
