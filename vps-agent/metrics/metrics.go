@@ -88,6 +88,11 @@ var serviceEndpoints = map[string]string{
 
 var healthClient = &http.Client{Timeout: 2 * time.Second}
 
+// CollectServiceHealth checks health of all services (exported for use by control API)
+func CollectServiceHealth() map[string]ServiceInfo {
+	return collectServiceVersions()
+}
+
 func collectServiceVersions() map[string]ServiceInfo {
 	results := make(map[string]ServiceInfo)
 	var mu sync.Mutex
