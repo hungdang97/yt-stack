@@ -9,7 +9,7 @@ import urllib.parse
 
 app = FastAPI(
     title="Instagram Extractor",
-    version="1.0.0",
+    version="2.0.0",
     description="Extract media links from Instagram posts, reels, IGTV and profiles. Powered by instaloader.",
 )
 
