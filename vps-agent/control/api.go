@@ -176,6 +176,12 @@ func (api *ControlAPI) Restart(c *fiber.Ctx) error {
 	return c.JSON(fiber.Map{"message": "Restart process started"})
 }
 
+// SetBuildStatus is a public method for main.go to update build status during startup
+func (api *ControlAPI) SetBuildStatus(state string, message string) {
+	api.setStatus(BuildState(state), message)
+	api.setAllServicesStatus(BuildState(state), message)
+}
+
 func (api *ControlAPI) setStatus(state BuildState, message string) {
 	api.statusMu.Lock()
 	defer api.statusMu.Unlock()
