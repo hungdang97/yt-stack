@@ -10,6 +10,7 @@ import (
 
 	"vps-agent/config"
 	"vps-agent/deployer"
+	"vps-agent/metrics"
 
 	"github.com/gofiber/fiber/v2"
 )
@@ -33,6 +34,14 @@ type BuildStatus struct {
 	Time    time.Time  `json:"time"`
 }
 
+// AllServices is the whitelist of restartable services
+var AllServices = []string{
+	"yt-downloader", "yt-extractor",
+	"tik-downloader", "tik-extractor",
+	"insta-downloader", "insta-extractor",
+	"nginx", "gost",
+}
+
 type ControlAPI struct {
 	fetcher    *config.ConfigFetcher
 	deployer   *deployer.Deployer
@@ -43,16 +52,31 @@ type ControlAPI struct {
 
 	statusMu      sync.RWMutex
 	currentStatus BuildStatus
+
+	// Per-service build states
+	serviceStatusMu sync.RWMutex
+	serviceStatuses map[string]BuildStatus
 }
 
 func NewControlAPI(fetcher *config.ConfigFetcher, deployer *deployer.Deployer, projectDir string) *ControlAPI {
+	// Initialize per-service statuses
+	serviceStatuses := make(map[string]BuildStatus)
+	for _, svc := range AllServices {
+		serviceStatuses[svc] = BuildStatus{
+			State:   StateIdle,
+			Message: "Ready",
+			Time:    time.Now(),
+		}
+	}
+
 	return &ControlAPI{
-		fetcher:    fetcher,
-		deployer:   deployer,
-		projectDir: projectDir,
-		app:        fiber.New(fiber.Config{DisableStartupMessage: true}),
-		startTime:  time.Now(),
-		version:    "1.0.0",
+		fetcher:         fetcher,
+		deployer:        deployer,
+		projectDir:      projectDir,
+		app:             fiber.New(fiber.Config{DisableStartupMessage: true}),
+		startTime:       time.Now(),
+		version:         "1.0.0",
+		serviceStatuses: serviceStatuses,
 		currentStatus: BuildStatus{
 			State:   StateIdle,
 			Message: "Ready",
@@ -64,6 +88,7 @@ func NewControlAPI(fetcher *config.ConfigFetcher, deployer *deployer.Deployer, p
 func (api *ControlAPI) SetupRoutes() {
 	api.app.Get("/health", api.HealthCheck)
 	api.app.Get("/status", api.GetStatus)
+	api.app.Get("/services/health", api.GetServicesHealth)
 	api.app.Get("/control/build-status", api.GetBuildStatus)
 	api.app.Post("/control/restart", api.Restart)
 	api.app.Post("/control/restart/:service", api.RestartService)
@@ -83,8 +108,47 @@ func (api *ControlAPI) GetStatus(c *fiber.Ctx) error {
 // GET /control/build-status
 func (api *ControlAPI) GetBuildStatus(c *fiber.Ctx) error {
 	api.statusMu.RLock()
-	defer api.statusMu.RUnlock()
-	return c.JSON(api.currentStatus)
+	stackStatus := api.currentStatus
+	api.statusMu.RUnlock()
+
+	api.serviceStatusMu.RLock()
+	servicesCopy := make(map[string]BuildStatus, len(api.serviceStatuses))
+	for k, v := range api.serviceStatuses {
+		servicesCopy[k] = v
+	}
+	api.serviceStatusMu.RUnlock()
+
+	return c.JSON(fiber.Map{
+		"stack":    stackStatus,
+		"services": servicesCopy,
+	})
+}
+
+// GET /services/health — per-service health check (calls each service's /health endpoint)
+func (api *ControlAPI) GetServicesHealth(c *fiber.Ctx) error {
+	serviceHealth := metrics.CollectServiceHealth()
+
+	api.serviceStatusMu.RLock()
+	servicesCopy := make(map[string]BuildStatus, len(api.serviceStatuses))
+	for k, v := range api.serviceStatuses {
+		servicesCopy[k] = v
+	}
+	api.serviceStatusMu.RUnlock()
+
+	type ServiceDetail struct {
+		Health     metrics.ServiceInfo `json:"health"`
+		BuildState BuildStatus         `json:"build"`
+	}
+
+	result := make(map[string]ServiceDetail)
+	for name, health := range serviceHealth {
+		result[name] = ServiceDetail{
+			Health:     health,
+			BuildState: servicesCopy[name],
+		}
+	}
+
+	return c.JSON(result)
 }
 
 // POST /control/restart
@@ -115,43 +179,74 @@ func (api *ControlAPI) setStatus(state BuildState, message string) {
 	log.Printf("[Control] Status: %s - %s", state, message)
 }
 
+func (api *ControlAPI) setServiceStatus(service string, state BuildState, message string) {
+	api.serviceStatusMu.Lock()
+	defer api.serviceStatusMu.Unlock()
+	api.serviceStatuses[service] = BuildStatus{
+		State:   state,
+		Message: message,
+		Time:    time.Now(),
+	}
+	log.Printf("[Control] Service %s: %s - %s", service, state, message)
+}
+
+// setAllServicesStatus sets the same state for all services (used during full stack operations)
+func (api *ControlAPI) setAllServicesStatus(state BuildState, message string) {
+	api.serviceStatusMu.Lock()
+	defer api.serviceStatusMu.Unlock()
+	now := time.Now()
+	for _, svc := range AllServices {
+		api.serviceStatuses[svc] = BuildStatus{
+			State:   state,
+			Message: message,
+			Time:    now,
+		}
+	}
+}
+
 func (api *ControlAPI) runAsyncRestart() {
 	log.Println("[Control] Starting async restart sequence")
 
 	// 1. Pull latest config
 	api.setStatus(StateConfiguring, "Fetching latest configuration...")
+	api.setAllServicesStatus(StateConfiguring, "Fetching latest configuration...")
 	err := api.updateConfig()
 	if err != nil {
 		log.Printf("[Control] Warning: Config update failed: %v", err)
-		// Enable to fail hard if config is critical, for now we proceed with warning
 	}
 
 	// 1.5 Pull latest code from Git
 	api.setStatus(StatePulling, "Pulling latest code...")
+	api.setAllServicesStatus(StatePulling, "Pulling latest code...")
 	if err := api.deployer.PullCode(); err != nil {
 		log.Printf("[Control] Warning: Git pull failed: %v", err)
 	}
 
 	// 2. Stop service
 	api.setStatus(StateStopping, "Stopping current services...")
-	// Don't check error strictly here, as services might already be down
+	api.setAllServicesStatus(StateStopping, "Stopping...")
 	api.deployer.Stop()
 
 	// 3. Build service
 	api.setStatus(StateBuilding, "Building services (this may take a while)...")
+	api.setAllServicesStatus(StateBuilding, "Building...")
 	if err := api.deployer.Build(); err != nil {
 		api.setStatus(StateError, "Build failed: "+err.Error())
+		api.setAllServicesStatus(StateError, "Build failed: "+err.Error())
 		return
 	}
 
 	// 4. Deploy service
 	api.setStatus(StateDeploying, "Deploying services...")
+	api.setAllServicesStatus(StateDeploying, "Deploying...")
 	if err := api.deployer.Deploy(); err != nil {
 		api.setStatus(StateError, "Deploy failed: "+err.Error())
+		api.setAllServicesStatus(StateError, "Deploy failed: "+err.Error())
 		return
 	}
 
 	api.setStatus(StateSuccess, "Services restarted successfully")
+	api.setAllServicesStatus(StateSuccess, "Restarted successfully")
 }
 
 // POST /control/restart/:service - Restart a single service (git pull → build → up)
@@ -159,29 +254,36 @@ func (api *ControlAPI) RestartService(c *fiber.Ctx) error {
 	service := c.Params("service")
 
 	// Whitelist allowed services
-	allowed := map[string]bool{
-		"yt-downloader":    true,
-		"yt-extractor":     true,
-		"tik-downloader":   true,
-		"tik-extractor":    true,
-		"insta-downloader": true,
-		"insta-extractor":  true,
-		"nginx":            true,
-		"gost":             true,
+	allowed := make(map[string]bool, len(AllServices))
+	for _, svc := range AllServices {
+		allowed[svc] = true
 	}
 	if !allowed[service] {
 		return c.Status(400).JSON(fiber.Map{"error": fmt.Sprintf("Unknown service: %s", service)})
 	}
 
+	// Check if this service is already being built
+	api.serviceStatusMu.RLock()
+	svcStatus := api.serviceStatuses[service]
+	api.serviceStatusMu.RUnlock()
+	if svcStatus.State == StateBuilding || svcStatus.State == StateDeploying || svcStatus.State == StatePulling {
+		return c.Status(409).JSON(fiber.Map{"error": fmt.Sprintf("Service %s is already being restarted", service)})
+	}
+
 	log.Printf("[Control] Restart requested for service: %s", service)
 
 	go func() {
-		api.setStatus(StateBuilding, fmt.Sprintf("Restarting service: %s", service))
+		api.setServiceStatus(service, StatePulling, "Pulling latest code...")
+		if err := api.deployer.PullCode(); err != nil {
+			log.Printf("[Control] Warning: Git pull failed for %s: %v", service, err)
+		}
+
+		api.setServiceStatus(service, StateBuilding, "Building...")
 		if err := api.deployer.RestartService(service); err != nil {
-			api.setStatus(StateError, fmt.Sprintf("Restart %s failed: %v", service, err))
+			api.setServiceStatus(service, StateError, fmt.Sprintf("Restart failed: %v", err))
 			return
 		}
-		api.setStatus(StateSuccess, fmt.Sprintf("Service %s restarted successfully", service))
+		api.setServiceStatus(service, StateSuccess, "Restarted successfully")
 	}()
 
 	return c.JSON(fiber.Map{"message": fmt.Sprintf("Restart %s started", service)})
