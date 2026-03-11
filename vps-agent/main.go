@@ -96,22 +96,8 @@ func main() {
 	waitForDNS(downloadDomain)
 	log.Println("✓ DNS records verified")
 
-	// 4. Build & Deploy service
+	// 4. Create deployer and Control API (start API early so dashboard can connect)
 	dep := deployer.NewDeployer(projectDir)
-
-	log.Println("Building service...")
-	if err := dep.Build(); err != nil {
-		log.Fatalf("Build failed: %v", err)
-	}
-	log.Println("✓ Build successful")
-
-	log.Println("Deploying service...")
-	if err := dep.Deploy(); err != nil {
-		log.Fatalf("Deploy failed: %v", err)
-	}
-	log.Println("✓ Service deployed successfully")
-
-	// 5. Start Control API
 	controlAPI := control.NewControlAPI(fetcher, dep, projectDir)
 	controlAPI.SetupRoutes()
 
@@ -122,9 +108,27 @@ func main() {
 		}
 	}()
 
-	// 6. Start Heartbeat
+	// 5. Start Heartbeat (early, so Hub knows agent is alive)
 	hb := heartbeat.NewHeartbeat(hubURL, serverIP, projectDir, 3*time.Second)
 	go hb.Start()
+
+	// 6. Build & Deploy service (Control API already running, dashboard can monitor)
+	log.Println("Building service...")
+	controlAPI.SetBuildStatus("building", "Building services...")
+	if err := dep.Build(); err != nil {
+		controlAPI.SetBuildStatus("error", "Build failed: "+err.Error())
+		log.Fatalf("Build failed: %v", err)
+	}
+	log.Println("✓ Build successful")
+
+	log.Println("Deploying service...")
+	controlAPI.SetBuildStatus("deploying", "Deploying services...")
+	if err := dep.Deploy(); err != nil {
+		controlAPI.SetBuildStatus("error", "Deploy failed: "+err.Error())
+		log.Fatalf("Deploy failed: %v", err)
+	}
+	controlAPI.SetBuildStatus("success", "Services deployed successfully")
+	log.Println("✓ Service deployed successfully")
 
 	log.Println("✓ Agent running successfully")
 	log.Println("  Control API: http://localhost:9000")
