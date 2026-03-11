@@ -4,6 +4,7 @@ import (
 	"bufio"
 	"encoding/json"
 	"fmt"
+	"net"
 	"net/http"
 	"os"
 	"path/filepath"
@@ -76,7 +77,7 @@ func Collect(projectDir string) (*SystemMetrics, error) {
 	return m, nil
 }
 
-// services to check health - name → local URL
+// services to check health via HTTP /health endpoint
 var serviceEndpoints = map[string]string{
 	"yt-downloader":    "http://localhost:5001/health",
 	"yt-extractor":     "http://localhost:8300/health",
@@ -84,6 +85,12 @@ var serviceEndpoints = map[string]string{
 	"tik-extractor":    "http://localhost:5555/health",
 	"insta-downloader": "http://localhost:5003/health",
 	"insta-extractor":  "http://localhost:8000/health",
+}
+
+// services to check health via TCP port (no /health endpoint)
+var tcpServicePorts = map[string]string{
+	"nginx": "localhost:80",
+	"gost":  "localhost:1111",
 }
 
 var healthClient = &http.Client{Timeout: 2 * time.Second}
@@ -98,6 +105,7 @@ func collectServiceVersions() map[string]ServiceInfo {
 	var mu sync.Mutex
 	var wg sync.WaitGroup
 
+	// Check HTTP /health services
 	for name, url := range serviceEndpoints {
 		wg.Add(1)
 		go func(name, url string) {
@@ -109,8 +117,29 @@ func collectServiceVersions() map[string]ServiceInfo {
 		}(name, url)
 	}
 
+	// Check TCP port services (nginx, gost)
+	for name, addr := range tcpServicePorts {
+		wg.Add(1)
+		go func(name, addr string) {
+			defer wg.Done()
+			info := checkTCPHealth(addr)
+			mu.Lock()
+			results[name] = info
+			mu.Unlock()
+		}(name, addr)
+	}
+
 	wg.Wait()
 	return results
+}
+
+func checkTCPHealth(addr string) ServiceInfo {
+	conn, err := net.DialTimeout("tcp", addr, 2*time.Second)
+	if err != nil {
+		return ServiceInfo{Status: "down"}
+	}
+	conn.Close()
+	return ServiceInfo{Status: "ok"}
 }
 
 func checkServiceHealth(name, url string) ServiceInfo {
