@@ -7,6 +7,7 @@ import (
 	"net"
 	"net/http"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"strconv"
 	"strings"
@@ -88,9 +89,16 @@ var serviceEndpoints = map[string]string{
 }
 
 // services to check health via TCP port (no /health endpoint)
-var tcpServicePorts = map[string]string{
-	"nginx": "localhost:80",
-	"gost":  "localhost:1111",
+// format: name → "addr|docker_container|version_cmd"
+var tcpServices = map[string]tcpServiceConfig{
+	"nginx": {Addr: "localhost:80", Container: "nginx", VersionCmd: "nginx -v 2>&1"},
+	"gost":  {Addr: "localhost:1111", Container: "gost", VersionCmd: "gost -V 2>&1"},
+}
+
+type tcpServiceConfig struct {
+	Addr       string
+	Container  string
+	VersionCmd string
 }
 
 var healthClient = &http.Client{Timeout: 2 * time.Second}
@@ -117,29 +125,47 @@ func collectServiceVersions() map[string]ServiceInfo {
 		}(name, url)
 	}
 
-	// Check TCP port services (nginx, gost)
-	for name, addr := range tcpServicePorts {
+	// Check TCP port services (nginx, gost) + get version from docker
+	for name, cfg := range tcpServices {
 		wg.Add(1)
-		go func(name, addr string) {
+		go func(name string, cfg tcpServiceConfig) {
 			defer wg.Done()
-			info := checkTCPHealth(addr)
+			info := checkTCPHealth(cfg)
 			mu.Lock()
 			results[name] = info
 			mu.Unlock()
-		}(name, addr)
+		}(name, cfg)
 	}
 
 	wg.Wait()
 	return results
 }
 
-func checkTCPHealth(addr string) ServiceInfo {
-	conn, err := net.DialTimeout("tcp", addr, 2*time.Second)
+func checkTCPHealth(cfg tcpServiceConfig) ServiceInfo {
+	conn, err := net.DialTimeout("tcp", cfg.Addr, 2*time.Second)
 	if err != nil {
 		return ServiceInfo{Status: "down"}
 	}
 	conn.Close()
-	return ServiceInfo{Status: "ok"}
+
+	// Get version from docker exec
+	version := getDockerVersion(cfg.Container, cfg.VersionCmd)
+	return ServiceInfo{Status: "ok", Version: version}
+}
+
+func getDockerVersion(container, versionCmd string) string {
+	out, err := exec.Command("docker", "exec", container, "sh", "-c", versionCmd).Output()
+	if err != nil {
+		return ""
+	}
+	raw := strings.TrimSpace(string(out))
+	// Parse version from output: "nginx/1.25.3" → "1.25.3", "gost 2.11.5" → "2.11.5"
+	for _, sep := range []string{"/", " "} {
+		if idx := strings.LastIndex(raw, sep); idx >= 0 {
+			return strings.TrimSpace(raw[idx+1:])
+		}
+	}
+	return raw
 }
 
 func checkServiceHealth(name, url string) ServiceInfo {
