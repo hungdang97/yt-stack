@@ -103,7 +103,7 @@ class APIServer(TikTok):
     def setup_routes(self):
         @self.server.get("/health")
         async def health():
-            return {"status": "ok", "service": "tik-extractor", "version": __VERSION__}
+            return {"status": "ok", "service": "tik-extractor", "version": "1.0.0"}
 
         @self.server.get(
             "/",
