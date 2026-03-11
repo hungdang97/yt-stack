@@ -165,7 +165,6 @@ def build_ydl_opts(cookie_file_path=None, proxy=None):
         'extractor_args': {
             'youtube': {
                 'skip': ['hls', 'dash', 'translated_subs'],
-                'player_skip': ['configs'],
             }
         },
         # Deno JavaScript runtime (found via PATH)
