@@ -109,7 +109,7 @@ func main() {
 	}()
 
 	// 5. Start Heartbeat (early, so Hub knows agent is alive)
-	hb := heartbeat.NewHeartbeat(hubURL, serverIP, projectDir, 3*time.Second)
+	hb := heartbeat.NewHeartbeat(hubURL, serverIP, projectDir, 10*time.Second)
 	go hb.Start()
 
 	// 6. Build & Deploy service (Control API already running, dashboard can monitor)

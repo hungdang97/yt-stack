@@ -109,16 +109,9 @@ func (d *Deployer) Stop() error {
 	return cmd.Run()
 }
 
-// RestartService pulls code and restarts a single service
+// RestartService rebuilds and restarts a single service (git pull done by caller)
 func (d *Deployer) RestartService(service string) error {
-	// 1. Git pull
-	log.Printf("[Deployer] Pulling code for service restart: %s", service)
-	if err := d.PullCode(); err != nil {
-		log.Printf("[Deployer] Warning: git pull failed: %v", err)
-		// Continue anyway — might just want to restart
-	}
-
-	// 2. Build + restart the specific service
+	// Build + restart the specific service
 	log.Printf("[Deployer] Building & restarting service: %s", service)
 	cmd := exec.Command("docker-compose", "up", "-d", "--build", "--force-recreate", service)
 	cmd.Dir = d.projectDir
