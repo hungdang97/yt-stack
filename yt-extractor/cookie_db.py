@@ -4,7 +4,7 @@ from threading import Thread
 from pymongo import MongoClient
 
 # Error patterns indicating bad/expired cookies
-BAD_COOKIE_ERRORS = ('sign in', 'login required', 'bot', 'please sign in', 'login', 'sign')
+BAD_COOKIE_ERRORS = ('sign in', 'login required', 'bot', 'please sign in', 'login', 'sign', 'page needs to be reloaded')
 
 # MongoDB connection
 _MONGO_URI = os.environ.get(
