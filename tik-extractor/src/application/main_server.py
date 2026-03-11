@@ -101,6 +101,10 @@ class APIServer(TikTok):
         await server.serve()
 
     def setup_routes(self):
+        @self.server.get("/health")
+        async def health():
+            return {"status": "ok", "service": "tik-extractor", "version": __VERSION__}
+
         @self.server.get(
             "/",
             summary=_("访问项目 GitHub 仓库"),
