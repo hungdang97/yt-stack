@@ -152,8 +152,8 @@ def build_proxy_url(proxy):
     return proxy
 
 
-def build_ydl_opts(cookie_file_path, proxy=None):
-    """Build yt-dlp options with cookie file and optional proxy."""
+def build_ydl_opts(cookie_file_path=None, proxy=None):
+    """Build yt-dlp options with optional cookie file and proxy."""
     opts = {
         'quiet': True,
         'no_warnings': True,
@@ -162,7 +162,6 @@ def build_ydl_opts(cookie_file_path, proxy=None):
         'no_check_formats': True,
         'formats': 'none',
         'dump_single_json': True,
-        'cookiefile': cookie_file_path, 
         'extractor_args': {
             'youtube': {
                 'skip': ['hls', 'dash', 'translated_subs'],
@@ -172,6 +171,8 @@ def build_ydl_opts(cookie_file_path, proxy=None):
         # Deno JavaScript runtime (found via PATH)
         'js_runtime': 'deno',
     }
+    if cookie_file_path:
+        opts['cookiefile'] = cookie_file_path
     if proxy:
         opts['proxy'] = proxy
     return opts
@@ -226,24 +227,54 @@ def extract_sync(video_id: str, proxy: str, profile: str, cookies: str):
                 pass
 
 
+def extract_no_cookie_sync(video_id: str, proxy: str):
+    """Extraction without cookies - uses Cloudflare IP only. Runs in thread pool."""
+    url = f'https://www.youtube.com/watch?v={video_id}'
+
+    try:
+        ydl_opts = build_ydl_opts(cookie_file_path=None, proxy=proxy)
+
+        with yt_dlp.YoutubeDL(ydl_opts) as ydl:
+            info = ydl.extract_info(url, download=False)
+
+        result = map_yt_dlp_to_api(info)
+
+        has_video = bool(result.get('videoStreams'))
+        has_audio = bool(result.get('audioStreams'))
+
+        if not has_video or not has_audio:
+            missing = []
+            if not has_video:
+                missing.append('video')
+            if not has_audio:
+                missing.append('audio')
+            return None, f"Missing streams: {', '.join(missing)}"
+
+        return result, None
+    except Exception as e:
+        return None, str(e)
+
+
 @app.get('/api/youtube/video/{video_id}')
 async def extract(video_id: str, proxy: str = Query(None)):
     logger.info(f"[{video_id}] Extraction request received | proxy={proxy}")
     proxy_url = build_proxy_url(proxy)
-    
-    # Retry mechanism: Attempt 1 + 1 Retry = 2 Attempts
-    max_attempts = 2
+
+    # Retry mechanism: Attempt 1-2 with cookies, Attempt 3 without cookies (Cloudflare IP only)
+    max_cookie_attempts = 2
     last_error = None
-    
-    for attempt in range(1, max_attempts + 1):
+    last_attempt = 0
+
+    # Phase 1: Try with cookies (2 attempts)
+    for attempt in range(1, max_cookie_attempts + 1):
+        last_attempt = attempt
         profile, cookies = await cookie_pool.get()
         if not cookies:
             logger.error(f"[{video_id}] No active cookie available")
-            return JSONResponse({'error': 'No active cookie'}, status_code=503)
+            break  # Fall through to no-cookie attempt
 
-        logger.info(f"[{video_id}] Attempt {attempt}/{max_attempts} | Using cookie: {profile}")
+        logger.info(f"[{video_id}] Attempt {attempt}/3 | Using cookie: {profile}")
 
-        # Run blocking yt-dlp in thread pool
         loop = asyncio.get_event_loop()
         result, error = await loop.run_in_executor(
             executor, extract_sync, video_id, proxy_url, profile, cookies
@@ -252,21 +283,35 @@ async def extract(video_id: str, proxy: str = Query(None)):
         if not error:
             logger.info(f"[{video_id}] Extraction successful | video={len(result.get('videoStreams', []))} | audio={len(result.get('audioStreams', []))}")
             return result
-        
-        # Handle Error
+
         last_error = error
         is_bad = cookie_db.is_bad(error) or "Missing streams" in error
-        
+
         if is_bad:
             logger.warning(f"[{video_id}] Attempt {attempt} failed with BAD COOKIE error: {error}. Invalidating {profile}.")
             cookie_db.invalidate(profile)
-            # Loop continues to next attempt
         else:
-            logger.error(f"[{video_id}] Attempt {attempt} failed with non-cookie error: {error}. No retry.")
-            break # Non-cookie error (e.g. 404, network), do not retry randomly
+            logger.error(f"[{video_id}] Attempt {attempt} failed with non-cookie error: {error}.")
+            break
 
-    # If we exhausted retries or broke early
-    logger.error(f"[{video_id}] Extraction finally failed after {attempt} attempts: {last_error}")
+    # Phase 2: Try without cookies, Cloudflare IP only (attempt 3)
+    if proxy_url:
+        last_attempt = 3
+        logger.info(f"[{video_id}] Attempt 3/3 | No cookie, Cloudflare IP only")
+
+        loop = asyncio.get_event_loop()
+        result, error = await loop.run_in_executor(
+            executor, extract_no_cookie_sync, video_id, proxy_url
+        )
+
+        if not error:
+            logger.info(f"[{video_id}] Extraction successful (no cookie) | video={len(result.get('videoStreams', []))} | audio={len(result.get('audioStreams', []))}")
+            return result
+
+        last_error = error
+        logger.warning(f"[{video_id}] Attempt 3 (no cookie) failed: {error}")
+
+    logger.error(f"[{video_id}] Extraction finally failed after {last_attempt} attempts: {last_error}")
     return JSONResponse({'error': last_error}, status_code=500)
 
 
