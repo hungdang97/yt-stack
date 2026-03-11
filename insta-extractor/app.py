@@ -6,7 +6,7 @@ import re
 
 app = FastAPI(
     title="Instagram Extractor",
-    version="2.0.0",
+    version="1.0.0",
     description="Extract media links from Instagram posts, reels, IGTV and profiles. Powered by instaloader.",
 )
 
@@ -42,7 +42,7 @@ def parse_shortcode(url: str) -> str:
 
 @app.get("/health")
 def health():
-    return {"status": "ok", "service": "insta-extractor", "version": "2.0.0"}
+    return {"status": "ok", "service": "insta-extractor", "version": "1.0.0"}
 
 
 @app.get("/extract", summary="Extract media from Instagram post")
