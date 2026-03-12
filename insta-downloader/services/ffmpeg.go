@@ -6,28 +6,65 @@ import (
 	"os/exec"
 )
 
-// RemuxVideo remuxes video to mp4 container (fast, no re-encode).
-// Removes the source file after successful remux.
-func RemuxVideo(inputPath, outputPath string) error {
-	cmd := exec.Command("ffmpeg",
-		"-i", inputPath,
-		"-c", "copy",
-		"-movflags", "+faststart",
-		"-y",
-		outputPath,
+// isH264 checks if the video stream is H.264 codec.
+func isH264(videoPath string) bool {
+	cmd := exec.Command("ffprobe",
+		"-v", "error",
+		"-select_streams", "v:0",
+		"-show_entries", "stream=codec_name",
+		"-of", "csv=p=0",
+		videoPath,
 	)
+	output, err := cmd.Output()
+	if err != nil {
+		return false
+	}
+	codec := string(output)
+	return codec == "h264\n" || codec == "h264"
+}
+
+// RemuxVideo remuxes/re-encodes video to mp4 container.
+// If already H.264, just remux (fast copy). Otherwise re-encode to H.264.
+// Removes the source file after success.
+func RemuxVideo(inputPath, outputPath string) error {
+	var cmd *exec.Cmd
+
+	if isH264(inputPath) {
+		// Already H.264, fast remux
+		fmt.Printf("[FFmpeg] Remuxing video (copy): %s → %s\n", inputPath, outputPath)
+		cmd = exec.Command("ffmpeg",
+			"-i", inputPath,
+			"-c", "copy",
+			"-movflags", "+faststart",
+			"-y",
+			outputPath,
+		)
+	} else {
+		// Re-encode to H.264 for compatibility
+		fmt.Printf("[FFmpeg] Re-encoding video to H.264: %s → %s\n", inputPath, outputPath)
+		cmd = exec.Command("ffmpeg",
+			"-i", inputPath,
+			"-c:v", "libx264",
+			"-preset", "fast",
+			"-crf", "18",
+			"-c:a", "aac",
+			"-b:a", "192k",
+			"-movflags", "+faststart",
+			"-y",
+			outputPath,
+		)
+	}
+
 	cmd.Stdout = os.Stdout
 	cmd.Stderr = os.Stderr
 
-	fmt.Printf("[FFmpeg] Remuxing video: %s → %s\n", inputPath, outputPath)
-
 	if err := cmd.Run(); err != nil {
-		return fmt.Errorf("ffmpeg remux failed: %w", err)
+		return fmt.Errorf("ffmpeg failed: %w", err)
 	}
 
 	os.Remove(inputPath)
 
-	fmt.Printf("[FFmpeg] ✓ Video remuxed: %s\n", outputPath)
+	fmt.Printf("[FFmpeg] ✓ Video processed: %s\n", outputPath)
 	return nil
 }
 
@@ -85,8 +122,11 @@ func MergeVideoAudio(videoPath, audioPath, outputPath string) error {
 	cmd := exec.Command("ffmpeg",
 		"-i", videoPath,
 		"-i", audioPath,
-		"-c:v", "copy",
+		"-c:v", "libx264",
+		"-preset", "fast",
+		"-crf", "18",
 		"-c:a", "aac",
+		"-b:a", "192k",
 		"-movflags", "+faststart",
 		"-y",
 		outputPath,
