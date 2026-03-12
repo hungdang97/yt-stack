@@ -6,9 +6,15 @@ import "encoding/json"
 // REQUEST / RESPONSE
 // ============================================
 
+type OutputConfig struct {
+	Type   string `json:"type"`             // "video" or "audio"
+	Format string `json:"format,omitempty"` // mp4, mp3, etc.
+}
+
 type DownloadRequest struct {
-	URL  string `json:"url"`
-	Type string `json:"type"` // "video" or "audio"
+	URL    string       `json:"url"`
+	Type   string       `json:"type,omitempty"`   // "video" or "audio" (simple format)
+	Output OutputConfig `json:"output,omitempty"` // Hub format: output.type
 }
 
 type DownloadResponse struct {
