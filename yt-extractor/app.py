@@ -259,18 +259,35 @@ async def extract(video_id: str, proxy: str = Query(None)):
     logger.info(f"[{video_id}] Extraction request received | proxy={proxy}")
     proxy_url = build_proxy_url(proxy)
 
-    # Retry mechanism: Attempt 1-2 with cookies, Attempt 3 without cookies (Cloudflare IP only)
+    # Retry mechanism: Attempt 1 without cookies (android_vr), Attempt 2-3 with cookies
     max_cookie_attempts = 2
     last_error = None
     last_attempt = 0
 
-    # Phase 1: Try with cookies (2 attempts)
-    for attempt in range(1, max_cookie_attempts + 1):
+    # Phase 1: Try without cookies first (android_vr client works better without cookies)
+    if proxy_url:
+        last_attempt = 1
+        logger.info(f"[{video_id}] Attempt 1/3 | No cookie, Cloudflare IP only")
+
+        loop = asyncio.get_event_loop()
+        result, error = await loop.run_in_executor(
+            executor, extract_no_cookie_sync, video_id, proxy_url
+        )
+
+        if not error:
+            logger.info(f"[{video_id}] Extraction successful (no cookie) | video={len(result.get('videoStreams', []))} | audio={len(result.get('audioStreams', []))}")
+            return result
+
+        last_error = error
+        logger.warning(f"[{video_id}] Attempt 1 (no cookie) failed: {error}")
+
+    # Phase 2: Fallback to cookies (2 attempts)
+    for attempt in range(2, max_cookie_attempts + 2):
         last_attempt = attempt
         profile, cookies = await cookie_pool.get()
         if not cookies:
             logger.error(f"[{video_id}] No active cookie available")
-            break  # Fall through to no-cookie attempt
+            break
 
         logger.info(f"[{video_id}] Attempt {attempt}/3 | Using cookie: {profile}")
 
@@ -293,30 +310,13 @@ async def extract(video_id: str, proxy: str = Query(None)):
             logger.error(f"[{video_id}] Attempt {attempt} failed with non-cookie error: {error}.")
             break
 
-    # Phase 2: Try without cookies, Cloudflare IP only (attempt 3)
-    if proxy_url:
-        last_attempt = 3
-        logger.info(f"[{video_id}] Attempt 3/3 | No cookie, Cloudflare IP only")
-
-        loop = asyncio.get_event_loop()
-        result, error = await loop.run_in_executor(
-            executor, extract_no_cookie_sync, video_id, proxy_url
-        )
-
-        if not error:
-            logger.info(f"[{video_id}] Extraction successful (no cookie) | video={len(result.get('videoStreams', []))} | audio={len(result.get('audioStreams', []))}")
-            return result
-
-        last_error = error
-        logger.warning(f"[{video_id}] Attempt 3 (no cookie) failed: {error}")
-
     logger.error(f"[{video_id}] Extraction finally failed after {last_attempt} attempts: {last_error}")
     return JSONResponse({'error': last_error}, status_code=500)
 
 
 @app.get('/health')
 async def health():
-    return {'status': 'UP', 'service': 'yt-extractor', 'version': '2.0.0'}
+    return {'status': 'UP', 'service': 'yt-extractor', 'version': '3.0.0'}
 
 
 if __name__ == '__main__':
