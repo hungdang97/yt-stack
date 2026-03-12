@@ -15,7 +15,7 @@ logger = logging.getLogger("insta-extractor")
 
 app = FastAPI(
     title="Instagram Extractor",
-    version="6.0.0",
+    version="7.0.0",
     description="Extract media links from Instagram posts, reels, IGTV and profiles. yt-dlp primary, instaloader fallback.",
 )
 
@@ -148,19 +148,28 @@ def _map_ytdlp_response(info: dict, shortcode: str) -> dict:
     for entry in entries:
         is_video = entry.get("ext") in ("mp4", "webm") or bool(entry.get("url", ""))
         video_url = None
+        video_progressive_url = None
         audio_url = None
         display_url = None
 
         if is_video:
             formats = entry.get("formats", [])
             if formats:
-                # Best video: highest resolution (may be DASH video-only, that's OK)
+                # Best DASH video: highest resolution (may be video-only VP9)
                 video_formats = [f for f in formats if f.get("vcodec") != "none"]
                 if video_formats:
                     best_video = max(video_formats, key=lambda f: (f.get("height") or 0, f.get("tbr") or 0))
                     video_url = best_video.get("url")
 
-                # Best audio: highest bitrate audio stream
+                # Best progressive: has both video+audio, not DASH
+                progressive = [f for f in formats
+                               if f.get("acodec") != "none" and f.get("vcodec") != "none"
+                               and f.get("protocol") not in ("video_dashinit", "m3u8_native")]
+                if progressive:
+                    best_prog = max(progressive, key=lambda f: (f.get("height") or 0, f.get("tbr") or 0))
+                    video_progressive_url = best_prog.get("url")
+
+                # Best DASH audio: highest bitrate audio-only stream
                 audio_formats = [f for f in formats if f.get("acodec") != "none" and f.get("vcodec") == "none"]
                 if audio_formats:
                     best_audio = max(audio_formats, key=lambda f: f.get("abr") or f.get("tbr") or 0)
@@ -168,15 +177,14 @@ def _map_ytdlp_response(info: dict, shortcode: str) -> dict:
             else:
                 video_url = entry.get("url")
 
-            # Thumbnail as display_url
             display_url = entry.get("thumbnail") or entry.get("thumbnails", [{}])[-1].get("url")
         else:
-            # Image post
             display_url = entry.get("url") or entry.get("thumbnail")
 
         media.append({
             "is_video": is_video,
             "video_url": video_url,
+            "video_progressive_url": video_progressive_url,
             "audio_url": audio_url,
             "display_url": display_url,
         })
@@ -187,6 +195,7 @@ def _map_ytdlp_response(info: dict, shortcode: str) -> dict:
         media.append({
             "is_video": is_video,
             "video_url": info.get("url") if is_video else None,
+            "video_progressive_url": None,
             "audio_url": None,
             "display_url": info.get("thumbnail") or info.get("url"),
         })
@@ -246,6 +255,7 @@ def _extract_with_instaloader(shortcode: str, proxy: Optional[str] = None, cooki
             media.append({
                 "is_video": node.is_video,
                 "video_url": node.video_url,
+                "video_progressive_url": node.video_url,
                 "audio_url": None,
                 "display_url": node.display_url,
             })
@@ -253,6 +263,7 @@ def _extract_with_instaloader(shortcode: str, proxy: Optional[str] = None, cooki
         media.append({
             "is_video": True,
             "video_url": post.video_url,
+            "video_progressive_url": post.video_url,
             "audio_url": None,
             "display_url": post.url,
         })
@@ -260,6 +271,7 @@ def _extract_with_instaloader(shortcode: str, proxy: Optional[str] = None, cooki
         media.append({
             "is_video": False,
             "video_url": None,
+            "video_progressive_url": None,
             "audio_url": None,
             "display_url": post.url,
         })
@@ -310,7 +322,7 @@ def _extract_with_instaloader(shortcode: str, proxy: Optional[str] = None, cooki
 
 @app.get("/health")
 def health():
-    return {"status": "ok", "service": "insta-extractor", "version": "6.0.0"}
+    return {"status": "ok", "service": "insta-extractor", "version": "7.0.0"}
 
 
 @app.get("/extract", summary="Extract media from Instagram post")

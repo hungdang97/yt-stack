@@ -14,6 +14,11 @@ import (
 	gonanoid "github.com/matoous/go-nanoid/v2"
 )
 
+// needsProgressiveFormat returns true if the device only supports H.264 (iOS/macOS)
+func needsProgressiveFormat(os string) bool {
+	return os == "ios" || os == "macos"
+}
+
 // HandleDownload handles POST /api/download
 func HandleDownload(c *fiber.Ctx) error {
 	// Verify Hub token
@@ -51,6 +56,11 @@ func HandleDownload(c *fiber.Ctx) error {
 		})
 	}
 
+	// Default OS
+	if req.OS == "" {
+		req.OS = "windows"
+	}
+
 	// Validate Instagram URL
 	if !utils.IsInstagramURL(req.URL) {
 		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{
@@ -58,7 +68,7 @@ func HandleDownload(c *fiber.Ctx) error {
 		})
 	}
 
-	fmt.Printf("[Instagram] Download request: %s (type=%s)\n", req.URL, req.Type)
+	fmt.Printf("[Instagram] Download request: %s (type=%s, os=%s)\n", req.URL, req.Type, req.OS)
 
 	// Extract post metadata from insta-extractor
 	postData, err := services.Extract(req.URL)
@@ -68,26 +78,44 @@ func HandleDownload(c *fiber.Ctx) error {
 		})
 	}
 
-	// Get best video and audio URLs
-	videoURL := postData.GetVideoURL()
-	audioURL := postData.GetAudioURL()
+	// Pick video URL based on device
+	var videoURL, audioURL string
 
-	if videoURL == "" && audioURL == "" {
-		return c.Status(fiber.StatusNotFound).JSON(fiber.Map{
-			"error": "No download URL available for this post",
-		})
-	}
+	if req.Type == "video" {
+		if needsProgressiveFormat(req.OS) {
+			// iOS/macOS: use progressive (H.264 + audio in one file)
+			videoURL = postData.GetVideoProgressiveURL()
+			if videoURL == "" {
+				videoURL = postData.GetVideoURL() // fallback
+			}
+		} else {
+			// Android/Windows/Linux: use best DASH video (VP9 OK)
+			videoURL = postData.GetVideoURL()
+			if videoURL == "" {
+				videoURL = postData.GetVideoProgressiveURL() // fallback
+			}
+		}
+		audioURL = postData.GetAudioURL()
 
-	if req.Type == "audio" && audioURL == "" && videoURL == "" {
-		return c.Status(fiber.StatusNotFound).JSON(fiber.Map{
-			"error": "No audio available for this post",
-		})
-	}
-
-	if req.Type == "video" && videoURL == "" {
-		return c.Status(fiber.StatusNotFound).JSON(fiber.Map{
-			"error": "No video URL available for this post",
-		})
+		if videoURL == "" {
+			return c.Status(fiber.StatusNotFound).JSON(fiber.Map{
+				"error": "No video URL available for this post",
+			})
+		}
+	} else {
+		// Audio request: prefer DASH audio, fallback to video
+		audioURL = postData.GetAudioURL()
+		if audioURL == "" {
+			videoURL = postData.GetVideoProgressiveURL()
+			if videoURL == "" {
+				videoURL = postData.GetVideoURL()
+			}
+		}
+		if audioURL == "" && videoURL == "" {
+			return c.Status(fiber.StatusNotFound).JSON(fiber.Map{
+				"error": "No audio available for this post",
+			})
+		}
 	}
 
 	var outputFilename string
@@ -128,7 +156,7 @@ func HandleDownload(c *fiber.Ctx) error {
 		duration = *postData.VideoDuration
 	}
 
-	// Get thumbnail (first display_url)
+	// Get thumbnail
 	thumbnail := postData.GetImageURL()
 
 	// Create meta
@@ -154,7 +182,8 @@ func HandleDownload(c *fiber.Ctx) error {
 	}
 
 	// Start background job
-	go processJob(jobID, req.URL, req.Type, videoURL, audioURL, outputFilename)
+	useProgressive := needsProgressiveFormat(req.OS)
+	go processJob(jobID, req.URL, req.Type, videoURL, audioURL, outputFilename, useProgressive)
 
 	// Return response
 	response := models.DownloadResponse{
@@ -165,12 +194,12 @@ func HandleDownload(c *fiber.Ctx) error {
 		Thumbnail: thumbnail,
 	}
 
-	fmt.Printf("[%s] Job created: %s → %s\n", jobID, req.Type, outputFilename)
+	fmt.Printf("[%s] Job created: %s → %s (progressive=%v)\n", jobID, req.Type, outputFilename, useProgressive)
 	return c.Status(fiber.StatusCreated).JSON(response)
 }
 
-// processJob downloads best quality video/audio and processes to requested format
-func processJob(jobID, postURL, outputType, videoURL, audioURL, outputFilename string) {
+// processJob downloads and processes to requested format
+func processJob(jobID, postURL, outputType, videoURL, audioURL, outputFilename string, useProgressive bool) {
 	ctx, cancel := context.WithTimeout(context.Background(), config.DownloadTimeout)
 	defer cancel()
 
@@ -178,9 +207,8 @@ func processJob(jobID, postURL, outputType, videoURL, audioURL, outputFilename s
 
 	switch outputType {
 	case "audio":
-		// Audio request: download audio stream directly, convert to MP3
 		if audioURL != "" {
-			// Direct audio download (best quality DASH audio)
+			// Direct DASH audio download → convert to MP3
 			audioFile := "temp_audio.m4a"
 			fileSize, err := services.Download(ctx, jobID, postURL, audioURL, audioFile)
 			if err != nil {
@@ -193,12 +221,12 @@ func processJob(jobID, postURL, outputType, videoURL, audioURL, outputFilename s
 			utils.UpdateMetaStatus(jobID, models.StatusProcessing)
 			audioPath := filepath.Join(utils.GetJobDir(jobID), audioFile)
 			if err := services.ConvertToMP3(audioPath, outputPath); err != nil {
-				fmt.Printf("[%s] ✗ FFmpeg convert to mp3 failed: %v\n", jobID, err)
+				fmt.Printf("[%s] ✗ Convert to MP3 failed: %v\n", jobID, err)
 				utils.UpdateMetaError(jobID, fmt.Sprintf("Audio conversion failed: %v", err))
 				return
 			}
 		} else {
-			// Fallback: download video, extract audio
+			// Fallback: download video → extract audio
 			videoFile := "temp_video.mp4"
 			fileSize, err := services.Download(ctx, jobID, postURL, videoURL, videoFile)
 			if err != nil {
@@ -211,14 +239,13 @@ func processJob(jobID, postURL, outputType, videoURL, audioURL, outputFilename s
 			utils.UpdateMetaStatus(jobID, models.StatusProcessing)
 			videoPath := filepath.Join(utils.GetJobDir(jobID), videoFile)
 			if err := services.ExtractAudio(videoPath, outputPath); err != nil {
-				fmt.Printf("[%s] ✗ FFmpeg audio extract failed: %v\n", jobID, err)
+				fmt.Printf("[%s] ✗ Audio extract failed: %v\n", jobID, err)
 				utils.UpdateMetaError(jobID, fmt.Sprintf("Audio extraction failed: %v", err))
 				return
 			}
 		}
 
 	case "video":
-		// Video request: download best video
 		videoFile := "temp_video.mp4"
 		fileSize, err := services.Download(ctx, jobID, postURL, videoURL, videoFile)
 		if err != nil {
@@ -229,11 +256,17 @@ func processJob(jobID, postURL, outputType, videoURL, audioURL, outputFilename s
 		fmt.Printf("[%s] Video downloaded (%.2f MB)\n", jobID, float64(fileSize)/1024/1024)
 
 		videoPath := filepath.Join(utils.GetJobDir(jobID), videoFile)
-
 		utils.UpdateMetaStatus(jobID, models.StatusProcessing)
 
-		// Check if video has audio — if not, merge with separate audio stream
-		if audioURL != "" && !services.HasAudioStream(videoPath) {
+		if useProgressive || services.HasAudioStream(videoPath) {
+			// Progressive or already has audio → just remux (fast copy)
+			if err := services.RemuxVideo(videoPath, outputPath); err != nil {
+				fmt.Printf("[%s] ✗ Remux failed: %v\n", jobID, err)
+				utils.UpdateMetaError(jobID, fmt.Sprintf("Video processing failed: %v", err))
+				return
+			}
+		} else if audioURL != "" {
+			// DASH video-only → download audio → merge with copy (no re-encode)
 			fmt.Printf("[%s] Video has no audio, downloading separate audio stream...\n", jobID)
 			audioFile := "temp_audio.m4a"
 			_, err := services.Download(ctx, jobID, postURL, audioURL, audioFile)
@@ -244,14 +277,14 @@ func processJob(jobID, postURL, outputType, videoURL, audioURL, outputFilename s
 			}
 			audioPath := filepath.Join(utils.GetJobDir(jobID), audioFile)
 			if err := services.MergeVideoAudio(videoPath, audioPath, outputPath); err != nil {
-				fmt.Printf("[%s] ✗ FFmpeg merge failed: %v\n", jobID, err)
-				utils.UpdateMetaError(jobID, fmt.Sprintf("Video+audio merge failed: %v", err))
+				fmt.Printf("[%s] ✗ Merge failed: %v\n", jobID, err)
+				utils.UpdateMetaError(jobID, fmt.Sprintf("Merge failed: %v", err))
 				return
 			}
 		} else {
-			// Video already has audio, just remux
+			// No audio available, just remux video as-is
 			if err := services.RemuxVideo(videoPath, outputPath); err != nil {
-				fmt.Printf("[%s] ✗ FFmpeg remux failed: %v\n", jobID, err)
+				fmt.Printf("[%s] ✗ Remux failed: %v\n", jobID, err)
 				utils.UpdateMetaError(jobID, fmt.Sprintf("Video processing failed: %v", err))
 				return
 			}
