@@ -60,7 +60,7 @@ def _ensure_login(cookie: Optional[str] = None):
 def parse_shortcode(url: str) -> str:
     patterns = [
         r"instagram\.com/p/([A-Za-z0-9_-]+)",
-        r"instagram\.com/reel/([A-Za-z0-9_-]+)",
+        r"instagram\.com/reels?/([A-Za-z0-9_-]+)",
         r"instagram\.com/tv/([A-Za-z0-9_-]+)",
     ]
     for p in patterns:
