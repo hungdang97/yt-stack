@@ -7,6 +7,7 @@ import (
 	"insta-downloader/models"
 	"insta-downloader/services"
 	"insta-downloader/utils"
+	"net/url"
 	"path/filepath"
 	"time"
 
@@ -156,8 +157,11 @@ func HandleDownload(c *fiber.Ctx) error {
 		duration = *postData.VideoDuration
 	}
 
-	// Get thumbnail
+	// Get thumbnail — proxy through our server to bypass Instagram CORP
 	thumbnail := postData.GetImageURL()
+	if thumbnail != "" {
+		thumbnail = config.BaseURL + config.PathPrefix + "/proxy/image?url=" + url.QueryEscape(thumbnail)
+	}
 
 	// Create meta
 	meta := &models.Meta{
