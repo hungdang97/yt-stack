@@ -74,11 +74,13 @@ func main() {
 	app.Post("/api/download", handlers.HandleDownload)
 	app.Get("/api/status/:id", handlers.HandleStatus)
 	app.Get("/files/:id/:filename", handlers.HandleFiles)
+	app.Get("/proxy/image", handlers.HandleProxyImage)
 
 	log.Println("=== Routes ===")
 	log.Println("  POST /api/download     - Create download job")
 	log.Println("  GET  /api/status/:id   - Check job status")
 	log.Println("  GET  /files/:id/:file  - Download file")
+	log.Println("  GET  /proxy/image      - Proxy Instagram images")
 	log.Println("  GET  /health           - Health check")
 	log.Println("===============================")
 
