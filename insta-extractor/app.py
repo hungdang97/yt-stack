@@ -122,9 +122,8 @@ def _build_ydl_opts(proxy: Optional[str] = None, cookie: Optional[str] = None) -
     return opts, cookie_file.name if cookie_file else None
 
 
-def _extract_with_ytdlp(shortcode: str, proxy: Optional[str] = None, cookie: Optional[str] = None) -> dict:
-    """Extract Instagram post using yt-dlp. Returns response in standard format."""
-    url = _build_instagram_url(shortcode)
+def _extract_with_ytdlp(url: str, proxy: Optional[str] = None, cookie: Optional[str] = None) -> dict:
+    """Extract Instagram post using yt-dlp. Accepts full URL directly."""
     opts, cookie_path = _build_ydl_opts(proxy, cookie)
 
     try:
@@ -137,6 +136,7 @@ def _extract_with_ytdlp(shortcode: str, proxy: Optional[str] = None, cookie: Opt
     if not info:
         raise Exception("yt-dlp returned empty result")
 
+    shortcode = info.get("id") or parse_shortcode(url)
     return _map_ytdlp_response(info, shortcode)
 
 
@@ -302,18 +302,17 @@ def health():
 
 @app.get("/extract", summary="Extract media from Instagram post")
 def extract(url: str, proxy: Optional[str] = None, cookie: Optional[str] = None):
-    shortcode = parse_shortcode(url)
-
-    # Attempt 1: yt-dlp (fast, no cookie needed)
+    # Attempt 1: yt-dlp (fast, accepts any URL format natively)
     try:
-        logger.info(f"[Extract] yt-dlp attempt for {shortcode}")
-        result = _extract_with_ytdlp(shortcode, proxy=proxy, cookie=cookie)
-        logger.info(f"[Extract] yt-dlp success for {shortcode}")
+        logger.info(f"[Extract] yt-dlp attempt for {url}")
+        result = _extract_with_ytdlp(url, proxy=proxy, cookie=cookie)
+        logger.info(f"[Extract] yt-dlp success for {url}")
         return result
     except Exception as e:
-        logger.warning(f"[Extract] yt-dlp failed for {shortcode}: {e}")
+        logger.warning(f"[Extract] yt-dlp failed for {url}: {e}")
 
-    # Attempt 2: instaloader fallback
+    # Attempt 2: instaloader fallback (needs shortcode)
+    shortcode = parse_shortcode(url)
     try:
         logger.info(f"[Extract] instaloader fallback for {shortcode}")
         result = _extract_with_instaloader(shortcode, proxy=proxy, cookie=cookie)
