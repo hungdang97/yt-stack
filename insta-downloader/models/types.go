@@ -13,6 +13,7 @@ type OutputConfig struct {
 
 type DownloadRequest struct {
 	URL    string       `json:"url"`
+	OS     string       `json:"os,omitempty"`     // "ios", "android", "macos", "windows", "linux"
 	Type   string       `json:"type,omitempty"`   // "video" or "audio" (simple format)
 	Output OutputConfig `json:"output,omitempty"` // Hub format: output.type
 }
@@ -43,7 +44,7 @@ const (
 	StatusPending     = "pending"
 	StatusExtracting  = "extracting"
 	StatusDownloading = "downloading"
-	StatusProcessing  = "processing" // FFmpeg extracting audio
+	StatusProcessing  = "processing"
 	StatusCompleted   = "completed"
 	StatusError       = "error"
 )
@@ -53,7 +54,7 @@ type Meta struct {
 	Status       string  `json:"status"`
 	Title        string  `json:"title"`
 	Duration     float64 `json:"duration,omitempty"`
-	OutputType   string  `json:"output_type"` // "video" or "audio"
+	OutputType   string  `json:"output_type"`
 	Output       string  `json:"output"`
 	Error        string  `json:"error,omitempty"`
 	CreatedAt    int64   `json:"created_at"`
@@ -70,10 +71,11 @@ type Meta struct {
 // ============================================
 
 type InstaMediaItem struct {
-	IsVideo    bool   `json:"is_video"`
-	VideoURL   string `json:"video_url"`
-	AudioURL   string `json:"audio_url"`
-	DisplayURL string `json:"display_url"`
+	IsVideo             bool   `json:"is_video"`
+	VideoURL            string `json:"video_url"`             // Best DASH video (may be VP9, no audio)
+	VideoProgressiveURL string `json:"video_progressive_url"` // Progressive (H.264 + audio)
+	AudioURL            string `json:"audio_url"`             // Best DASH audio
+	DisplayURL          string `json:"display_url"`
 }
 
 type InstaExtractResponse struct {
@@ -103,7 +105,7 @@ type InstaExtractResponse struct {
 	Media                []InstaMediaItem `json:"media"`
 }
 
-// GetVideoURL returns the first video URL from media items
+// GetVideoURL returns the best DASH video URL
 func (r *InstaExtractResponse) GetVideoURL() string {
 	for _, m := range r.Media {
 		if m.IsVideo && m.VideoURL != "" {
@@ -113,7 +115,17 @@ func (r *InstaExtractResponse) GetVideoURL() string {
 	return ""
 }
 
-// GetAudioURL returns the first audio URL from media items
+// GetVideoProgressiveURL returns the progressive (H.264+audio) video URL
+func (r *InstaExtractResponse) GetVideoProgressiveURL() string {
+	for _, m := range r.Media {
+		if m.IsVideo && m.VideoProgressiveURL != "" {
+			return m.VideoProgressiveURL
+		}
+	}
+	return ""
+}
+
+// GetAudioURL returns the best DASH audio URL
 func (r *InstaExtractResponse) GetAudioURL() string {
 	for _, m := range r.Media {
 		if m.AudioURL != "" {
@@ -123,7 +135,7 @@ func (r *InstaExtractResponse) GetAudioURL() string {
 	return ""
 }
 
-// GetImageURL returns the first display URL from media items
+// GetImageURL returns the first display URL
 func (r *InstaExtractResponse) GetImageURL() string {
 	for _, m := range r.Media {
 		if m.DisplayURL != "" {

@@ -6,7 +6,7 @@ import (
 	"github.com/gofiber/fiber/v2"
 )
 
-const Version = "6.0.0"
+const Version = "7.0.0"
 
 // HandleHealth handles GET /health
 func HandleHealth(c *fiber.Ctx) error {
