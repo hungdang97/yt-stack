@@ -15,7 +15,7 @@ logger = logging.getLogger("insta-extractor")
 
 app = FastAPI(
     title="Instagram Extractor",
-    version="3.0.0",
+    version="5.0.0",
     description="Extract media links from Instagram posts, reels, IGTV and profiles. yt-dlp primary, instaloader fallback.",
 )
 
@@ -297,7 +297,7 @@ def _extract_with_instaloader(shortcode: str, proxy: Optional[str] = None, cooki
 
 @app.get("/health")
 def health():
-    return {"status": "ok", "service": "insta-extractor", "version": "3.0.0"}
+    return {"status": "ok", "service": "insta-extractor", "version": "5.0.0"}
 
 
 @app.get("/extract", summary="Extract media from Instagram post")
