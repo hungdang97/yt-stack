@@ -70,6 +70,16 @@ def parse_shortcode(url: str) -> str:
     return url.strip("/")
 
 
+def _safe_int(value) -> int:
+    """Convert value to int, return 0 if not possible."""
+    if value is None:
+        return 0
+    try:
+        return int(value)
+    except (ValueError, TypeError):
+        return 0
+
+
 def _build_instagram_url(shortcode: str) -> str:
     return f"https://www.instagram.com/p/{shortcode}/"
 
@@ -180,7 +190,7 @@ def _map_ytdlp_response(info: dict, shortcode: str) -> dict:
 
     return {
         "shortcode": shortcode,
-        "media_id": info.get("id"),
+        "media_id": _safe_int(info.get("id")),
         "typename": typename,
         "caption": caption,
         "caption_hashtags": caption_hashtags,
