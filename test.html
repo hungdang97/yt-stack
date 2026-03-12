@@ -545,7 +545,7 @@
       const isTik = service === 'tiktok';
       const isInsta = service === 'instagram';
 
-      // Show/hide YouTube-specific fields
+      // Show/hide YouTube-specific fields (format, quality, trim, etc.)
       document.getElementById('ytFields').style.display = isYT ? '' : 'none';
 
       // Show/hide image option (Instagram only)
@@ -563,7 +563,7 @@
         dp.textContent = 'TikTok detected → /tik/api/download';
         dp.style.display = 'block';
       } else if (isInsta) {
-        dp.textContent = 'Instagram detected → /insta/api/download (audio = extract from video via FFmpeg)';
+        dp.textContent = 'Instagram detected → /insta/api/download (iOS/macOS=H.264 progressive, others=best DASH+merge)';
         dp.style.display = 'block';
       } else {
         dp.style.display = 'none';
@@ -766,10 +766,14 @@
 
       if (detectedService === 'tiktok') {
         apiEndpoint = `${API}/tik/api/download`;
-        body = { url, type: els.type.value };
+        body = { url, output: { type: els.type.value } };
       } else if (detectedService === 'instagram') {
         apiEndpoint = `${API}/insta/api/download`;
-        body = { url, type: els.type.value };
+        body = {
+          url,
+          os: els.platform.value || undefined,
+          output: { type: els.type.value }
+        };
       } else {
         // YouTube (default)
         apiEndpoint = `${API}/api/download`;
