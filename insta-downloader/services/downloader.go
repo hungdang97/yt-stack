@@ -32,12 +32,8 @@ func Download(ctx context.Context, jobID string, postURL string, downloadURL str
 				continue
 			}
 
-			// Pick the right URL based on filename
-			if strings.HasSuffix(filename, ".jpg") || strings.HasSuffix(filename, ".png") {
-				downloadURL = newData.GetImageURL()
-			} else {
-				downloadURL = newData.GetVideoURL()
-			}
+			// Always get video URL on retry
+			downloadURL = newData.GetVideoURL()
 
 			if downloadURL == "" {
 				lastErr = fmt.Errorf("no download URL after re-extract")
