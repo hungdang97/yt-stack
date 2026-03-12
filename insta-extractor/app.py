@@ -148,15 +148,23 @@ def _map_ytdlp_response(info: dict, shortcode: str) -> dict:
     for entry in entries:
         is_video = entry.get("ext") in ("mp4", "webm") or bool(entry.get("url", ""))
         video_url = None
+        audio_url = None
         display_url = None
 
         if is_video:
-            # Get best video URL
             formats = entry.get("formats", [])
             if formats:
-                # Pick best quality video
-                best = max(formats, key=lambda f: (f.get("height") or 0, f.get("tbr") or 0))
-                video_url = best.get("url")
+                # Best video: highest resolution (may be DASH video-only, that's OK)
+                video_formats = [f for f in formats if f.get("vcodec") != "none"]
+                if video_formats:
+                    best_video = max(video_formats, key=lambda f: (f.get("height") or 0, f.get("tbr") or 0))
+                    video_url = best_video.get("url")
+
+                # Best audio: highest bitrate audio stream
+                audio_formats = [f for f in formats if f.get("acodec") != "none" and f.get("vcodec") == "none"]
+                if audio_formats:
+                    best_audio = max(audio_formats, key=lambda f: f.get("abr") or f.get("tbr") or 0)
+                    audio_url = best_audio.get("url")
             else:
                 video_url = entry.get("url")
 
@@ -169,6 +177,7 @@ def _map_ytdlp_response(info: dict, shortcode: str) -> dict:
         media.append({
             "is_video": is_video,
             "video_url": video_url,
+            "audio_url": audio_url,
             "display_url": display_url,
         })
 
@@ -178,6 +187,7 @@ def _map_ytdlp_response(info: dict, shortcode: str) -> dict:
         media.append({
             "is_video": is_video,
             "video_url": info.get("url") if is_video else None,
+            "audio_url": None,
             "display_url": info.get("thumbnail") or info.get("url"),
         })
 
@@ -236,18 +246,21 @@ def _extract_with_instaloader(shortcode: str, proxy: Optional[str] = None, cooki
             media.append({
                 "is_video": node.is_video,
                 "video_url": node.video_url,
+                "audio_url": None,
                 "display_url": node.display_url,
             })
     elif post.is_video:
         media.append({
             "is_video": True,
             "video_url": post.video_url,
+            "audio_url": None,
             "display_url": post.url,
         })
     else:
         media.append({
             "is_video": False,
             "video_url": None,
+            "audio_url": None,
             "display_url": post.url,
         })
 

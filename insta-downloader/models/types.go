@@ -72,6 +72,7 @@ type Meta struct {
 type InstaMediaItem struct {
 	IsVideo    bool   `json:"is_video"`
 	VideoURL   string `json:"video_url"`
+	AudioURL   string `json:"audio_url"`
 	DisplayURL string `json:"display_url"`
 }
 
@@ -107,6 +108,16 @@ func (r *InstaExtractResponse) GetVideoURL() string {
 	for _, m := range r.Media {
 		if m.IsVideo && m.VideoURL != "" {
 			return m.VideoURL
+		}
+	}
+	return ""
+}
+
+// GetAudioURL returns the first audio URL from media items
+func (r *InstaExtractResponse) GetAudioURL() string {
+	for _, m := range r.Media {
+		if m.AudioURL != "" {
+			return m.AudioURL
 		}
 	}
 	return ""
