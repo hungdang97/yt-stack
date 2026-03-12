@@ -8,7 +8,7 @@ import "encoding/json"
 
 type DownloadRequest struct {
 	URL  string `json:"url"`
-	Type string `json:"type"` // "video", "image", or "audio"
+	Type string `json:"type"` // "video" or "audio"
 }
 
 type DownloadResponse struct {
@@ -47,7 +47,7 @@ type Meta struct {
 	Status       string  `json:"status"`
 	Title        string  `json:"title"`
 	Duration     float64 `json:"duration,omitempty"`
-	OutputType   string  `json:"output_type"` // "video", "image", or "audio"
+	OutputType   string  `json:"output_type"` // "video" or "audio"
 	Output       string  `json:"output"`
 	Error        string  `json:"error,omitempty"`
 	CreatedAt    int64   `json:"created_at"`

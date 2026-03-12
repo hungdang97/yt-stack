@@ -42,9 +42,9 @@ func HandleDownload(c *fiber.Ctx) error {
 	if req.Type == "" {
 		req.Type = "video"
 	}
-	if req.Type != "video" && req.Type != "image" && req.Type != "audio" {
+	if req.Type != "video" && req.Type != "audio" {
 		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{
-			"error": "Type must be 'video', 'image', or 'audio'",
+			"error": "Type must be 'video' or 'audio'",
 		})
 	}
 
@@ -65,33 +65,20 @@ func HandleDownload(c *fiber.Ctx) error {
 		})
 	}
 
-	// Determine download URL and output filename
-	var downloadURL, outputFilename string
+	// Always download video first, then convert based on type
+	downloadURL := postData.GetVideoURL()
+	if downloadURL == "" {
+		return c.Status(fiber.StatusNotFound).JSON(fiber.Map{
+			"error": "No video URL available for this post",
+		})
+	}
+
+	var outputFilename string
 	switch req.Type {
 	case "video":
-		downloadURL = postData.GetVideoURL()
 		outputFilename = "output.mp4"
-		if downloadURL == "" {
-			return c.Status(fiber.StatusNotFound).JSON(fiber.Map{
-				"error": "No video URL available for this post",
-			})
-		}
-	case "image":
-		downloadURL = postData.GetImageURL()
-		outputFilename = "output.jpg"
-		if downloadURL == "" {
-			return c.Status(fiber.StatusNotFound).JSON(fiber.Map{
-				"error": "No image URL available for this post",
-			})
-		}
 	case "audio":
-		downloadURL = postData.GetVideoURL()
 		outputFilename = "output.mp3"
-		if downloadURL == "" {
-			return c.Status(fiber.StatusNotFound).JSON(fiber.Map{
-				"error": "No video URL available (audio requires a video post)",
-			})
-		}
 	}
 
 	// Generate job ID
@@ -136,8 +123,7 @@ func HandleDownload(c *fiber.Ctx) error {
 		OutputType:   req.Type,
 		Output:       outputFilename,
 		CreatedAt:    time.Now().UnixMilli(),
-		VideoURL:     postData.GetVideoURL(),
-		ImageURL:     postData.GetImageURL(),
+		VideoURL:     downloadURL,
 		ThumbnailURL: thumbnail,
 		Author:       postData.OwnerUsername,
 		SourceURL:    req.URL,
@@ -166,57 +152,49 @@ func HandleDownload(c *fiber.Ctx) error {
 	return c.Status(fiber.StatusCreated).JSON(response)
 }
 
-// processJob runs the download (and optional FFmpeg) in background
+// processJob downloads video then converts to requested format
 func processJob(jobID, postURL, outputType, downloadURL, outputFilename string) {
 	ctx, cancel := context.WithTimeout(context.Background(), config.DownloadTimeout)
 	defer cancel()
 
-	if outputType == "audio" {
-		// For audio: download video first, then extract audio with FFmpeg
-		videoFile := "temp_video.mp4"
-		fileSize, err := services.Download(ctx, jobID, postURL, downloadURL, videoFile)
-		if err != nil {
-			fmt.Printf("[%s] ✗ Video download failed: %v\n", jobID, err)
-			utils.UpdateMetaError(jobID, err.Error())
+	// Step 1: Always download video first
+	videoFile := "temp_video.mp4"
+	fileSize, err := services.Download(ctx, jobID, postURL, downloadURL, videoFile)
+	if err != nil {
+		fmt.Printf("[%s] ✗ Video download failed: %v\n", jobID, err)
+		utils.UpdateMetaError(jobID, err.Error())
+		return
+	}
+	fmt.Printf("[%s] Video downloaded (%.2f MB)\n", jobID, float64(fileSize)/1024/1024)
+
+	videoPath := filepath.Join(utils.GetJobDir(jobID), videoFile)
+	outputPath := filepath.Join(utils.GetJobDir(jobID), outputFilename)
+
+	// Step 2: Convert based on type
+	utils.UpdateMetaStatus(jobID, models.StatusProcessing)
+
+	switch outputType {
+	case "video":
+		// Remux to mp4 (fast, no re-encode)
+		if err := services.RemuxVideo(videoPath, outputPath); err != nil {
+			fmt.Printf("[%s] ✗ FFmpeg remux failed: %v\n", jobID, err)
+			utils.UpdateMetaError(jobID, fmt.Sprintf("Video processing failed: %v", err))
 			return
 		}
-
-		fmt.Printf("[%s] Video downloaded (%.2f MB), extracting audio...\n", jobID, float64(fileSize)/1024/1024)
-
-		// Update status to processing
-		utils.UpdateMetaStatus(jobID, models.StatusProcessing)
-
-		// Extract audio with FFmpeg
-		videoPath := filepath.Join(utils.GetJobDir(jobID), videoFile)
-		audioPath := filepath.Join(utils.GetJobDir(jobID), outputFilename)
-		if err := services.ExtractAudio(videoPath, audioPath); err != nil {
-			fmt.Printf("[%s] ✗ FFmpeg failed: %v\n", jobID, err)
+	case "audio":
+		// Extract audio to mp3
+		if err := services.ExtractAudio(videoPath, outputPath); err != nil {
+			fmt.Printf("[%s] ✗ FFmpeg audio extract failed: %v\n", jobID, err)
 			utils.UpdateMetaError(jobID, fmt.Sprintf("Audio extraction failed: %v", err))
 			return
 		}
-
-		// Get audio file size
-		audioSize := utils.GetFileSize(audioPath)
-		if err := utils.UpdateMetaCompleted(jobID, outputFilename, audioSize); err != nil {
-			fmt.Printf("[%s] ✗ Failed to update meta: %v\n", jobID, err)
-			return
-		}
-
-		fmt.Printf("[%s] ✓ Audio job completed: %s (%.2f MB)\n", jobID, outputFilename, float64(audioSize)/1024/1024)
-	} else {
-		// For video/image: direct download
-		fileSize, err := services.Download(ctx, jobID, postURL, downloadURL, outputFilename)
-		if err != nil {
-			fmt.Printf("[%s] ✗ Download failed: %v\n", jobID, err)
-			utils.UpdateMetaError(jobID, err.Error())
-			return
-		}
-
-		if err := utils.UpdateMetaCompleted(jobID, outputFilename, fileSize); err != nil {
-			fmt.Printf("[%s] ✗ Failed to update meta: %v\n", jobID, err)
-			return
-		}
-
-		fmt.Printf("[%s] ✓ Job completed: %s (%.2f MB)\n", jobID, outputFilename, float64(fileSize)/1024/1024)
 	}
+
+	finalSize := utils.GetFileSize(outputPath)
+	if err := utils.UpdateMetaCompleted(jobID, outputFilename, finalSize); err != nil {
+		fmt.Printf("[%s] ✗ Failed to update meta: %v\n", jobID, err)
+		return
+	}
+
+	fmt.Printf("[%s] ✓ Job completed: %s (%.2f MB)\n", jobID, outputFilename, float64(finalSize)/1024/1024)
 }
