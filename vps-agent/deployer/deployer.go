@@ -113,7 +113,17 @@ func (d *Deployer) Stop() error {
 func (d *Deployer) RestartService(service string) error {
 	// Build + restart the specific service
 	log.Printf("[Deployer] Building & restarting service: %s", service)
-	cmd := exec.Command("docker-compose", "up", "-d", "--build", "--force-recreate", service)
+	// Build without cache first
+	buildCmd := exec.Command("docker-compose", "build", "--no-cache", service)
+	buildCmd.Dir = d.projectDir
+	buildOutput, err := buildCmd.CombinedOutput()
+	if err != nil {
+		log.Printf("[Deployer] Build service failed: %s", buildOutput)
+		return fmt.Errorf("build %s failed: %w", service, err)
+	}
+
+	// Then recreate container with new image
+	cmd := exec.Command("docker-compose", "up", "-d", "--force-recreate", service)
 	cmd.Dir = d.projectDir
 	output, err := cmd.CombinedOutput()
 	if err != nil {
