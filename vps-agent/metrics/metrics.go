@@ -87,6 +87,8 @@ var serviceEndpoints = map[string]string{
 	"tik-extractor":    "http://localhost:5555/health",
 	"insta-downloader": "http://localhost:5003/health",
 	"insta-extractor":  "http://localhost:8000/health",
+	"fb-downloader":    "http://localhost:5004/health",
+	"fb-extractor":     "http://localhost:8002/health",
 }
 
 // services to check health via TCP port (no /health endpoint)
