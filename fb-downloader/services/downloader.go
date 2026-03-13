@@ -15,6 +15,10 @@ import (
 
 // Download downloads a file via WARP proxy with retry + URL refresh.
 func Download(ctx context.Context, jobID string, postURL string, downloadURL string, filename string) (int64, error) {
+	if config.WARPProxyURL == "" {
+		fmt.Printf("[%s] Warning: WARP proxy is not configured, downloading without proxy\n", jobID)
+	}
+
 	destPath := filepath.Join(utils.GetJobDir(jobID), filename)
 	maxRetries := config.MaxRetries
 
