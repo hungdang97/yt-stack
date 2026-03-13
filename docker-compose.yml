@@ -363,6 +363,75 @@ services:
     networks:
       - backend
 
+  # Facebook Extractor service
+  fb-extractor:
+    build:
+      context: ./fb-extractor
+      dockerfile: Dockerfile
+    image: fb-extractor:latest
+    container_name: fb-extractor
+    restart: always
+    ports:
+      - "8002:8002"
+    healthcheck:
+      test: [ "CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8002/health')" ]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 10s
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
+    networks:
+      - backend
+
+  # Facebook Downloader service
+  fb-downloader:
+    platform: linux/amd64
+    build:
+      context: ./fb-downloader
+      dockerfile: Dockerfile
+    image: fb-downloader:latest
+    container_name: fb-downloader
+    restart: always
+    ports:
+      - "5004:5004"
+    environment:
+      - PORT=5004
+      - STORAGE_DIR=./storage
+      - SIGNED_URL_SECRET=${SIGNED_URL_SECRET}
+      - SIGNED_URL_EXPIRATION_MIN=${SIGNED_URL_EXPIRATION_MIN:-30}
+      - BASE_DOMAIN=${BASE_DOMAIN}
+      - DOWNLOAD_SUBDOMAIN=${DOWNLOAD_SUBDOMAIN}
+      - PATH_PREFIX=/fb
+      - FB_EXTRACTOR_URL=http://fb-extractor:8002
+      - FB_DEFAULT_COOKIE=${FB_DEFAULT_COOKIE}
+      - HUB_TOKEN=${HUB_TOKEN}
+      - CLEANUP_INTERVAL=*/5 * * * *
+      - MAX_JOB_AGE_MIN=15
+      - WARP_USER=${WARP_USER}
+      - WARP_PASS=${WARP_PASS}
+    volumes:
+      - fb_storage:/app/storage
+    depends_on:
+      fb-extractor:
+        condition: service_healthy
+    healthcheck:
+      test: [ "CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://localhost:5004/health" ]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 10s
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
+    networks:
+      - backend
+
   # Nginx reverse proxy with SSL
   nginx:
     platform: linux/amd64
@@ -405,5 +474,6 @@ volumes:
   tik_volume:
   tik_storage:
   insta_storage:
+  fb_storage:
   letsencrypt:
   certbot_webroot:

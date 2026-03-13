@@ -39,6 +39,7 @@ var AllServices = []string{
 	"yt-downloader", "yt-extractor",
 	"tik-downloader", "tik-extractor",
 	"insta-downloader", "insta-extractor",
+	"fb-downloader", "fb-extractor",
 	"nginx", "gost",
 }
 
