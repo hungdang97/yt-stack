@@ -457,6 +457,8 @@ services:
         condition: service_healthy
       insta-downloader:
         condition: service_healthy
+      fb-downloader:
+        condition: service_healthy
     networks:
       - backend
 

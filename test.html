@@ -375,7 +375,7 @@
 
   <div class="form-group">
     <label>URL</label>
-    <input type="text" id="url" placeholder="YouTube / TikTok / Instagram URL">
+    <input type="text" id="url" placeholder="YouTube / TikTok / Instagram / Facebook URL">
   </div>
 
   <div id="detectedPlatform" class="info-box" style="display: none;"></div>
@@ -403,88 +403,88 @@
   </div>
 
   <div id="ytFields">
-  <div id="platformInfo" class="info-box" style="display: none;"></div>
+    <div id="platformInfo" class="info-box" style="display: none;"></div>
 
-  <div class="row">
-    <div class="form-group">
-      <label>Format</label>
-      <select id="format"></select>
-    </div>
-    <div class="form-group" id="qualityGroup">
-      <label>Quality</label>
-      <select id="quality">
-        <option value="">Auto (Best)</option>
-        <option value="2160p">4K (2160p)</option>
-        <option value="1440p">1440p</option>
-        <option value="1080p">1080p</option>
-        <option value="720p">720p</option>
-        <option value="480p">480p</option>
-        <option value="360p">360p</option>
-      </select>
-    </div>
-  </div>
-
-  <div class="row">
-    <div class="form-group">
-      <label>Audio Language (optional)</label>
-      <input type="text" id="audioLanguage" placeholder="e.g., vi, en, ko, ja" maxlength="5">
-    </div>
-    <div class="form-group">
-      <label>Audio Bitrate</label>
-      <select id="bitrate">
-        <option value="192k">192 kbps</option>
-        <option value="128k">128 kbps</option>
-        <option value="320k">320 kbps</option>
-        <option value="64k">64 kbps</option>
-      </select>
-    </div>
-  </div>
-
-  <div class="form-group">
-    <label class="checkbox-label">
-      <input type="checkbox" id="enableTrim">
-      <span>Enable Trim</span>
-    </label>
-  </div>
-
-  <div id="trimFields">
     <div class="row">
       <div class="form-group">
-        <label>Start (seconds)</label>
-        <input type="number" id="trimStart" value="0" min="0">
+        <label>Format</label>
+        <select id="format"></select>
+      </div>
+      <div class="form-group" id="qualityGroup">
+        <label>Quality</label>
+        <select id="quality">
+          <option value="">Auto (Best)</option>
+          <option value="2160p">4K (2160p)</option>
+          <option value="1440p">1440p</option>
+          <option value="1080p">1080p</option>
+          <option value="720p">720p</option>
+          <option value="480p">480p</option>
+          <option value="360p">360p</option>
+        </select>
+      </div>
+    </div>
+
+    <div class="row">
+      <div class="form-group">
+        <label>Audio Language (optional)</label>
+        <input type="text" id="audioLanguage" placeholder="e.g., vi, en, ko, ja" maxlength="5">
       </div>
       <div class="form-group">
-        <label>End (seconds)</label>
-        <input type="number" id="trimEnd" value="60" min="1">
+        <label>Audio Bitrate</label>
+        <select id="bitrate">
+          <option value="192k">192 kbps</option>
+          <option value="128k">128 kbps</option>
+          <option value="320k">320 kbps</option>
+          <option value="64k">64 kbps</option>
+        </select>
       </div>
     </div>
-  </div>
 
-  <div class="filename-style-group">
-    <label>Filename Style</label>
-    <div class="style-tabs" id="styleTabs">
-      <button class="style-tab" data-style="classic">classic</button>
-      <button class="style-tab active" data-style="basic">basic</button>
-      <button class="style-tab" data-style="pretty">pretty</button>
-      <button class="style-tab" data-style="nerdy">nerdy</button>
-    </div>
-    <div class="filename-preview" id="filenamePreview">
-      <span class="label">Preview:</span>
-      <span id="previewText">Video Title - Author (1080p).mp4</span>
-    </div>
-  </div>
-
-  <div class="metadata-group">
-    <div class="toggle-row">
-      <label>Embed file metadata</label>
-      <label class="toggle-switch">
-        <input type="checkbox" id="enableMetadata">
-        <span class="toggle-slider"></span>
+    <div class="form-group">
+      <label class="checkbox-label">
+        <input type="checkbox" id="enableTrim">
+        <span>Enable Trim</span>
       </label>
     </div>
-    <div class="metadata-hint">Title, artist, and thumbnail will be added to the file (MP4/M4A only for thumbnail).
+
+    <div id="trimFields">
+      <div class="row">
+        <div class="form-group">
+          <label>Start (seconds)</label>
+          <input type="number" id="trimStart" value="0" min="0">
+        </div>
+        <div class="form-group">
+          <label>End (seconds)</label>
+          <input type="number" id="trimEnd" value="60" min="1">
+        </div>
+      </div>
     </div>
-  </div>
+
+    <div class="filename-style-group">
+      <label>Filename Style</label>
+      <div class="style-tabs" id="styleTabs">
+        <button class="style-tab" data-style="classic">classic</button>
+        <button class="style-tab active" data-style="basic">basic</button>
+        <button class="style-tab" data-style="pretty">pretty</button>
+        <button class="style-tab" data-style="nerdy">nerdy</button>
+      </div>
+      <div class="filename-preview" id="filenamePreview">
+        <span class="label">Preview:</span>
+        <span id="previewText">Video Title - Author (1080p).mp4</span>
+      </div>
+    </div>
+
+    <div class="metadata-group">
+      <div class="toggle-row">
+        <label>Embed file metadata</label>
+        <label class="toggle-switch">
+          <input type="checkbox" id="enableMetadata">
+          <span class="toggle-slider"></span>
+        </label>
+      </div>
+      <div class="metadata-hint">Title, artist, and thumbnail will be added to the file (MP4/M4A only for thumbnail).
+      </div>
+    </div>
   </div><!-- end ytFields -->
 
   <button id="downloadBtn">Download</button>
@@ -526,15 +526,16 @@
   </div>
 
   <script>
-    const API = 'https://vps-2645aa08.ytconvert.org';
+    const API = 'https://vps-7a60dd29.ytconvert.org';
     let currentStatusUrl = null;
     let pollInterval = null;
-    let detectedService = 'youtube'; // 'youtube' | 'tiktok' | 'instagram'
+    let detectedService = 'youtube'; // 'youtube' | 'tiktok' | 'instagram' | 'facebook'
 
     // Detect service from URL
     function detectService(url) {
       if (/instagram\.com/.test(url)) return 'instagram';
       if (/tiktok\.com/.test(url)) return 'tiktok';
+      if (/facebook\.com|fb\.watch|fb\.com/.test(url)) return 'facebook';
       return 'youtube';
     }
 
@@ -544,6 +545,7 @@
       const isYT = service === 'youtube';
       const isTik = service === 'tiktok';
       const isInsta = service === 'instagram';
+      const isFb = service === 'facebook';
 
       // Show/hide YouTube-specific fields (format, quality, trim, etc.)
       document.getElementById('ytFields').style.display = isYT ? '' : 'none';
@@ -565,17 +567,26 @@
       } else if (isInsta) {
         dp.textContent = 'Instagram detected → /insta/api/download (iOS/macOS=H.264 progressive, others=best DASH+merge)';
         dp.style.display = 'block';
+      } else if (isFb) {
+        dp.textContent = 'Facebook detected → /fb/api/download (iOS/macOS=H.264 progressive, others=best DASH+merge)';
+        dp.style.display = 'block';
       } else {
         dp.style.display = 'none';
       }
     }
 
-    // Listen for URL changes
-    document.getElementById('url').addEventListener('input', (e) => {
-      const url = e.target.value.trim();
+    // Listen for URL changes (input, paste, change)
+    function onUrlChange(e) {
+      const url = (e.target.value || '').trim();
       if (url) updateServiceUI(detectService(url));
       else updateServiceUI('youtube');
+    }
+    document.getElementById('url').addEventListener('input', onUrlChange);
+    document.getElementById('url').addEventListener('paste', (e) => {
+      // Use timeout so pasted value is available
+      setTimeout(() => onUrlChange({ target: document.getElementById('url') }), 0);
     });
+    document.getElementById('url').addEventListener('change', onUrlChange);
 
     const platformInfo = {
       ios: 'iOS: Max 1080p, H.264 codec, AAC audio',
@@ -761,6 +772,9 @@
       const url = els.url.value.trim();
       if (!url) return alert('Please enter a URL');
 
+      // Re-detect service from URL before sending (in case paste event was missed)
+      updateServiceUI(detectService(url));
+
       // Determine API endpoint based on detected service
       let apiEndpoint, body;
 
@@ -769,6 +783,13 @@
         body = { url, output: { type: els.type.value } };
       } else if (detectedService === 'instagram') {
         apiEndpoint = `${API}/insta/api/download`;
+        body = {
+          url,
+          os: els.platform.value || undefined,
+          output: { type: els.type.value }
+        };
+      } else if (detectedService === 'facebook') {
+        apiEndpoint = `${API}/fb/api/download`;
         body = {
           url,
           os: els.platform.value || undefined,
