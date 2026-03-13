@@ -259,15 +259,15 @@ async def extract(video_id: str, proxy: str = Query(None)):
     logger.info(f"[{video_id}] Extraction request received | proxy={proxy}")
     proxy_url = build_proxy_url(proxy)
 
-    # Retry mechanism: Attempt 1 without cookies (android_vr), Attempt 2-3 with cookies
-    max_cookie_attempts = 2
+    # Retry mechanism: Attempt 1 without cookies, Attempt 2 with cookie
+    max_cookie_attempts = 1
     last_error = None
     last_attempt = 0
 
     # Phase 1: Try without cookies first (android_vr client works better without cookies)
     if proxy_url:
         last_attempt = 1
-        logger.info(f"[{video_id}] Attempt 1/3 | No cookie, Cloudflare IP only")
+        logger.info(f"[{video_id}] Attempt 1/2 | No cookie, Cloudflare IP only")
 
         loop = asyncio.get_event_loop()
         result, error = await loop.run_in_executor(
@@ -289,7 +289,7 @@ async def extract(video_id: str, proxy: str = Query(None)):
             logger.error(f"[{video_id}] No active cookie available")
             break
 
-        logger.info(f"[{video_id}] Attempt {attempt}/3 | Using cookie: {profile}")
+        logger.info(f"[{video_id}] Attempt {attempt}/2 | Using cookie: {profile}")
 
         loop = asyncio.get_event_loop()
         result, error = await loop.run_in_executor(
@@ -318,7 +318,7 @@ async def extract(video_id: str, proxy: str = Query(None)):
 
 @app.get('/health')
 async def health():
-    return {'status': 'UP', 'service': 'yt-extractor', 'version': '3.1.0'}
+    return {'status': 'UP', 'service': 'yt-extractor', 'version': '3.2.0'}
 
 
 if __name__ == '__main__':
