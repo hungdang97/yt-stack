@@ -301,14 +301,16 @@ async def extract(video_id: str, proxy: str = Query(None)):
             return result
 
         last_error = error
-        is_bad = cookie_db.is_bad(error) or "Missing streams" in error
-
-        if is_bad:
-            logger.warning(f"[{video_id}] Attempt {attempt} failed with BAD COOKIE error: {error}. Invalidating {profile}.")
-            cookie_db.invalidate(profile)
-        else:
-            logger.error(f"[{video_id}] Attempt {attempt} failed with non-cookie error: {error}.")
-            break
+        # TODO: Tạm tắt invalidate cookie, bật lại sau
+        # is_bad = cookie_db.is_bad(error) or "Missing streams" in error
+        #
+        # if is_bad:
+        #     logger.warning(f"[{video_id}] Attempt {attempt} failed with BAD COOKIE error: {error}. Invalidating {profile}.")
+        #     cookie_db.invalidate(profile)
+        # else:
+        #     logger.error(f"[{video_id}] Attempt {attempt} failed with non-cookie error: {error}.")
+        #     break
+        logger.warning(f"[{video_id}] Attempt {attempt} failed: {error} (cookie invalidation disabled)")
 
     logger.error(f"[{video_id}] Extraction finally failed after {last_attempt} attempts: {last_error}")
     return JSONResponse({'error': last_error}, status_code=500)
@@ -316,7 +318,7 @@ async def extract(video_id: str, proxy: str = Query(None)):
 
 @app.get('/health')
 async def health():
-    return {'status': 'UP', 'service': 'yt-extractor', 'version': '3.0.0'}
+    return {'status': 'UP', 'service': 'yt-extractor', 'version': '3.1.0'}
 
 
 if __name__ == '__main__':
