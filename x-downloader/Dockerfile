@@ -15,12 +15,12 @@ RUN go mod tidy && \
     CGO_ENABLED=0 GOOS=linux go build -o x-downloader .
 
 # Run stage - includes FFmpeg for audio extraction
-FROM alpine:latest
+FROM alpine:3.19
 
 WORKDIR /app
 
 # Install CA certificates, wget for healthcheck, and FFmpeg for audio extraction
-RUN apk add --no-cache ca-certificates wget ffmpeg lame
+RUN apk add --no-cache ca-certificates wget ffmpeg
 
 # Copy binary
 COPY --from=builder /build/x-downloader .
