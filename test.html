@@ -375,7 +375,7 @@
 
   <div class="form-group">
     <label>URL</label>
-    <input type="text" id="url" placeholder="YouTube / TikTok / Instagram / Facebook URL">
+    <input type="text" id="url" placeholder="YouTube / TikTok / Instagram / Facebook / X(Twitter) URL">
   </div>
 
   <div id="detectedPlatform" class="info-box" style="display: none;"></div>
@@ -529,13 +529,14 @@
     const API = 'https://vps-7a60dd29.ytconvert.org';
     let currentStatusUrl = null;
     let pollInterval = null;
-    let detectedService = 'youtube'; // 'youtube' | 'tiktok' | 'instagram' | 'facebook'
+    let detectedService = 'youtube'; // 'youtube' | 'tiktok' | 'instagram' | 'facebook' | 'twitter'
 
     // Detect service from URL
     function detectService(url) {
       if (/instagram\.com/.test(url)) return 'instagram';
       if (/tiktok\.com/.test(url)) return 'tiktok';
       if (/facebook\.com|fb\.watch|fb\.com/.test(url)) return 'facebook';
+      if (/x\.com|twitter\.com|t\.co/.test(url)) return 'twitter';
       return 'youtube';
     }
 
@@ -546,6 +547,7 @@
       const isTik = service === 'tiktok';
       const isInsta = service === 'instagram';
       const isFb = service === 'facebook';
+      const isTwitter = service === 'twitter';
 
       // Show/hide YouTube-specific fields (format, quality, trim, etc.)
       document.getElementById('ytFields').style.display = isYT ? '' : 'none';
@@ -569,6 +571,9 @@
         dp.style.display = 'block';
       } else if (isFb) {
         dp.textContent = 'Facebook detected → /fb/api/download (iOS/macOS=H.264 progressive, others=best DASH+merge)';
+        dp.style.display = 'block';
+      } else if (isTwitter) {
+        dp.textContent = 'X/Twitter detected → /x/api/download';
         dp.style.display = 'block';
       } else {
         dp.style.display = 'none';
@@ -790,6 +795,13 @@
         };
       } else if (detectedService === 'facebook') {
         apiEndpoint = `${API}/fb/api/download`;
+        body = {
+          url,
+          os: els.platform.value || undefined,
+          output: { type: els.type.value }
+        };
+      } else if (detectedService === 'twitter') {
+        apiEndpoint = `${API}/x/api/download`;
         body = {
           url,
           os: els.platform.value || undefined,
