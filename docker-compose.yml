@@ -433,12 +433,12 @@ services:
       - backend
 
   # X/Twitter Extractor service
-  x-extractor:
+  tw-extractor:
     build:
       context: ./x-extractor
       dockerfile: Dockerfile
-    image: x-extractor:latest
-    container_name: x-extractor
+    image: tw-extractor:latest
+    container_name: tw-extractor
     restart: always
     ports:
       - "8003:8003"
@@ -457,13 +457,13 @@ services:
       - backend
 
   # X/Twitter Downloader service
-  x-downloader:
+  tw-downloader:
     platform: linux/amd64
     build:
       context: ./x-downloader
       dockerfile: Dockerfile
-    image: x-downloader:latest
-    container_name: x-downloader
+    image: tw-downloader:latest
+    container_name: tw-downloader
     restart: always
     ports:
       - "5005:5005"
@@ -475,7 +475,7 @@ services:
       - BASE_DOMAIN=${BASE_DOMAIN}
       - DOWNLOAD_SUBDOMAIN=${DOWNLOAD_SUBDOMAIN}
       - PATH_PREFIX=/x
-      - X_EXTRACTOR_URL=http://x-extractor:8003
+      - X_EXTRACTOR_URL=http://tw-extractor:8003
       - X_DEFAULT_COOKIE=${X_DEFAULT_COOKIE}
       - HUB_TOKEN=${HUB_TOKEN}
       - CLEANUP_INTERVAL=*/5 * * * *
@@ -483,9 +483,9 @@ services:
       - WARP_USER=${WARP_USER}
       - WARP_PASS=${WARP_PASS}
     volumes:
-      - x_storage:/app/storage
+      - tw_storage:/app/storage
     depends_on:
-      x-extractor:
+      tw-extractor:
         condition: service_healthy
     healthcheck:
       test: [ "CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://localhost:5005/health" ]
@@ -528,7 +528,7 @@ services:
         condition: service_healthy
       fb-downloader:
         condition: service_healthy
-      x-downloader:
+      tw-downloader:
         condition: service_healthy
     networks:
       - backend
@@ -548,6 +548,6 @@ volumes:
   tik_storage:
   insta_storage:
   fb_storage:
-  x_storage:
+  tw_storage:
   letsencrypt:
   certbot_webroot:

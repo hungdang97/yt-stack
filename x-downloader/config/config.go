@@ -28,7 +28,7 @@ var (
 	StorageDir = getEnvOrDefault("STORAGE_DIR", "./storage")
 
 	// X Extractor
-	XExtractorURL     = getEnvOrDefault("X_EXTRACTOR_URL", "http://x-extractor:8003")
+	XExtractorURL     = getEnvOrDefault("X_EXTRACTOR_URL", "http://tw-extractor:8003")
 	XExtractorTimeout = time.Duration(getEnvIntOrDefault("EXTRACT_API_TIMEOUT", 15)) * time.Second
 
 	// X Cookie (from env, no DB)
