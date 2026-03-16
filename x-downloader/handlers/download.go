@@ -105,15 +105,13 @@ func HandleDownload(c *fiber.Ctx) error {
 			})
 		}
 	} else {
-		// Audio request: prefer DASH audio, fallback to video
-		audioURL = postData.GetAudioURL()
-		if audioURL == "" {
-			videoURL = postData.GetVideoProgressiveURL()
-			if videoURL == "" {
-				videoURL = postData.GetVideoURL()
-			}
+		// Audio request: use progressive video (has audio embedded) then extract
+		// X/Twitter DASH audio is HLS (m3u8) which can't be downloaded via simple HTTP GET
+		videoURL = postData.GetVideoProgressiveURL()
+		if videoURL == "" {
+			videoURL = postData.GetVideoURL()
 		}
-		if audioURL == "" && videoURL == "" {
+		if videoURL == "" {
 			return c.Status(fiber.StatusNotFound).JSON(fiber.Map{
 				"error": "No audio available for this post",
 			})
