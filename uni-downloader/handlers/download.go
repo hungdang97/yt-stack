@@ -21,6 +21,21 @@ func needsProgressiveFormat(os string) bool {
 	return os == "ios" || os == "macos"
 }
 
+// isHLSURL checks if the URL is an HLS manifest (m3u8)
+func isHLSURL(rawURL string) bool {
+	lower := strings.ToLower(rawURL)
+	if strings.Contains(lower, ".m3u8") {
+		return true
+	}
+	// Some CDNs use query params without .m3u8 extension
+	if parsed, err := url.Parse(rawURL); err == nil {
+		if strings.Contains(strings.ToLower(parsed.Path), "m3u8") {
+			return true
+		}
+	}
+	return false
+}
+
 // HandleDownload handles POST /api/download
 func HandleDownload(c *fiber.Ctx) error {
 	// Verify Hub token
@@ -238,87 +253,13 @@ func processJob(jobID, postURL, outputType, videoURL, audioURL, outputFilename s
 
 	switch outputType {
 	case "audio":
-		if audioURL != "" {
-			// Direct DASH audio download → convert to MP3
-			audioFile := "temp_audio.m4a"
-			fileSize, err := services.Download(ctx, jobID, postURL, audioURL, audioFile)
-			if err != nil {
-				fmt.Printf("[%s] ✗ Audio download failed: %v\n", jobID, err)
-				utils.UpdateMetaError(jobID, err.Error())
-				return
-			}
-			fmt.Printf("[%s] Audio downloaded (%.2f MB)\n", jobID, float64(fileSize)/1024/1024)
-
-			utils.UpdateMetaStatus(jobID, models.StatusProcessing)
-			audioPath := filepath.Join(utils.GetJobDir(jobID), audioFile)
-			if err := services.ConvertToMP3(audioPath, outputPath); err != nil {
-				fmt.Printf("[%s] ✗ Convert to MP3 failed: %v\n", jobID, err)
-				utils.UpdateMetaError(jobID, fmt.Sprintf("Audio conversion failed: %v", err))
-				return
-			}
-		} else {
-			// Fallback: download video → extract audio
-			videoFile := "temp_video.mp4"
-			fileSize, err := services.Download(ctx, jobID, postURL, videoURL, videoFile)
-			if err != nil {
-				fmt.Printf("[%s] ✗ Video download failed: %v\n", jobID, err)
-				utils.UpdateMetaError(jobID, err.Error())
-				return
-			}
-			fmt.Printf("[%s] Video downloaded for audio extraction (%.2f MB)\n", jobID, float64(fileSize)/1024/1024)
-
-			utils.UpdateMetaStatus(jobID, models.StatusProcessing)
-			videoPath := filepath.Join(utils.GetJobDir(jobID), videoFile)
-			if err := services.ExtractAudio(videoPath, outputPath); err != nil {
-				fmt.Printf("[%s] ✗ Audio extract failed: %v\n", jobID, err)
-				utils.UpdateMetaError(jobID, fmt.Sprintf("Audio extraction failed: %v", err))
-				return
-			}
+		if err := processAudio(ctx, jobID, postURL, audioURL, videoURL, outputPath); err != nil {
+			return
 		}
 
 	case "video":
-		videoFile := "temp_video.mp4"
-		fileSize, err := services.Download(ctx, jobID, postURL, videoURL, videoFile)
-		if err != nil {
-			fmt.Printf("[%s] ✗ Video download failed: %v\n", jobID, err)
-			utils.UpdateMetaError(jobID, err.Error())
+		if err := processVideo(ctx, jobID, postURL, videoURL, audioURL, outputPath, useProgressive); err != nil {
 			return
-		}
-		fmt.Printf("[%s] Video downloaded (%.2f MB)\n", jobID, float64(fileSize)/1024/1024)
-
-		videoPath := filepath.Join(utils.GetJobDir(jobID), videoFile)
-		utils.UpdateMetaStatus(jobID, models.StatusProcessing)
-
-		if useProgressive || services.HasAudioStream(videoPath) {
-			// Progressive or already has audio → just remux (fast copy)
-			if err := services.RemuxVideo(videoPath, outputPath); err != nil {
-				fmt.Printf("[%s] ✗ Remux failed: %v\n", jobID, err)
-				utils.UpdateMetaError(jobID, fmt.Sprintf("Video processing failed: %v", err))
-				return
-			}
-		} else if audioURL != "" {
-			// DASH video-only → download audio → merge with copy (no re-encode)
-			fmt.Printf("[%s] Video has no audio, downloading separate audio stream...\n", jobID)
-			audioFile := "temp_audio.m4a"
-			_, err := services.Download(ctx, jobID, postURL, audioURL, audioFile)
-			if err != nil {
-				fmt.Printf("[%s] ✗ Audio download failed: %v\n", jobID, err)
-				utils.UpdateMetaError(jobID, fmt.Sprintf("Audio download failed: %v", err))
-				return
-			}
-			audioPath := filepath.Join(utils.GetJobDir(jobID), audioFile)
-			if err := services.MergeVideoAudio(videoPath, audioPath, outputPath); err != nil {
-				fmt.Printf("[%s] ✗ Merge failed: %v\n", jobID, err)
-				utils.UpdateMetaError(jobID, fmt.Sprintf("Merge failed: %v", err))
-				return
-			}
-		} else {
-			// No audio available, just remux video as-is
-			if err := services.RemuxVideo(videoPath, outputPath); err != nil {
-				fmt.Printf("[%s] ✗ Remux failed: %v\n", jobID, err)
-				utils.UpdateMetaError(jobID, fmt.Sprintf("Video processing failed: %v", err))
-				return
-			}
 		}
 	}
 
@@ -329,4 +270,105 @@ func processJob(jobID, postURL, outputType, videoURL, audioURL, outputFilename s
 	}
 
 	fmt.Printf("[%s] ✓ Job completed: %s (%.2f MB)\n", jobID, outputFilename, float64(finalSize)/1024/1024)
+}
+
+// downloadFile downloads a URL to a local file. Handles both direct HTTP and HLS/m3u8.
+// Returns the local file path and any error.
+func downloadFile(ctx context.Context, jobID, postURL, downloadURL, filename string) (string, error) {
+	destPath := filepath.Join(utils.GetJobDir(jobID), filename)
+
+	if isHLSURL(downloadURL) {
+		fmt.Printf("[%s] Detected HLS stream for %s, using ffmpeg\n", jobID, filename)
+		if err := services.DownloadHLS(downloadURL, destPath, config.WARPProxyURL); err != nil {
+			return "", err
+		}
+	} else {
+		fileSize, err := services.Download(ctx, jobID, postURL, downloadURL, filename)
+		if err != nil {
+			return "", err
+		}
+		fmt.Printf("[%s] Downloaded %s (%.2f MB)\n", jobID, filename, float64(fileSize)/1024/1024)
+	}
+
+	return destPath, nil
+}
+
+// processAudio handles the audio download/conversion flow.
+func processAudio(ctx context.Context, jobID, postURL, audioURL, videoURL, outputPath string) error {
+	if audioURL != "" {
+		// Download audio (direct or HLS)
+		tempAudioPath, err := downloadFile(ctx, jobID, postURL, audioURL, "temp_audio.m4a")
+		if err != nil {
+			fmt.Printf("[%s] ✗ Audio download failed: %v\n", jobID, err)
+			utils.UpdateMetaError(jobID, fmt.Sprintf("Audio download failed: %v", err))
+			return err
+		}
+
+		utils.UpdateMetaStatus(jobID, models.StatusProcessing)
+		if err := services.ConvertToMP3(tempAudioPath, outputPath); err != nil {
+			fmt.Printf("[%s] ✗ Convert to MP3 failed: %v\n", jobID, err)
+			utils.UpdateMetaError(jobID, fmt.Sprintf("Audio conversion failed: %v", err))
+			return err
+		}
+	} else {
+		// Fallback: download video → extract audio
+		tempVideoPath, err := downloadFile(ctx, jobID, postURL, videoURL, "temp_video.mp4")
+		if err != nil {
+			fmt.Printf("[%s] ✗ Video download failed: %v\n", jobID, err)
+			utils.UpdateMetaError(jobID, err.Error())
+			return err
+		}
+
+		utils.UpdateMetaStatus(jobID, models.StatusProcessing)
+		if err := services.ExtractAudio(tempVideoPath, outputPath); err != nil {
+			fmt.Printf("[%s] ✗ Audio extract failed: %v\n", jobID, err)
+			utils.UpdateMetaError(jobID, fmt.Sprintf("Audio extraction failed: %v", err))
+			return err
+		}
+	}
+	return nil
+}
+
+// processVideo handles the video download/processing flow.
+func processVideo(ctx context.Context, jobID, postURL, videoURL, audioURL, outputPath string, useProgressive bool) error {
+	// Download video (direct or HLS)
+	videoPath, err := downloadFile(ctx, jobID, postURL, videoURL, "temp_video.mp4")
+	if err != nil {
+		fmt.Printf("[%s] ✗ Video download failed: %v\n", jobID, err)
+		utils.UpdateMetaError(jobID, err.Error())
+		return err
+	}
+
+	utils.UpdateMetaStatus(jobID, models.StatusProcessing)
+
+	if useProgressive || services.HasAudioStream(videoPath) {
+		// Progressive or already has audio → just remux (fast copy)
+		if err := services.RemuxVideo(videoPath, outputPath); err != nil {
+			fmt.Printf("[%s] ✗ Remux failed: %v\n", jobID, err)
+			utils.UpdateMetaError(jobID, fmt.Sprintf("Video processing failed: %v", err))
+			return err
+		}
+	} else if audioURL != "" {
+		// Video-only → download audio → merge with copy (no re-encode)
+		fmt.Printf("[%s] Video has no audio, downloading separate audio stream...\n", jobID)
+		audioPath, err := downloadFile(ctx, jobID, postURL, audioURL, "temp_audio.m4a")
+		if err != nil {
+			fmt.Printf("[%s] ✗ Audio download failed: %v\n", jobID, err)
+			utils.UpdateMetaError(jobID, fmt.Sprintf("Audio download failed: %v", err))
+			return err
+		}
+		if err := services.MergeVideoAudio(videoPath, audioPath, outputPath); err != nil {
+			fmt.Printf("[%s] ✗ Merge failed: %v\n", jobID, err)
+			utils.UpdateMetaError(jobID, fmt.Sprintf("Merge failed: %v", err))
+			return err
+		}
+	} else {
+		// No audio available, just remux video as-is
+		if err := services.RemuxVideo(videoPath, outputPath); err != nil {
+			fmt.Printf("[%s] ✗ Remux failed: %v\n", jobID, err)
+			utils.UpdateMetaError(jobID, fmt.Sprintf("Video processing failed: %v", err))
+			return err
+		}
+	}
+	return nil
 }
