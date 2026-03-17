@@ -13,7 +13,7 @@ logger = logging.getLogger("uni-extractor")
 
 app = FastAPI(
     title="Universal Extractor",
-    version="1.0.0",
+    version="2.0.0",
     description="Extract media links from any supported site. Powered by yt-dlp.",
 )
 
@@ -225,7 +225,7 @@ def _map_response(info: dict) -> dict:
 
 @app.get("/health")
 def health():
-    return {"status": "ok", "service": "uni-extractor", "version": "1.0.0"}
+    return {"status": "ok", "service": "uni-extractor", "version": "2.0.0"}
 
 
 @app.get("/extract", summary="Extract media from any supported URL")
