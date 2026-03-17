@@ -501,6 +501,74 @@ services:
     networks:
       - backend
 
+  # Universal Extractor service (fallback for all other sites)
+  uni-extractor:
+    build:
+      context: ./uni-extractor
+      dockerfile: Dockerfile
+    image: uni-extractor:latest
+    container_name: uni-extractor
+    restart: always
+    ports:
+      - "8004:8004"
+    healthcheck:
+      test: [ "CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8004/health')" ]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 10s
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
+    networks:
+      - backend
+
+  # Universal Downloader service (fallback for all other sites)
+  uni-downloader:
+    platform: linux/amd64
+    build:
+      context: ./uni-downloader
+      dockerfile: Dockerfile
+    image: uni-downloader:latest
+    container_name: uni-downloader
+    restart: always
+    ports:
+      - "5006:5006"
+    environment:
+      - PORT=5006
+      - STORAGE_DIR=./storage
+      - SIGNED_URL_SECRET=${SIGNED_URL_SECRET}
+      - SIGNED_URL_EXPIRATION_MIN=${SIGNED_URL_EXPIRATION_MIN:-30}
+      - BASE_DOMAIN=${BASE_DOMAIN}
+      - DOWNLOAD_SUBDOMAIN=${DOWNLOAD_SUBDOMAIN}
+      - PATH_PREFIX=/uni
+      - UNI_EXTRACTOR_URL=http://uni-extractor:8004
+      - HUB_TOKEN=${HUB_TOKEN}
+      - CLEANUP_INTERVAL=*/5 * * * *
+      - MAX_JOB_AGE_MIN=15
+      - WARP_USER=${WARP_USER}
+      - WARP_PASS=${WARP_PASS}
+    volumes:
+      - uni_storage:/app/storage
+    depends_on:
+      uni-extractor:
+        condition: service_healthy
+    healthcheck:
+      test: [ "CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://localhost:5006/health" ]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 10s
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
+    networks:
+      - backend
+
   # Nginx reverse proxy with SSL
   nginx:
     platform: linux/amd64
@@ -530,6 +598,8 @@ services:
         condition: service_healthy
       tw-downloader:
         condition: service_healthy
+      uni-downloader:
+        condition: service_healthy
     networks:
       - backend
 
@@ -549,5 +619,6 @@ volumes:
   insta_storage:
   fb_storage:
   tw_storage:
+  uni_storage:
   letsencrypt:
   certbot_webroot:
