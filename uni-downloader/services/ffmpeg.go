@@ -6,6 +6,37 @@ import (
 	"os/exec"
 )
 
+// DownloadHLS downloads an HLS/m3u8 stream using ffmpeg with optional proxy.
+func DownloadHLS(url, outputPath, proxyURL string) error {
+	args := []string{}
+
+	// Add proxy via http_proxy option if provided
+	if proxyURL != "" {
+		args = append(args, "-http_proxy", proxyURL)
+	}
+
+	args = append(args,
+		"-i", url,
+		"-c", "copy",
+		"-movflags", "+faststart",
+		"-y",
+		outputPath,
+	)
+
+	cmd := exec.Command("ffmpeg", args...)
+	cmd.Stdout = os.Stdout
+	cmd.Stderr = os.Stderr
+
+	fmt.Printf("[FFmpeg] Downloading HLS: %s → %s (proxy=%v)\n", url, outputPath, proxyURL != "")
+
+	if err := cmd.Run(); err != nil {
+		return fmt.Errorf("ffmpeg HLS download failed: %w", err)
+	}
+
+	fmt.Printf("[FFmpeg] ✓ HLS downloaded: %s\n", outputPath)
+	return nil
+}
+
 // RemuxVideo remuxes video to mp4 container (fast copy, no re-encode).
 func RemuxVideo(inputPath, outputPath string) error {
 	cmd := exec.Command("ffmpeg",

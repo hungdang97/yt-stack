@@ -95,7 +95,30 @@ def _extract(url: str, proxy: Optional[str] = None, cookie: Optional[str] = None
     if not info:
         raise Exception("yt-dlp returned empty result")
 
+    # Detect live streams
+    if _is_live_stream(info):
+        raise Exception("Live streams are not supported. Please provide a VOD/clip URL instead.")
+
     return _map_response(info)
+
+
+def _is_live_stream(info: dict) -> bool:
+    """Detect live streams via yt-dlp fields and heuristics."""
+    # Explicit flags
+    if info.get("is_live") is True:
+        return True
+    if info.get("live_status") in ("is_live", "is_upcoming"):
+        return True
+
+    # Heuristic: no duration + all formats are m3u8 = likely live
+    if info.get("duration") is None:
+        formats = info.get("formats", [])
+        if formats and all(
+            (f.get("protocol") or "").startswith("m3u8") for f in formats
+        ):
+            return True
+
+    return False
 
 
 def _map_response(info: dict) -> dict:
@@ -112,27 +135,33 @@ def _map_response(info: dict) -> dict:
         if is_video:
             formats = entry.get("formats", [])
             if formats:
+                def _is_direct(f):
+                    """Returns True if the format is a direct HTTP(S) download (not HLS/DASH manifest)."""
+                    proto = (f.get("protocol") or "").lower()
+                    url_val = (f.get("url") or "").lower()
+                    return proto not in ("m3u8", "m3u8_native", "dash") and ".m3u8" not in url_val and ".mpd" not in url_val
+
+                def _quality_key(f):
+                    return (f.get("height") or 0, f.get("quality") or 0, f.get("tbr") or 0)
+
                 # Best progressive: has both video+audio
                 progressive = [f for f in formats
                                if f.get("acodec") != "none" and f.get("vcodec") != "none"]
                 if progressive:
-                    best_prog = max(progressive, key=lambda f: (
-                        f.get("height") or 0, f.get("quality") or 0, f.get("tbr") or 0,
-                    ))
+                    # At same quality, prefer direct over m3u8 (faster download)
+                    best_prog = max(progressive, key=lambda f: (*_quality_key(f), _is_direct(f)))
                     video_progressive_url = best_prog.get("url")
 
                 # Best video (any, including video-only DASH)
                 video_formats = [f for f in formats if f.get("vcodec") != "none"]
                 if video_formats:
-                    best_video = max(video_formats, key=lambda f: (
-                        f.get("height") or 0, f.get("quality") or 0, f.get("tbr") or 0,
-                    ))
+                    best_video = max(video_formats, key=lambda f: (*_quality_key(f), _is_direct(f)))
                     video_url = best_video.get("url")
 
-                # Best audio-only (DASH)
+                # Best audio-only
                 audio_formats = [f for f in formats if f.get("acodec") != "none" and f.get("vcodec") == "none"]
                 if audio_formats:
-                    best_audio = max(audio_formats, key=lambda f: f.get("abr") or f.get("tbr") or 0)
+                    best_audio = max(audio_formats, key=lambda f: (f.get("abr") or f.get("tbr") or 0, _is_direct(f)))
                     audio_url = best_audio.get("url")
             else:
                 video_url = entry.get("url")
