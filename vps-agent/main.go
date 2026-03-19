@@ -112,23 +112,34 @@ func main() {
 	hb := heartbeat.NewHeartbeat(hubURL, serverIP, projectDir, 10*time.Second)
 	go hb.Start()
 
-	// 6. Build & Deploy service (Control API already running, dashboard can monitor)
-	log.Println("Building service...")
-	controlAPI.SetBuildStatus("building", "Building services...")
-	if err := dep.Build(); err != nil {
-		controlAPI.SetBuildStatus("error", "Build failed: "+err.Error())
-		log.Fatalf("Build failed: %v", err)
-	}
-	log.Println("✓ Build successful")
+	// 6. Build & Deploy service (only if not already running)
+	// Use SKIP_DEPLOY=1 or check if containers are already healthy
+	skipDeploy := os.Getenv("SKIP_DEPLOY") == "1"
 
-	log.Println("Deploying service...")
-	controlAPI.SetBuildStatus("deploying", "Deploying services...")
-	if err := dep.Deploy(); err != nil {
-		controlAPI.SetBuildStatus("error", "Deploy failed: "+err.Error())
-		log.Fatalf("Deploy failed: %v", err)
+	if skipDeploy {
+		log.Println("⏭ SKIP_DEPLOY=1, skipping build & deploy (services already running)")
+		controlAPI.SetBuildStatus("success", "Agent restarted, services kept running")
+	} else if dep.IsRunning() {
+		log.Println("⏭ Services already running, skipping build & deploy")
+		controlAPI.SetBuildStatus("success", "Agent restarted, services already running")
+	} else {
+		log.Println("Building service...")
+		controlAPI.SetBuildStatus("building", "Building services...")
+		if err := dep.Build(); err != nil {
+			controlAPI.SetBuildStatus("error", "Build failed: "+err.Error())
+			log.Fatalf("Build failed: %v", err)
+		}
+		log.Println("✓ Build successful")
+
+		log.Println("Deploying service...")
+		controlAPI.SetBuildStatus("deploying", "Deploying services...")
+		if err := dep.Deploy(); err != nil {
+			controlAPI.SetBuildStatus("error", "Deploy failed: "+err.Error())
+			log.Fatalf("Deploy failed: %v", err)
+		}
+		controlAPI.SetBuildStatus("success", "Services deployed successfully")
+		log.Println("✓ Service deployed successfully")
 	}
-	controlAPI.SetBuildStatus("success", "Services deployed successfully")
-	log.Println("✓ Service deployed successfully")
 
 	log.Println("✓ Agent running successfully")
 	log.Println("  Control API: http://localhost:9000")
