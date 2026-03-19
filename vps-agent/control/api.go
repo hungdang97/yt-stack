@@ -268,7 +268,7 @@ func (api *ControlAPI) runAsyncRestart() {
 
 // POST /control/restart/:service - Restart a single service (git pull → build → up)
 func (api *ControlAPI) RestartService(c *fiber.Ctx) error {
-	service := c.Params("service")
+	service := string([]byte(c.Params("service"))) // Copy to avoid Fiber zero-allocation memory reuse in goroutine
 
 	// Whitelist allowed services
 	allowed := make(map[string]bool, len(AllServices))
