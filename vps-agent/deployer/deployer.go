@@ -7,6 +7,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"strings"
 	"time"
 )
 
@@ -133,6 +134,25 @@ func (d *Deployer) RestartService(service string) error {
 
 	log.Printf("[Deployer] ✓ Service %s restarted successfully", service)
 	return nil
+}
+
+// IsRunning checks if the main services are already running (at least 3 containers up)
+func (d *Deployer) IsRunning() bool {
+	cmd := exec.Command("docker-compose", "ps", "--status", "running", "-q")
+	cmd.Dir = d.projectDir
+	output, err := cmd.Output()
+	if err != nil {
+		return false
+	}
+	// Count running containers by counting non-empty lines
+	lines := 0
+	for _, line := range strings.Split(strings.TrimSpace(string(output)), "\n") {
+		if line != "" {
+			lines++
+		}
+	}
+	log.Printf("[Deployer] Found %d running containers", lines)
+	return lines >= 3
 }
 
 func (d *Deployer) GetStatus() (map[string]interface{}, error) {
