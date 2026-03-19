@@ -78,7 +78,7 @@ func NewControlAPI(fetcher *config.ConfigFetcher, deployer *deployer.Deployer, p
 		projectDir:      projectDir,
 		app:             fiber.New(fiber.Config{DisableStartupMessage: true}),
 		startTime:       time.Now(),
-		version:         "1.0.0",
+		version:         "2.0.0",
 		serviceStatuses: serviceStatuses,
 		currentStatus: BuildStatus{
 			State:   StateIdle,
