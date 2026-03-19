@@ -56,7 +56,7 @@ func GenerateConfig(serverIP string) map[string]interface{} {
 		"tier_config": `{"0":{"threads":2,"rate":1048576},"1":{"threads":4,"rate":2097152}}`,
 
 		// Agent Info
-		"agent_version": "1.0.0",
+		"agent_version": "2.0.0",
 	}
 }
 

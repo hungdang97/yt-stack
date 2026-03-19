@@ -42,7 +42,7 @@ var (
 // Uses native Linux /proc filesystem for cross-distro compatibility
 func Collect(projectDir string) (*SystemMetrics, error) {
 	m := &SystemMetrics{
-		AgentVersion: "1.0.0",
+		AgentVersion: "2.0.0",
 		Uptime:       int64(time.Since(startTime).Seconds()),
 	}
 
