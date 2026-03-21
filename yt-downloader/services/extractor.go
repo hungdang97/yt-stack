@@ -16,11 +16,11 @@ import (
 
 // Extract fetches video metadata using Cloudflare proxy only
 // Python Extractor + Cloudflare Proxy (cookie pool + proxy)
-func Extract(videoID string) (*models.ExtractResponse, error) {
+func Extract(videoID string, premium bool) (*models.ExtractResponse, error) {
 	// Use Cloudflare Proxy only
-	result, err := extractFromAPI(videoID, config.ExtractAPIBase, config.WARPProxyURL)
+	result, err := extractFromAPI(videoID, config.ExtractAPIBase, config.WARPProxyURL, premium)
 	if err == nil && isValidExtractResponse(result) {
-		fmt.Printf("[%s] ✓ Extract success via Python (Cloudflare)\n", videoID)
+		fmt.Printf("[%s] ✓ Extract success via Python (Cloudflare) premium=%v\n", videoID, premium)
 		return result, nil
 	}
 
@@ -49,13 +49,18 @@ func isValidExtractResponse(resp *models.ExtractResponse) bool {
 }
 
 // extractFromAPI performs the actual extraction from specified API with optional proxy
-func extractFromAPI(videoID string, apiBase string, proxy string) (*models.ExtractResponse, error) {
+func extractFromAPI(videoID string, apiBase string, proxy string, premium bool) (*models.ExtractResponse, error) {
 	// Build API URL
 	apiURL := fmt.Sprintf("%s/%s", apiBase, videoID)
+	params := url.Values{}
 	if proxy != "" {
-		// URL encode proxy to handle special characters (: @ /)
-		proxyEncoded := url.QueryEscape(proxy)
-		apiURL = fmt.Sprintf("%s?proxy=%s", apiURL, proxyEncoded)
+		params.Set("proxy", proxy)
+	}
+	if premium {
+		params.Set("premium", "1")
+	}
+	if len(params) > 0 {
+		apiURL = fmt.Sprintf("%s?%s", apiURL, params.Encode())
 	}
 
 	req, err := http.NewRequest("GET", apiURL, nil)
