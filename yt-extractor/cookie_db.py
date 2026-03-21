@@ -14,24 +14,25 @@ _MONGO_URI = os.environ.get(
 _col = MongoClient(_MONGO_URI)['cookie']['cookies']
 
 
-def get():
-    """Get a random active cookie."""
+def get(premium=False):
+    """Get a random active cookie, optionally premium only."""
+    match_filter = {'status': 'active', 'is_premium': True} if premium else {'status': 'active', 'is_premium': {'$ne': True}}
     pipeline = [
-        {'$match': {'status': 'active'}},
+        {'$match': match_filter},
         {'$sample': {'size': 1}}
     ]
     docs = list(_col.aggregate(pipeline))
     if docs:
         doc = docs[0]
-        # No last_used update needed for random strategy
         return doc['profile_name'], doc['cookie_string']
     return None, None
 
 
-def get_batch(limit=10):
-    """Get multiple random active cookies."""
+def get_batch(limit=10, premium=False):
+    """Get multiple random active cookies, optionally premium only."""
+    match_filter = {'status': 'active', 'is_premium': True} if premium else {'status': 'active', 'is_premium': {'$ne': True}}
     pipeline = [
-        {'$match': {'status': 'active'}},
+        {'$match': match_filter},
         {'$sample': {'size': limit}}
     ]
     docs = list(_col.aggregate(pipeline))
