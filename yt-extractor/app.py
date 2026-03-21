@@ -325,7 +325,7 @@ async def extract(video_id: str, proxy: str = Query(None), premium: str = Query(
 
 @app.get('/health')
 async def health():
-    return {'status': 'UP', 'service': 'yt-extractor', 'version': '5.0.0'}
+    return {'status': 'UP', 'service': 'yt-extractor', 'version': '5.1.0'}
 
 
 if __name__ == '__main__':
