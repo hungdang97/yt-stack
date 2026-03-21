@@ -36,47 +36,53 @@ executor = ThreadPoolExecutor(max_workers=10)
 
 
 class CookiePool:
-    """Random cookie pool with periodic refresh."""
+    """Cookie pool with premium/normal separation and periodic refresh."""
 
     def __init__(self, size=10):
-        self.pool = deque()
+        self.normal_pool = deque()
+        self.premium_pool = deque()
         self.size = size
         self._lock = asyncio.Lock()
 
-    async def get(self):
+    async def get(self, premium=False):
         """Get a cookie from pool. Refill if empty."""
+        pool = self.premium_pool if premium else self.normal_pool
         async with self._lock:
-            if not self.pool:
-                await self._refill()
-            
-            if self.pool:
-                return self.pool.popleft()
-        
-        # Fallback to direct DB fetch if pool remains empty
-        return cookie_db.get()
+            if not pool:
+                await self._refill(premium)
+                pool = self.premium_pool if premium else self.normal_pool
 
-    async def _refill(self):
+            if pool:
+                return pool.popleft()
+
+        # Fallback to direct DB fetch if pool remains empty
+        return cookie_db.get(premium=premium)
+
+    async def _refill(self, premium=False):
         """Fetch fresh random cookies."""
         loop = asyncio.get_event_loop()
-        cookies = await loop.run_in_executor(None, cookie_db.get_batch, self.size)
+        cookies = await loop.run_in_executor(None, cookie_db.get_batch, self.size, premium)
         if cookies:
-            self.pool.extend(cookies)
+            pool = self.premium_pool if premium else self.normal_pool
+            pool.extend(cookies)
 
     async def start_refresh_loop(self):
-        """Background task to refresh pool every 10 seconds."""
+        """Background task to refresh pools every 10 seconds."""
         while True:
             await asyncio.sleep(10)
             try:
                 async with self._lock:
-                    self.pool.clear()
-                    await self._refill()
-                # logger.debug("Cookie pool refreshed")
+                    self.normal_pool.clear()
+                    self.premium_pool.clear()
+                    await self._refill(premium=False)
+                    await self._refill(premium=True)
             except Exception as e:
                 logger.error(f"Cookie pool refresh failed: {e}")
 
     async def warm_up(self):
         """Initial fill and start background refresh."""
-        await self._refill()
+        await self._refill(premium=False)
+        await self._refill(premium=True)
         asyncio.create_task(self.start_refresh_loop())
 
 
@@ -255,8 +261,9 @@ def extract_no_cookie_sync(video_id: str, proxy: str):
 
 
 @app.get('/api/youtube/video/{video_id}')
-async def extract(video_id: str, proxy: str = Query(None)):
-    logger.info(f"[{video_id}] Extraction request received | proxy={proxy}")
+async def extract(video_id: str, proxy: str = Query(None), premium: str = Query(None)):
+    is_premium = premium == '1'
+    logger.info(f"[{video_id}] Extraction request received | proxy={proxy} | premium={is_premium}")
     proxy_url = build_proxy_url(proxy)
 
     # Retry mechanism: Attempt 1 without cookies, Attempt 2 with cookie
@@ -264,8 +271,8 @@ async def extract(video_id: str, proxy: str = Query(None)):
     last_error = None
     last_attempt = 0
 
-    # Phase 1: Try without cookies first (android_vr client works better without cookies)
-    if proxy_url:
+    # Phase 1: Try without cookies first (skip for premium - always use premium cookies)
+    if proxy_url and not is_premium:
         last_attempt = 1
         logger.info(f"[{video_id}] Attempt 1/2 | No cookie, Cloudflare IP only")
 
@@ -284,12 +291,12 @@ async def extract(video_id: str, proxy: str = Query(None)):
     # Phase 2: Fallback to cookies (2 attempts)
     for attempt in range(2, max_cookie_attempts + 2):
         last_attempt = attempt
-        profile, cookies = await cookie_pool.get()
+        profile, cookies = await cookie_pool.get(premium=is_premium)
         if not cookies:
-            logger.error(f"[{video_id}] No active cookie available")
+            logger.error(f"[{video_id}] No active {'premium' if is_premium else 'normal'} cookie available")
             break
 
-        logger.info(f"[{video_id}] Attempt {attempt}/2 | Using cookie: {profile}")
+        logger.info(f"[{video_id}] Attempt {attempt}/2 | Using {'premium' if is_premium else 'normal'} cookie: {profile}")
 
         loop = asyncio.get_event_loop()
         result, error = await loop.run_in_executor(
