@@ -283,6 +283,12 @@ async def extract(video_id: str, proxy: str = Query(None), premium: str = Query(
 
         if not error:
             logger.info(f"[{video_id}] Extraction successful (no cookie) | video={len(result.get('videoStreams', []))} | audio={len(result.get('audioStreams', []))}")
+            result['extractInfo'] = {
+                'cookie': None,
+                'proxy': proxy_url,
+                'premium': False,
+                'attempt': 1,
+            }
             return result
 
         last_error = error
@@ -305,6 +311,12 @@ async def extract(video_id: str, proxy: str = Query(None), premium: str = Query(
 
         if not error:
             logger.info(f"[{video_id}] Extraction successful | video={len(result.get('videoStreams', []))} | audio={len(result.get('audioStreams', []))}")
+            result['extractInfo'] = {
+                'cookie': profile,
+                'proxy': proxy_url,
+                'premium': is_premium,
+                'attempt': attempt,
+            }
             return result
 
         last_error = error
@@ -325,7 +337,7 @@ async def extract(video_id: str, proxy: str = Query(None), premium: str = Query(
 
 @app.get('/health')
 async def health():
-    return {'status': 'UP', 'service': 'yt-extractor', 'version': '5.1.0'}
+    return {'status': 'UP', 'service': 'yt-extractor', 'version': '5.2.0'}
 
 
 if __name__ == '__main__':

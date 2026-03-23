@@ -4,7 +4,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>YT Downloader Test</title>
+  <title>Download Stack Test</title>
   <style>
     * {
       box-sizing: border-box;
@@ -204,6 +204,22 @@
       background: #16a34a;
     }
 
+    .info-box {
+      background: #eff6ff;
+      border: 1px solid #bfdbfe;
+      padding: 10px 12px;
+      border-radius: 6px;
+      margin-bottom: 16px;
+      font-size: 0.85rem;
+      color: #1e40af;
+    }
+
+    .info-box.uni {
+      background: #f0fdf4;
+      border-color: #bbf7d0;
+      color: #166534;
+    }
+
     #trimFields {
       display: none;
       margin-top: 8px;
@@ -230,16 +246,6 @@
 
     .checkbox-label input {
       width: auto;
-    }
-
-    .info-box {
-      background: #eff6ff;
-      border: 1px solid #bfdbfe;
-      padding: 10px 12px;
-      border-radius: 6px;
-      margin-bottom: 16px;
-      font-size: 0.85rem;
-      color: #1e40af;
     }
 
     .filename-style-group {
@@ -371,11 +377,11 @@
 </head>
 
 <body>
-  <h1 id="pageTitle">YT Downloader Test - Updated</h1>
+  <h1 id="pageTitle">Download Stack Test</h1>
 
   <div class="form-group">
     <label>URL</label>
-    <input type="text" id="url" placeholder="YouTube / TikTok / Instagram / Facebook / X(Twitter) URL">
+    <input type="text" id="url" placeholder="YouTube / TikTok / Instagram / Facebook / X / Vimeo / Dailymotion / Any URL">
   </div>
 
   <div id="detectedPlatform" class="info-box" style="display: none;"></div>
@@ -487,6 +493,13 @@
     </div>
   </div><!-- end ytFields -->
 
+  <div class="form-group">
+    <label class="checkbox-label">
+      <input type="checkbox" id="premium">
+      <span>Premium (use premium cookie pool)</span>
+    </label>
+  </div>
+
   <button id="downloadBtn">Download</button>
 
   <div id="status">
@@ -509,7 +522,7 @@
         <div class="detail-bar">
           <div class="detail-bar-fill" id="videoProgress"></div>
         </div>
-        <span id="videoPercent">0d%</span>
+        <span id="videoPercent">0%</span>
       </div>
       <div class="detail-item">
         <span>Audio:</span>
@@ -526,28 +539,60 @@
   </div>
 
   <script>
-    const API = 'https://vps-7a60dd29.ytconvert.org';
+    const API = 'https://vps-2645aa08.ytconvert.org';
     let currentStatusUrl = null;
     let pollInterval = null;
-    let detectedService = 'youtube'; // 'youtube' | 'tiktok' | 'instagram' | 'facebook' | 'twitter'
+    let detectedService = 'youtube';
 
-    // Detect service from URL
+    // Detect service from URL by parsing hostname (same logic as Hub)
     function detectService(url) {
-      if (/instagram\.com/.test(url)) return 'instagram';
-      if (/tiktok\.com/.test(url)) return 'tiktok';
-      if (/facebook\.com|fb\.watch|fb\.com/.test(url)) return 'facebook';
-      if (/x\.com|twitter\.com|t\.co/.test(url)) return 'twitter';
-      return 'youtube';
+      try {
+        const host = new URL(url).hostname.toLowerCase();
+        const domainMap = {
+          'tiktok.com': 'tiktok',
+          'instagram.com': 'instagram',
+          'facebook.com': 'facebook',
+          'fb.watch': 'facebook',
+          'fb.com': 'facebook',
+          'x.com': 'twitter',
+          'twitter.com': 'twitter',
+          't.co': 'twitter',
+          'youtube.com': 'youtube',
+          'youtu.be': 'youtube',
+          'googlevideo.com': 'youtube',
+          'youtube-nocookie.com': 'youtube',
+        };
+        // Strip subdomains progressively: m.facebook.com → facebook.com
+        let h = host;
+        while (h) {
+          if (domainMap[h]) return domainMap[h];
+          const idx = h.indexOf('.');
+          if (idx < 0) break;
+          h = h.substring(idx + 1);
+        }
+      } catch (e) {}
+      return 'universal';
+    }
+
+    // Get route prefix for service
+    function getRoutePrefix(service) {
+      const map = {
+        youtube: '',
+        tiktok: '/tik',
+        instagram: '/insta',
+        facebook: '/fb',
+        twitter: '/x',
+        universal: '/uni'
+      };
+      return service in map ? map[service] : '/uni';
     }
 
     // Update UI based on detected service
     function updateServiceUI(service) {
       detectedService = service;
       const isYT = service === 'youtube';
-      const isTik = service === 'tiktok';
       const isInsta = service === 'instagram';
-      const isFb = service === 'facebook';
-      const isTwitter = service === 'twitter';
+      const isUni = service === 'universal';
 
       // Show/hide YouTube-specific fields (format, quality, trim, etc.)
       document.getElementById('ytFields').style.display = isYT ? '' : 'none';
@@ -563,24 +608,25 @@
 
       // Update detected platform info
       const dp = document.getElementById('detectedPlatform');
-      if (isTik) {
-        dp.textContent = 'TikTok detected → /tik/api/download';
-        dp.style.display = 'block';
-      } else if (isInsta) {
-        dp.textContent = 'Instagram detected → /insta/api/download (iOS/macOS=H.264 progressive, others=best DASH+merge)';
-        dp.style.display = 'block';
-      } else if (isFb) {
-        dp.textContent = 'Facebook detected → /fb/api/download (iOS/macOS=H.264 progressive, others=best DASH+merge)';
-        dp.style.display = 'block';
-      } else if (isTwitter) {
-        dp.textContent = 'X/Twitter detected → /x/api/download';
+      const prefix = getRoutePrefix(service);
+      const labels = {
+        tiktok: 'TikTok detected',
+        instagram: 'Instagram detected (iOS/macOS=H.264 progressive, others=best DASH+merge)',
+        facebook: 'Facebook detected (iOS/macOS=H.264 progressive, others=best DASH+merge)',
+        twitter: 'X/Twitter detected',
+        universal: 'Universal fallback (yt-dlp generic)'
+      };
+
+      if (labels[service]) {
+        dp.textContent = `${labels[service]} → ${prefix}/api/download`;
+        dp.className = isUni ? 'info-box uni' : 'info-box';
         dp.style.display = 'block';
       } else {
         dp.style.display = 'none';
       }
     }
 
-    // Listen for URL changes (input, paste, change)
+    // Listen for URL changes
     function onUrlChange(e) {
       const url = (e.target.value || '').trim();
       if (url) updateServiceUI(detectService(url));
@@ -588,7 +634,6 @@
     }
     document.getElementById('url').addEventListener('input', onUrlChange);
     document.getElementById('url').addEventListener('paste', (e) => {
-      // Use timeout so pasted value is available
       setTimeout(() => onUrlChange({ target: document.getElementById('url') }), 0);
     });
     document.getElementById('url').addEventListener('change', onUrlChange);
@@ -604,7 +649,7 @@
     const videoFormats = ['mp4', 'webm', 'mkv'];
     const audioFormats = ['mp3', 'm4a', 'wav', 'opus', 'flac', 'ogg'];
 
-    // Elements 
+    // Elements
     const els = {
       url: document.getElementById('url'),
       platform: document.getElementById('platform'),
@@ -652,17 +697,15 @@
       updateFilenamePreview();
     });
 
-    // Filename preview helper: format time as m꞉ss
     function fmtTime(sec) {
       const total = Math.floor(sec);
       const h = Math.floor(total / 3600);
       const m = Math.floor((total % 3600) / 60);
       const s = total % 60;
-      if (h > 0) return `${h}꞉${String(m).padStart(2, '0')}꞉${String(s).padStart(2, '0')}`;
-      return `${m}꞉${String(s).padStart(2, '0')}`;
+      if (h > 0) return `${h}:${String(m).padStart(2, '0')}:${String(s).padStart(2, '0')}`;
+      return `${m}:${String(s).padStart(2, '0')}`;
     }
 
-    // Generate filename preview
     function updateFilenamePreview() {
       const isVideo = els.type.value === 'video';
       const format = els.format.value || (isVideo ? 'mp4' : 'mp3');
@@ -684,7 +727,6 @@
         if (hasTrim) parts.push(`${Math.floor(trimStart)}-${Math.floor(trimEnd)}s`);
         filename = parts.join('_') + '.' + format;
       } else {
-        // basic / pretty / nerdy
         let name = `${title} - ${author}`;
         let infoParts = [];
         if (isVideo && quality) infoParts.push(quality);
@@ -748,11 +790,9 @@
       return `${m}:${s.toString().padStart(2, '0')}`;
     }
 
-    // Get error message from response
     function getErrorMessage(data) {
-      if (data.error && data.error.message) {
-        return data.error.message;
-      }
+      if (data.error && data.error.message) return data.error.message;
+      if (typeof data.error === 'string') return data.error;
       return 'Unknown error';
     }
 
@@ -777,41 +817,19 @@
       const url = els.url.value.trim();
       if (!url) return alert('Please enter a URL');
 
-      // Re-detect service from URL before sending (in case paste event was missed)
+      // Re-detect service
       updateServiceUI(detectService(url));
 
-      // Determine API endpoint based on detected service
-      let apiEndpoint, body;
+      const prefix = getRoutePrefix(detectedService);
+      const apiEndpoint = `${API}${prefix}/api/download`;
+      let body;
 
-      if (detectedService === 'tiktok') {
-        apiEndpoint = `${API}/tik/api/download`;
-        body = { url, output: { type: els.type.value } };
-      } else if (detectedService === 'instagram') {
-        apiEndpoint = `${API}/insta/api/download`;
+      const isPremium = document.getElementById('premium').checked;
+
+      if (detectedService === 'youtube') {
         body = {
           url,
-          os: els.platform.value || undefined,
-          output: { type: els.type.value }
-        };
-      } else if (detectedService === 'facebook') {
-        apiEndpoint = `${API}/fb/api/download`;
-        body = {
-          url,
-          os: els.platform.value || undefined,
-          output: { type: els.type.value }
-        };
-      } else if (detectedService === 'twitter') {
-        apiEndpoint = `${API}/x/api/download`;
-        body = {
-          url,
-          os: els.platform.value || undefined,
-          output: { type: els.type.value }
-        };
-      } else {
-        // YouTube (default)
-        apiEndpoint = `${API}/api/download`;
-        body = {
-          url,
+          premium: isPremium,
           output: { type: els.type.value, format: els.format.value },
           audio: { bitrate: els.bitrate.value },
           filenameStyle: currentStyle,
@@ -827,6 +845,13 @@
             end: parseFloat(els.trimEnd.value) || 60
           };
         }
+      } else {
+        // TikTok, Instagram, Facebook, Twitter, Universal — same simple body
+        body = {
+          url,
+          os: els.platform.value || undefined,
+          output: { type: els.type.value }
+        };
       }
 
       els.downloadBtn.disabled = true;
@@ -849,23 +874,18 @@
         currentStatusUrl = data.statusUrl;
         els.statusTitle.textContent = data.title;
 
-        // Build status info
         let infoText = '';
         if (data.duration) infoText += `Duration: ${formatDuration(data.duration)}`;
         if (data.selectedQuality) infoText += ` | Quality: ${data.selectedQuality}`;
         if (data.availableAudioLanguages && data.availableAudioLanguages.length > 0) {
-          infoText += ` | Available Languages: ${data.availableAudioLanguages.join(', ')}`;
+          infoText += ` | Languages: ${data.availableAudioLanguages.join(', ')}`;
         }
         els.statusInfo.textContent = infoText;
 
         // Show warnings (YouTube only)
         const warnings = [];
-        if (data.qualityChanged && data.qualityChangeReason) {
-          warnings.push(data.qualityChangeReason);
-        }
-        if (data.audioLanguageChanged && data.audioLanguageChangeReason) {
-          warnings.push(data.audioLanguageChangeReason);
-        }
+        if (data.qualityChanged && data.qualityChangeReason) warnings.push(data.qualityChangeReason);
+        if (data.audioLanguageChanged && data.audioLanguageChangeReason) warnings.push(data.audioLanguageChangeReason);
         if (warnings.length > 0) {
           els.warningBox.innerHTML = warnings.join('<br>');
           els.warningBox.style.display = 'block';
@@ -888,11 +908,9 @@
         const data = await res.json();
         if (!res.ok) throw new Error(getErrorMessage(data));
 
-        // Update progress
         els.progressBar.style.width = `${data.progress}%`;
         els.statusPercent.textContent = `${data.progress}%`;
 
-        // Show detail progress for video downloads (only when pending)
         if (data.status === 'pending' && data.detail) {
           if (data.detail.video !== undefined || data.detail.audio !== undefined) {
             els.detailProgress.style.display = 'flex';
@@ -909,11 +927,10 @@
         } else if (data.status === 'downloading') {
           els.statusPhase.textContent = 'Downloading...';
         } else if (data.status === 'processing') {
-          els.statusPhase.textContent = 'Extracting audio...';
+          els.statusPhase.textContent = 'Processing...';
         } else if (data.status === 'extracting') {
           els.statusPhase.textContent = 'Extracting metadata...';
         } else if (data.status === 'completed') {
-          // Completed
           clearInterval(pollInterval);
           els.progressBar.style.width = '100%';
           els.progressBar.classList.add('done');
@@ -932,7 +949,6 @@
           }
           els.downloadBtn.disabled = false;
         } else if (data.status === 'error') {
-          // Error
           clearInterval(pollInterval);
           els.statusPhase.textContent = 'Error';
           els.errorBox.textContent = data.error || data.jobError || 'Unknown error';
