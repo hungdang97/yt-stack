@@ -260,76 +260,92 @@ def extract_no_cookie_sync(video_id: str, proxy: str):
         return None, str(e)
 
 
+async def _try_cookie_extract(video_id, proxy_url, premium, attempt, total):
+    """Try extraction with a cookie from pool. Returns (result, error)."""
+    label = 'premium' if premium else 'normal'
+    profile, cookies = await cookie_pool.get(premium=premium)
+    if not cookies:
+        logger.error(f"[{video_id}] No active {label} cookie available")
+        return None, f"No active {label} cookie available"
+
+    logger.info(f"[{video_id}] Attempt {attempt}/{total} | Using {label} cookie: {profile}")
+
+    loop = asyncio.get_event_loop()
+    result, error = await loop.run_in_executor(
+        executor, extract_sync, video_id, proxy_url, profile, cookies
+    )
+
+    if not error:
+        logger.info(f"[{video_id}] Extraction successful | video={len(result.get('videoStreams', []))} | audio={len(result.get('audioStreams', []))}")
+        result['extractInfo'] = {
+            'cookie': profile,
+            'proxy': proxy_url,
+            'premium': premium,
+            'attempt': attempt,
+        }
+        return result, None
+
+    logger.warning(f"[{video_id}] Attempt {attempt} failed: {error} (cookie invalidation disabled)")
+    return None, error
+
+
+async def _try_no_cookie_extract(video_id, proxy_url, attempt, total):
+    """Try extraction without cookies (Cloudflare IP only). Returns (result, error)."""
+    logger.info(f"[{video_id}] Attempt {attempt}/{total} | No cookie, Cloudflare IP only")
+
+    loop = asyncio.get_event_loop()
+    result, error = await loop.run_in_executor(
+        executor, extract_no_cookie_sync, video_id, proxy_url
+    )
+
+    if not error:
+        logger.info(f"[{video_id}] Extraction successful (no cookie) | video={len(result.get('videoStreams', []))} | audio={len(result.get('audioStreams', []))}")
+        result['extractInfo'] = {
+            'cookie': None,
+            'proxy': proxy_url,
+            'premium': False,
+            'attempt': attempt,
+        }
+        return result, None
+
+    logger.warning(f"[{video_id}] Attempt {attempt} (no cookie) failed: {error}")
+    return None, error
+
+
 @app.get('/api/youtube/video/{video_id}')
 async def extract(video_id: str, proxy: str = Query(None), premium: str = Query(None)):
     is_premium = premium == '1'
     logger.info(f"[{video_id}] Extraction request received | proxy={proxy} | premium={is_premium}")
     proxy_url = build_proxy_url(proxy)
 
-    # Retry mechanism: Attempt 1 without cookies, Attempt 2 with cookie
-    max_cookie_attempts = 1
     last_error = None
     last_attempt = 0
 
-    # Phase 1: Try without cookies first (skip for premium - always use premium cookies)
-    if proxy_url and not is_premium:
-        last_attempt = 1
-        logger.info(f"[{video_id}] Attempt 1/2 | No cookie, Cloudflare IP only")
+    # Build attempt plan:
+    # Premium:  premium cookie → premium cookie → normal cookie → normal cookie → no-cookie
+    # Normal:   normal cookie → normal cookie → no-cookie
+    attempts = []
+    if is_premium:
+        attempts.append(('cookie', True))    # premium cookie
+        attempts.append(('cookie', True))    # premium cookie
+    attempts.append(('cookie', False))       # normal cookie
+    attempts.append(('cookie', False))       # normal cookie
+    if proxy_url:
+        attempts.append(('no_cookie', False))  # Cloudflare IP only
 
-        loop = asyncio.get_event_loop()
-        result, error = await loop.run_in_executor(
-            executor, extract_no_cookie_sync, video_id, proxy_url
-        )
+    total = len(attempts)
 
-        if not error:
-            logger.info(f"[{video_id}] Extraction successful (no cookie) | video={len(result.get('videoStreams', []))} | audio={len(result.get('audioStreams', []))}")
-            result['extractInfo'] = {
-                'cookie': None,
-                'proxy': proxy_url,
-                'premium': False,
-                'attempt': 1,
-            }
+    for i, (method, use_premium) in enumerate(attempts, 1):
+        last_attempt = i
+
+        if method == 'cookie':
+            result, error = await _try_cookie_extract(video_id, proxy_url, use_premium, i, total)
+        else:
+            result, error = await _try_no_cookie_extract(video_id, proxy_url, i, total)
+
+        if result:
             return result
-
         last_error = error
-        logger.warning(f"[{video_id}] Attempt 1 (no cookie) failed: {error}")
-
-    # Phase 2: Fallback to cookies (2 attempts)
-    for attempt in range(2, max_cookie_attempts + 2):
-        last_attempt = attempt
-        profile, cookies = await cookie_pool.get(premium=is_premium)
-        if not cookies:
-            logger.error(f"[{video_id}] No active {'premium' if is_premium else 'normal'} cookie available")
-            break
-
-        logger.info(f"[{video_id}] Attempt {attempt}/2 | Using {'premium' if is_premium else 'normal'} cookie: {profile}")
-
-        loop = asyncio.get_event_loop()
-        result, error = await loop.run_in_executor(
-            executor, extract_sync, video_id, proxy_url, profile, cookies
-        )
-
-        if not error:
-            logger.info(f"[{video_id}] Extraction successful | video={len(result.get('videoStreams', []))} | audio={len(result.get('audioStreams', []))}")
-            result['extractInfo'] = {
-                'cookie': profile,
-                'proxy': proxy_url,
-                'premium': is_premium,
-                'attempt': attempt,
-            }
-            return result
-
-        last_error = error
-        # TODO: Tạm tắt invalidate cookie, bật lại sau
-        # is_bad = cookie_db.is_bad(error) or "Missing streams" in error
-        #
-        # if is_bad:
-        #     logger.warning(f"[{video_id}] Attempt {attempt} failed with BAD COOKIE error: {error}. Invalidating {profile}.")
-        #     cookie_db.invalidate(profile)
-        # else:
-        #     logger.error(f"[{video_id}] Attempt {attempt} failed with non-cookie error: {error}.")
-        #     break
-        logger.warning(f"[{video_id}] Attempt {attempt} failed: {error} (cookie invalidation disabled)")
 
     logger.error(f"[{video_id}] Extraction finally failed after {last_attempt} attempts: {last_error}")
     return JSONResponse({'error': last_error}, status_code=500)
