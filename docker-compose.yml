@@ -168,7 +168,7 @@ services:
       - DIRECT_USER=${DIRECT_USER}
       - DIRECT_PASS=${DIRECT_PASS}
     command: >
-      -L=http://${WARP_USER}:${WARP_PASS}@:1111?probeResist=code:400 -F=socks5://warp-1:40000?ip=warp-1:40000,warp-2:40000,warp-3:40000,warp-4:40000,warp-5:40000&strategy=round&max_fails=3&fail_timeout=180s -L=http://${DIRECT_USER}:${DIRECT_PASS}@:2222?probeResist=code:400
+      -L=http://${WARP_USER}:${WARP_PASS}@:1111?probeResist=code:400 -F=socks5://warp-1:40000?ip=warp-1:40000,warp-2:40000,warp-3:40000,warp-4:40000,warp-5:40000&strategy=round&max_fails=1&fail_timeout=180s -L=http://${DIRECT_USER}:${DIRECT_PASS}@:2222?probeResist=code:400
     networks:
       - backend
 

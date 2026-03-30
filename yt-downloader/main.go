@@ -18,7 +18,7 @@ import (
 )
 
 // @title YT Downloader API
-// @version 1.0.0
+// @version 2.0.0
 // @description API for downloading YouTube videos and audio
 // @termsOfService http://swagger.io/terms/
 

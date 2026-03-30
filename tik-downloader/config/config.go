@@ -37,12 +37,12 @@ var (
 
 	// Cleanup
 	CleanupInterval  = getEnvOrDefault("CLEANUP_INTERVAL", "*/5 * * * *")
-	MaxJobAge        = time.Duration(getEnvIntOrDefault("MAX_JOB_AGE_MIN", 15)) * time.Minute
+	MaxJobAge        = time.Duration(getEnvIntOrDefault("MAX_JOB_AGE_MIN", 60)) * time.Minute
 	CleanupBatchSize = getEnvIntOrDefault("CLEANUP_BATCH_SIZE", 5000)
 
 	// Security
 	SignedURLSecret     = getEnvOrDefault("SIGNED_URL_SECRET", "default-secret-change-me")
-	SignedURLExpiration = time.Duration(getEnvIntOrDefault("SIGNED_URL_EXPIRATION_MIN", 30)) * time.Minute
+	SignedURLExpiration = time.Duration(getEnvIntOrDefault("SIGNED_URL_EXPIRATION_MIN", 60)) * time.Minute
 	HubToken            = getEnvOrDefault("HUB_TOKEN", "1234567890987654321234567890987654321")
 
 	// MongoDB

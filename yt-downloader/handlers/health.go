@@ -6,7 +6,7 @@ import (
 	"github.com/gofiber/fiber/v2"
 )
 
-const Version = "6.0.0"
+const Version = "2.0.0"
 
 // HandleHealth handles GET /health
 // @Summary Health check

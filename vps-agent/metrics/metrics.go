@@ -149,11 +149,11 @@ func collectServiceVersions() map[string]ServiceInfo {
 func checkTCPHealth(cfg tcpServiceConfig) ServiceInfo {
 	conn, err := net.DialTimeout("tcp", cfg.Addr, 2*time.Second)
 	if err != nil {
-		return ServiceInfo{Status: "down", Version: "1.0.0"}
+		return ServiceInfo{Status: "down", Version: "2.0.0"}
 	}
 	conn.Close()
 
-	return ServiceInfo{Status: "ok", Version: "1.0.0"}
+	return ServiceInfo{Status: "ok", Version: "2.0.0"}
 }
 
 
