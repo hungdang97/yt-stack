@@ -15,7 +15,7 @@ logger = logging.getLogger("fb-extractor")
 
 app = FastAPI(
     title="Facebook Extractor",
-    version="1.0.0",
+    version="2.0.0",
     description="Extract media links from Facebook videos, reels, stories. Powered by yt-dlp.",
 )
 
@@ -200,7 +200,7 @@ def _map_response(info: dict) -> dict:
 
 @app.get("/health")
 def health():
-    return {"status": "ok", "service": "fb-extractor", "version": "1.0.0"}
+    return {"status": "ok", "service": "fb-extractor", "version": "2.0.0"}
 
 
 @app.get("/extract", summary="Extract media from Facebook video/reel")

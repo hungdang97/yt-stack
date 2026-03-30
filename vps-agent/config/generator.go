@@ -36,12 +36,12 @@ func GenerateConfig(serverIP string) map[string]interface{} {
 
 		// Cleanup
 		"cleanup_interval":   "*/3 * * * *",
-		"max_job_age_min":    15,
+		"max_job_age_min":    60,
 		"cleanup_batch_size": 5000,
 
 		// Security (random secret)
 		"signed_url_secret":         generateRandomString(32),
-		"signed_url_expiration_min": 30,
+		"signed_url_expiration_min": 60,
 
 		// Limits
 		"max_trim_duration_min": 1440,

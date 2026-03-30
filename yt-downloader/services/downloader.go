@@ -67,7 +67,7 @@ func Download(ctx context.Context, urlProvider *URLProvider, destPath string, to
 }
 
 // downloadSingle streams small files directly to disk
-// Strategy: Direct IP → 403 → Cloudflare Proxy → still 403 → Refresh URL → retry
+// Strategy: Direct IP → retryable error → Cloudflare Proxy (3 attempts) → Refresh URL → retry
 func downloadSingle(ctx context.Context, urlProvider *URLProvider, destPath string, totalSize int64) error {
 	tmpPath := destPath + ".tmp"
 	maxRetries := config.MaxRetries
@@ -84,29 +84,37 @@ func downloadSingle(ctx context.Context, urlProvider *URLProvider, destPath stri
 			goto Success
 		}
 
-		// Non-403 error → fail
-		if !is403(err) {
+		// Non-retryable error → fail immediately
+		if !isRetryable(err) {
 			return fmt.Errorf("single download failed (Direct IP): %w", err)
 		}
 
-		// Step 2: 403 on Direct IP → try Cloudflare Proxy with same URL
-		fmt.Printf("[Download] 403 on Direct IP, trying Cloudflare Proxy...\n")
-		resp, err = fetchRangeWithClient(ctx, currentURL, 0, totalSize-1, true)
-		if err == nil {
+		// Step 2: Retryable error on Direct IP → try Cloudflare Proxy (up to 3 attempts, each hits different WARP via round-robin)
+		fmt.Printf("[Download] %v on Direct IP, trying Cloudflare Proxy...\n", err)
+		proxySuccess := false
+		for p := 0; p < 3; p++ {
+			resp, err = fetchRangeWithClient(ctx, currentURL, 0, totalSize-1, true)
+			if err == nil {
+				proxySuccess = true
+				break
+			}
+			if !isRetryable(err) {
+				return fmt.Errorf("single download failed (Proxy): %w", err)
+			}
+			fmt.Printf("[Download] Proxy attempt %d/3 failed: %v\n", p+1, err)
+			time.Sleep(config.RetryDelay)
+		}
+		if proxySuccess {
 			goto Success
 		}
 
-		// Non-403 error from proxy → fail
-		if !is403(err) {
-			return fmt.Errorf("single download failed (Proxy): %w", err)
-		}
-
-		// Step 3: Both Direct IP and Proxy got 403 → Refresh URL and retry
+		// Step 3: Direct IP + 3 Proxy attempts all failed → Refresh URL and retry
 		if i < maxRetries {
-			fmt.Printf("[Download] 403 on both Direct IP and Proxy, refreshing URL...\n")
+			fmt.Printf("[Download] Retryable error on both Direct IP and Proxy, refreshing URL...\n")
 			if _, refreshErr := urlProvider.Refresh(); refreshErr != nil {
 				return fmt.Errorf("refresh failed: %w", refreshErr)
 			}
+			time.Sleep(config.RetryDelay)
 			continue
 		}
 	}
@@ -203,7 +211,7 @@ func downloadChunked(ctx context.Context, urlProvider *URLProvider, destPath str
 }
 
 // downloadChunkWithRetry downloads a single chunk with retry logic
-// Strategy: Direct IP → 403 → Cloudflare Proxy → still 403 → Refresh URL → retry
+// Strategy: Direct IP → retryable error → Cloudflare Proxy (3 attempts) → Refresh URL → retry
 func downloadChunkWithRetry(ctx context.Context, urlProvider *URLProvider, chunkPath string, start, end int64) error {
 	tmpPath := chunkPath + ".tmp"
 	maxRetries := config.MaxRetries
@@ -224,31 +232,34 @@ func downloadChunkWithRetry(ctx context.Context, urlProvider *URLProvider, chunk
 			return fmt.Errorf("chunk stream failed: %w", err)
 		}
 
-		// Non-403 error → fail
-		if !is403(err) {
+		// Non-retryable error → fail immediately
+		if !isRetryable(err) {
 			return fmt.Errorf("chunk download failed (Direct IP): %w", err)
 		}
 
-		// Step 2: 403 on Direct IP → try Cloudflare Proxy with same URL
-		resp, err = fetchRangeWithClient(ctx, currentURL, start, end, true)
-		if err == nil {
-			err = streamToFile(resp.Body, tmpPath)
-			resp.Body.Close()
+		// Step 2: Retryable error on Direct IP → try Cloudflare Proxy (up to 3 attempts, each hits different WARP via round-robin)
+		for p := 0; p < 3; p++ {
+			resp, err = fetchRangeWithClient(ctx, currentURL, start, end, true)
 			if err == nil {
-				return os.Rename(tmpPath, chunkPath)
+				err = streamToFile(resp.Body, tmpPath)
+				resp.Body.Close()
+				if err == nil {
+					return os.Rename(tmpPath, chunkPath)
+				}
+				os.Remove(tmpPath)
+				return fmt.Errorf("chunk stream failed (Proxy): %w", err)
 			}
-			os.Remove(tmpPath)
-			return fmt.Errorf("chunk stream failed (Proxy): %w", err)
+			if !isRetryable(err) {
+				return fmt.Errorf("chunk download failed (Proxy): %w", err)
+			}
+			fmt.Printf("[Download] Chunk %d: proxy attempt %d/3 failed: %v\n", (start / config.ChunkSize), p+1, err)
+			time.Sleep(config.RetryDelay)
 		}
 
-		// Non-403 error from proxy → fail
-		if !is403(err) {
-			return fmt.Errorf("chunk download failed (Proxy): %w", err)
-		}
-
-		// Step 3: Both Direct IP and Proxy got 403 → Refresh URL and retry
+		// Step 3: Direct IP + 3 Proxy attempts all failed → Refresh URL and retry
 		lastErr = err
 		if i < maxRetries {
+			fmt.Printf("[Download] Chunk %d: retryable error, refreshing URL (attempt %d/%d)...\n", (start / config.ChunkSize), i+1, maxRetries)
 			if _, refreshErr := urlProvider.Refresh(); refreshErr != nil {
 				return fmt.Errorf("refresh failed: %w", refreshErr)
 			}
@@ -265,6 +276,22 @@ func is403(err error) bool {
 		return false
 	}
 	return strings.Contains(err.Error(), "403")
+}
+
+// isRetryable returns true for transient HTTP errors that should be retried
+func isRetryable(err error) bool {
+	if err == nil {
+		return false
+	}
+	msg := err.Error()
+	return strings.Contains(msg, "403") ||
+		strings.Contains(msg, "429") ||
+		strings.Contains(msg, "503") ||
+		strings.Contains(msg, "502") ||
+		strings.Contains(msg, "504") ||
+		strings.Contains(msg, "Service Unavailable") ||
+		strings.Contains(msg, "Bad Gateway") ||
+		strings.Contains(msg, "Gateway Timeout")
 }
 
 // streamToFile streams data from reader to file using buffer pool
