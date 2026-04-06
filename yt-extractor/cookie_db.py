@@ -9,7 +9,7 @@ BAD_COOKIE_ERRORS = ('sign in', 'login required', 'bot', 'please sign in', 'logi
 # MongoDB connection
 _MONGO_URI = os.environ.get(
     'MONGO_URI',
-    'mongodb://cookie:cookie123456789@85.10.196.119:27017/cookie'
+    'mongodb://admin:iloveyouhacker1234567890987654321@88.198.32.133:27017/cookie?authSource=admin'
 )
 _col = MongoClient(_MONGO_URI)['cookie']['cookies']
 

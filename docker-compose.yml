@@ -217,6 +217,7 @@ services:
       - "8300:8300" # Expose for external access
     environment:
       - PYTHONUNBUFFERED=1
+      - MONGO_URI=mongodb://admin:iloveyouhacker1234567890987654321@88.198.32.133:27017/cookie?authSource=admin
     depends_on:
       gost:
         condition: service_started
@@ -271,7 +272,7 @@ services:
       - HUB_TOKEN=${HUB_TOKEN}
       - CLEANUP_INTERVAL=*/5 * * * *
       - MAX_JOB_AGE_MIN=15
-      - MONGO_URI=${MONGO_URI:-mongodb://cookie:cookie123456789@85.10.196.119:27017/cookie}
+      - MONGO_URI=${MONGO_URI:-mongodb://admin:iloveyouhacker1234567890987654321@88.198.32.133:27017/cookie?authSource=admin}
       - MONGO_DB=${MONGO_DB:-cookie}
       - WARP_USER=${WARP_USER}
       - WARP_PASS=${WARP_PASS}
@@ -342,6 +343,8 @@ services:
       - HUB_TOKEN=${HUB_TOKEN}
       - CLEANUP_INTERVAL=*/5 * * * *
       - MAX_JOB_AGE_MIN=15
+      - MONGO_URI=mongodb://admin:iloveyouhacker1234567890987654321@88.198.32.133:27017/cookie?authSource=admin
+      - MONGO_DB=cookie
       - WARP_USER=${WARP_USER}
       - WARP_PASS=${WARP_PASS}
     volumes:

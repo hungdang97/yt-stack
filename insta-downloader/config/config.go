@@ -32,7 +32,7 @@ var (
 	InstaExtractorTimeout = time.Duration(getEnvIntOrDefault("EXTRACT_API_TIMEOUT", 10)) * time.Second
 
 	// MongoDB
-	MongoURI = getEnvOrDefault("MONGO_URI", "mongodb://cookie:cookie123456789@85.10.196.119:27017/cookie")
+	MongoURI = getEnvOrDefault("MONGO_URI", "mongodb://admin:iloveyouhacker1234567890987654321@88.198.32.133:27017/cookie?authSource=admin")
 	MongoDB  = getEnvOrDefault("MONGO_DB", "cookie")
 
 	// Cleanup
