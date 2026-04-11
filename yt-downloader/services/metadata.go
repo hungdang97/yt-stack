@@ -49,7 +49,7 @@ func FFmpegEmbedMetadata(jobDir string, meta *models.Meta) error {
 		switch format {
 		case "mp3":
 			args = append(args, "-id3v2_version", "3")
-		case "mp4", "m4a":
+		case "mp4", "m4a", "mov", "aac":
 			args = append(args, "-disposition:v:1", "attached_pic")
 		case "flac", "ogg":
 			args = append(args, "-disposition:v", "attached_pic")
@@ -90,10 +90,10 @@ func FFmpegEmbedMetadata(jobDir string, meta *models.Meta) error {
 // canEmbedThumbnail checks if the format supports embedded thumbnail
 func canEmbedThumbnail(format string) bool {
 	switch format {
-	case "mp4", "m4a", "mp3", "flac", "ogg":
+	case "mp4", "m4a", "mp3", "flac", "ogg", "mov", "aac":
 		return true // Fully supported containers for cover art
-	case "webm", "opus", "mkv":
-		return false // WebM/MKV officially don't support simple attached_pic copying without complex re-muxing
+	case "webm", "opus", "mkv", "avi", "flv", "gif", "alac":
+		return false
 	default:
 		return false
 	}

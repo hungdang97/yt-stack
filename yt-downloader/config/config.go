@@ -88,8 +88,8 @@ var (
 // ============================================
 
 var (
-	VideoFormats = []string{"mp4", "webm", "mkv"}
-	AudioFormats = []string{"mp3", "m4a", "wav", "opus", "flac", "ogg"}
+	VideoFormats = []string{"mp4", "webm", "mkv", "avi", "flv", "gif", "mov"}
+	AudioFormats = []string{"mp3", "m4a", "wav", "opus", "flac", "ogg", "aac", "alac"}
 	Qualities    = []string{"2160p", "1440p", "1080p", "720p", "480p", "360p", "144p"}
 	OSTypes      = []string{"ios", "android", "macos", "windows", "linux"}
 )
@@ -162,18 +162,23 @@ var DefaultProfile = DeviceProfile{
 var AudioCodecMap = map[string]string{
 	"mp3": "libmp3lame", "m4a": "aac", "mp4": "aac", "wav": "pcm_s16le",
 	"opus": "libopus", "flac": "flac", "webm": "libopus", "ogg": "libvorbis",
+	"aac": "aac", "alac": "alac",
+	"avi": "libmp3lame", "flv": "aac", "mov": "aac",
 }
 
 var VideoCodecMap = map[string]string{
 	"mp4": "libx264", "mkv": "libx264", "webm": "libvpx-vp9",
+	"avi": "libx264", "flv": "libx264", "mov": "libx264",
 }
 
 // MIME type to extension mapping
 var MimeToExt = map[string]string{
 	"video/mp4": "mp4", "video/webm": "webm",
+	"video/x-msvideo": "avi", "video/x-flv": "flv",
+	"video/quicktime": "mov", "image/gif": "gif",
 	"audio/mp4": "m4a", "audio/webm": "webm", "audio/mpeg": "mp3",
 	"audio/ogg": "ogg", "audio/opus": "opus", "audio/flac": "flac",
-	"audio/wav": "wav", "audio/x-wav": "wav",
+	"audio/wav": "wav", "audio/x-wav": "wav", "audio/aac": "aac",
 }
 
 // ============================================

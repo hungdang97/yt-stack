@@ -356,8 +356,9 @@ func needsAudioTranscode(meta *models.Meta) bool {
 	if inputExt == outputFormat {
 		return false
 	}
-	// m4a/mp4 compatible: no transcode
-	if (inputExt == "m4a" || inputExt == "mp4") && (outputFormat == "m4a" || outputFormat == "mp4") {
+	// m4a/mp4/mov/aac compatible: no transcode (all use AAC codec)
+	aacFormats := map[string]bool{"m4a": true, "mp4": true, "mov": true, "aac": true}
+	if aacFormats[inputExt] && aacFormats[outputFormat] {
 		return false
 	}
 	// webm to opus: no transcode (YouTube webm contains Opus)
