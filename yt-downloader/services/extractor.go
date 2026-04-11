@@ -137,17 +137,10 @@ func SelectVideo(data *models.ExtractResponse, requestedQuality string, osType s
 		return result
 	}
 
-	// Sort by quality dimension (descending), then format compatibility, then bitrate (descending)
+	// Sort by format compatibility (first), then quality (descending), then bitrate (descending)
+	// Prioritizing compatibility avoids heavy re-encoding for formats with limited codec support (MOV, FLV)
 	sort.Slice(compatibleStreams, func(i, j int) bool {
-		// 1. Quality dimension priority (higher is better)
-		// Use shorter edge for quality comparison to handle both landscape and vertical videos
-		dimI := getQualityDimension(&compatibleStreams[i])
-		dimJ := getQualityDimension(&compatibleStreams[j])
-		if dimI != dimJ {
-			return dimI > dimJ
-		}
-
-		// 2. Format compatibility priority (compatible codecs preferred)
+		// 1. Format compatibility priority (compatible codecs preferred — avoids re-encoding)
 		codecI := GetStreamCodec(&compatibleStreams[i])
 		codecJ := GetStreamCodec(&compatibleStreams[j])
 		compatI := isVideoCodecCompatible(codecI, targetFormat)
@@ -155,6 +148,14 @@ func SelectVideo(data *models.ExtractResponse, requestedQuality string, osType s
 
 		if compatI != compatJ {
 			return compatI // true comes first
+		}
+
+		// 2. Quality dimension priority (higher is better)
+		// Use shorter edge for quality comparison to handle both landscape and vertical videos
+		dimI := getQualityDimension(&compatibleStreams[i])
+		dimJ := getQualityDimension(&compatibleStreams[j])
+		if dimI != dimJ {
+			return dimI > dimJ
 		}
 
 		// 3. Bitrate priority (higher is better)
