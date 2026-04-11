@@ -77,6 +77,12 @@ func ValidateDownloadRequest(req *models.DownloadRequest) error {
 		return ValidationError{Field: "audio.bitrate", Message: "Invalid bitrate format. Must be like '192k'"}
 	}
 
+	// Trim not supported for these formats
+	noTrimFormats := map[string]bool{"avi": true, "flv": true, "mov": true, "aac": true, "alac": true}
+	if req.Trim != nil && noTrimFormats[req.Output.Format] {
+		req.Trim = nil // silently ignore trim for unsupported formats
+	}
+
 	// Validate trim if provided
 	if req.Trim != nil {
 		if req.Trim.Start < 0 {
