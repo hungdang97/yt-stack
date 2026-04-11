@@ -94,8 +94,13 @@ func FFmpegConvertAudio(jobDir string, format string, bitrate string, audioFile 
 		}
 
 		// Add bitrate for lossy codecs
-		if bitrate != "" && codec != "pcm_s16le" && codec != "flac" {
+		if bitrate != "" && codec != "pcm_s16le" && codec != "flac" && codec != "alac" {
 			args = append(args, "-b:a", bitrate)
+		}
+
+		// ALAC needs explicit M4A/MP4 container (ffmpeg can't infer from .alac extension)
+		if codec == "alac" {
+			args = append(args, "-f", "ipod")
 		}
 
 		args = append(args, outputFile)
