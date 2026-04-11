@@ -92,7 +92,7 @@ func canEmbedThumbnail(format string) bool {
 	switch format {
 	case "mp4", "m4a", "mp3", "flac", "ogg", "mov", "aac":
 		return true // Fully supported containers for cover art
-	case "webm", "opus", "mkv", "avi", "flv", "gif", "alac":
+	case "webm", "opus", "mkv", "avi", "flv", "alac":
 		return false
 	default:
 		return false

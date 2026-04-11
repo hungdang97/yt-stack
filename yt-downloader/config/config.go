@@ -88,7 +88,7 @@ var (
 // ============================================
 
 var (
-	VideoFormats = []string{"mp4", "webm", "mkv", "avi", "flv", "gif", "mov"}
+	VideoFormats = []string{"mp4", "webm", "mkv", "avi", "flv", "mov"}
 	AudioFormats = []string{"mp3", "m4a", "wav", "opus", "flac", "ogg", "aac", "alac"}
 	Qualities    = []string{"2160p", "1440p", "1080p", "720p", "480p", "360p", "144p"}
 	OSTypes      = []string{"ios", "android", "macos", "windows", "linux"}
@@ -175,7 +175,7 @@ var VideoCodecMap = map[string]string{
 var MimeToExt = map[string]string{
 	"video/mp4": "mp4", "video/webm": "webm",
 	"video/x-msvideo": "avi", "video/x-flv": "flv",
-	"video/quicktime": "mov", "image/gif": "gif",
+	"video/quicktime": "mov",
 	"audio/mp4": "m4a", "audio/webm": "webm", "audio/mpeg": "mp3",
 	"audio/ogg": "ogg", "audio/opus": "opus", "audio/flac": "flac",
 	"audio/wav": "wav", "audio/x-wav": "wav", "audio/aac": "aac",
