@@ -449,9 +449,6 @@ func isVideoCodecCompatible(videoCodec string, targetFormat string) bool {
 	case "flv":
 		// FLV supports H.264
 		return slices.Contains([]string{"avc1"}, videoCodec)
-	case "gif":
-		// GIF always needs re-encoding (palette-based format)
-		return false
 	default:
 		return false
 	}

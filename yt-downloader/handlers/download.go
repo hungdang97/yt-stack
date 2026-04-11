@@ -293,7 +293,6 @@ func shouldMerge(meta *models.Meta) bool {
 	const (
 		maxDurationAudio = 5 * 60.0   // 5 minutes for audio
 		maxDurationVideo = 4 * 3600.0 // 4 hours for video
-		maxDurationGIF   = 2 * 60.0   // 2 minutes for GIF (palette encoding is heavy)
 	)
 
 	// Use effective duration: trimmed duration if trim is set, otherwise full duration
@@ -309,12 +308,6 @@ func shouldMerge(meta *models.Meta) bool {
 	transcode := needsTranscode(meta)
 
 	if transcode {
-		// GIF always needs merge (streaming raw webm as GIF makes no sense)
-		// Cap at 2 minutes to prevent server overload from palette encoding
-		if meta.Format == "gif" && duration <= maxDurationGIF {
-			return true
-		}
-
 		// Exception: Audio < 5 minutes can still merge even with transcoding
 		if meta.OutputType == "audio" && duration < maxDurationAudio {
 			return true

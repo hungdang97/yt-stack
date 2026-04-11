@@ -225,8 +225,6 @@ func ContentTypeFromExt(ext string) string {
 		return "video/x-msvideo"
 	case "flv":
 		return "video/x-flv"
-	case "gif":
-		return "image/gif"
 	case "mov":
 		return "video/quicktime"
 	case "mp3":
