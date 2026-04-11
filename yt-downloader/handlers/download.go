@@ -285,21 +285,38 @@ func processJob(jobID string, meta *models.Meta, videoSelection *models.VideoSel
 
 // shouldMerge determines if the job should be pre-merged or stream-only
 // Strategy: Prevent server overload from heavy transcoding
-// - All transcoding jobs → STREAM (except audio < 5 minutes)
+// - All transcoding jobs → STREAM (except audio < 5 minutes or GIF < 2 minutes)
 // - Audio < 5 minutes → can merge even if needs transcoding
-// - Non-transcoding: Audio ≤ 3 min merge, Video ≤ 4 hours merge
+// - Non-transcoding: Audio ≤ 5 min merge, Video ≤ 4 hours merge
+// - Uses effective duration (respects trim if present)
 func shouldMerge(meta *models.Meta) bool {
 	const (
 		maxDurationAudio = 5 * 60.0   // 5 minutes for audio
 		maxDurationVideo = 4 * 3600.0 // 4 hours for video
+		maxDurationGIF   = 2 * 60.0   // 2 minutes for GIF (palette encoding is heavy)
 	)
+
+	// Use effective duration: trimmed duration if trim is set, otherwise full duration
+	duration := meta.Duration
+	if meta.Trim != nil {
+		trimDuration := meta.Trim.End - meta.Trim.Start
+		if trimDuration > 0 {
+			duration = trimDuration
+		}
+	}
 
 	// Check if needs transcoding (heavy CPU)
 	transcode := needsTranscode(meta)
 
 	if transcode {
+		// GIF always needs merge (streaming raw webm as GIF makes no sense)
+		// Cap at 2 minutes to prevent server overload from palette encoding
+		if meta.Format == "gif" && duration <= maxDurationGIF {
+			return true
+		}
+
 		// Exception: Audio < 5 minutes can still merge even with transcoding
-		if meta.OutputType == "audio" && meta.Duration < maxDurationAudio {
+		if meta.OutputType == "audio" && duration < maxDurationAudio {
 			return true
 		}
 		// All other transcoding jobs must stream to prevent server overload
@@ -308,11 +325,11 @@ func shouldMerge(meta *models.Meta) bool {
 
 	// No transcoding needed - use duration thresholds
 	if meta.OutputType == "audio" {
-		return meta.Duration <= maxDurationAudio
+		return duration <= maxDurationAudio
 	}
 
 	// Video
-	return meta.Duration <= maxDurationVideo
+	return duration <= maxDurationVideo
 }
 
 // needsTranscode checks if the job requires transcoding (heavy CPU)
