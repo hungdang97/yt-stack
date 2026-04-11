@@ -167,8 +167,8 @@ func streamVideo(c *fiber.Ctx, meta *models.Meta) error {
 		)
 	}
 
-	// Add movflags for streamable MP4
-	if format == "mp4" {
+	// Add movflags for streamable MP4/MOV
+	if format == "mp4" || format == "mov" {
 		args = append(args, "-movflags", "frag_keyframe+empty_moov+faststart")
 	}
 
@@ -257,15 +257,15 @@ func streamAudio(c *fiber.Ctx, meta *models.Meta) error {
 		)
 
 		// Add bitrate for lossy codecs
-		if codec != "pcm_s16le" && codec != "flac" {
+		if codec != "pcm_s16le" && codec != "flac" && codec != "alac" {
 			args = append(args, "-b:a", bitrate)
 		}
 
 		args = append(args, "-f", getFFmpegFormat(format))
 	}
 
-	// Add movflags for streamable M4A (similar to MP4)
-	if format == "m4a" {
+	// Add movflags for streamable M4A/ALAC (need MP4 container atoms for pipe output)
+	if format == "m4a" || format == "alac" {
 		args = append(args, "-movflags", "frag_keyframe+empty_moov+faststart")
 	}
 
@@ -342,12 +342,22 @@ func getFFmpegFormat(ext string) string {
 		return "webm"
 	case "mkv":
 		return "matroska"
+	case "avi":
+		return "avi"
+	case "flv":
+		return "flv"
+	case "mov":
+		return "mov"
 	case "mp3":
 		return "mp3"
-	case "m4a":
-		return "ipod" // FFmpeg uses "ipod" for m4a
+	case "m4a", "aac":
+		return "adts" // raw AAC stream (ADTS framing, streamable)
+	case "alac":
+		return "ipod" // ALAC needs M4A/MP4 container
 	case "opus":
 		return "opus"
+	case "ogg":
+		return "ogg"
 	case "wav":
 		return "wav"
 	case "flac":
@@ -362,7 +372,9 @@ func canCopyAudioStream(inputExt, outputFormat string) bool {
 	if inputExt == outputFormat {
 		return true
 	}
-	if (inputExt == "m4a" || inputExt == "mp4") && (outputFormat == "m4a" || outputFormat == "mp4") {
+	// m4a/mp4/mov/aac are compatible (all use AAC codec)
+	aacFormats := map[string]bool{"m4a": true, "mp4": true, "mov": true, "aac": true}
+	if aacFormats[inputExt] && aacFormats[outputFormat] {
 		return true
 	}
 	if inputExt == "webm" && outputFormat == "opus" {
