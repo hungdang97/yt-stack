@@ -17,6 +17,23 @@ func FFmpegMerge(jobDir string, format string, videoFile string, audioFile strin
 
 	var args []string
 
+	// GIF: video-only with palette generation for quality
+	if format == "gif" {
+		args = []string{
+			"-y",
+			"-i", filepath.Join(jobDir, videoFile),
+			"-vf", "fps=15,scale=480:-1:flags=lanczos,split[s0][s1];[s0]palettegen=max_colors=256[p];[s1][p]paletteuse=dither=sierra2_4a",
+			"-threads", "2",
+			"-loop", "0",
+			outputFile,
+		}
+
+		if err := runFFmpeg(args); err != nil {
+			return "", fmt.Errorf("gif conversion failed: %w", err)
+		}
+		return filepath.Base(outputFile), nil
+	}
+
 	if needsReencode {
 		// Re-encode to compatible codecs for target format
 		videoCodec := config.VideoCodecMap[format]
@@ -214,8 +231,9 @@ func canCopyAudio(inputExt string, outputFormat string) bool {
 		return true
 	}
 
-	// m4a/mp4 are compatible (both use AAC codec typically)
-	if (inputExt == "m4a" || inputExt == "mp4") && (outputFormat == "m4a" || outputFormat == "mp4") {
+	// m4a/mp4/mov/aac are compatible (all use AAC codec typically)
+	aacFormats := map[string]bool{"m4a": true, "mp4": true, "mov": true, "aac": true}
+	if aacFormats[inputExt] && aacFormats[outputFormat] {
 		return true
 	}
 

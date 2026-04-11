@@ -221,6 +221,14 @@ func ContentTypeFromExt(ext string) string {
 		return "video/webm"
 	case "mkv":
 		return "video/x-matroska"
+	case "avi":
+		return "video/x-msvideo"
+	case "flv":
+		return "video/x-flv"
+	case "gif":
+		return "image/gif"
+	case "mov":
+		return "video/quicktime"
 	case "mp3":
 		return "audio/mpeg"
 	case "m4a":
@@ -233,6 +241,10 @@ func ContentTypeFromExt(ext string) string {
 		return "audio/flac"
 	case "ogg":
 		return "audio/ogg"
+	case "aac":
+		return "audio/aac"
+	case "alac":
+		return "audio/mp4"
 	default:
 		return "application/octet-stream"
 	}

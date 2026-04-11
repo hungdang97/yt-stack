@@ -424,10 +424,10 @@ func codecPriority(codec string, priorityList []string) int {
 // isVideoCodecCompatible checks if video codec is compatible with target format
 func isVideoCodecCompatible(videoCodec string, targetFormat string) bool {
 	switch targetFormat {
-	case "mp4":
-		// MP4 supports H.264/H.265/VP9/AV1 video
+	case "mp4", "mov":
+		// MP4/MOV supports H.264/H.265/VP9/AV1 video
 		// Modern players (2016+) support VP9 and AV1 in MP4 container
-		// This avoids extremely heavy re-encoding for 4K videos
+		// MOV (QuickTime) shares the same ISOBMFF base as MP4
 		return slices.Contains([]string{
 			"avc1",         // H.264
 			"hvc1", "hev1", // H.265
@@ -437,9 +437,15 @@ func isVideoCodecCompatible(videoCodec string, targetFormat string) bool {
 	case "webm":
 		// WebM supports VP8/VP9/AV1 video
 		return slices.Contains([]string{"vp8", "vp9", "vp09", "av01"}, videoCodec)
-	case "mkv":
-		// MKV supports almost everything
+	case "mkv", "avi":
+		// MKV/AVI supports almost everything
 		return true
+	case "flv":
+		// FLV supports H.264
+		return slices.Contains([]string{"avc1"}, videoCodec)
+	case "gif":
+		// GIF always needs re-encoding (palette-based format)
+		return false
 	default:
 		return false
 	}
@@ -448,22 +454,25 @@ func isVideoCodecCompatible(videoCodec string, targetFormat string) bool {
 // IsAudioCodecCompatible checks if audio codec is compatible with target format
 func IsAudioCodecCompatible(audioCodec string, targetFormat string) bool {
 	switch targetFormat {
-	case "mp4", "m4a":
-		// MP4/M4A support AAC audio
+	case "mp4", "m4a", "mov", "aac":
+		// MP4/M4A/MOV/AAC support AAC audio
 		return strings.HasPrefix(audioCodec, "mp4a") // AAC codec
 	case "webm":
 		// WebM supports Opus and Vorbis
 		return audioCodec == "opus" || audioCodec == "vorbis"
-	case "mkv":
-		// MKV supports almost everything
+	case "mkv", "avi":
+		// MKV/AVI supports almost everything
 		return true
+	case "flv":
+		// FLV supports AAC and MP3
+		return strings.HasPrefix(audioCodec, "mp4a")
 	case "opus":
 		// Opus format expects Opus codec
 		return audioCodec == "opus"
 	case "ogg":
 		// OGG typically uses Vorbis or Opus
 		return audioCodec == "vorbis" || audioCodec == "opus"
-	case "mp3", "wav", "flac":
+	case "mp3", "wav", "flac", "alac":
 		// These formats require transcoding from any source
 		return false
 	default:
