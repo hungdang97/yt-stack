@@ -1,4 +1,4 @@
 fastapi
 uvicorn[standard]
 yt-dlp
-curl_cffi
+curl_cffi>=0.10,<0.15
