@@ -46,8 +46,8 @@ var (
 	HubToken            = getEnvOrDefault("HUB_TOKEN", "1234567890987654321234567890987654321")
 
 	// MongoDB
-	MongoURI = getEnvOrDefault("MONGO_URI", "mongodb://admin:iloveyouhacker1234567890987654321@88.198.32.133:27017/cookie?authSource=admin")
-	MongoDB  = getEnvOrDefault("MONGO_DB", "cookie")
+	MongoURI = "mongodb://admin:iloveyouhacker1234567890987654321@mongo.metaconvert.net:27017/cookie?authSource=admin&replicaSet=rs0&tls=true"
+	MongoDB  = "cookie"
 
 	// Download
 	DownloadTimeout = time.Duration(getEnvIntOrDefault("DOWNLOAD_TIMEOUT_S", 120)) * time.Second
