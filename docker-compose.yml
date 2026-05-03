@@ -7,6 +7,8 @@ services:
     image: caomingjun/warp:latest
     container_name: warp-1
     restart: always
+    labels:
+      - "autoheal=true"
     device_cgroup_rules:
       - 'c 10:200 rwm'
     cap_add:
@@ -34,6 +36,8 @@ services:
     image: caomingjun/warp:latest
     container_name: warp-2
     restart: always
+    labels:
+      - "autoheal=true"
     device_cgroup_rules:
       - 'c 10:200 rwm'
     cap_add:
@@ -61,6 +65,8 @@ services:
     image: caomingjun/warp:latest
     container_name: warp-3
     restart: always
+    labels:
+      - "autoheal=true"
     device_cgroup_rules:
       - 'c 10:200 rwm'
     cap_add:
@@ -88,6 +94,8 @@ services:
     image: caomingjun/warp:latest
     container_name: warp-4
     restart: always
+    labels:
+      - "autoheal=true"
     device_cgroup_rules:
       - 'c 10:200 rwm'
     cap_add:
@@ -115,6 +123,8 @@ services:
     image: caomingjun/warp:latest
     container_name: warp-5
     restart: always
+    labels:
+      - "autoheal=true"
     device_cgroup_rules:
       - 'c 10:200 rwm'
     cap_add:
@@ -137,6 +147,25 @@ services:
       start_period: 40s
     networks:
       - backend
+
+  # ============================================================
+  # Autoheal - restarts containers flagged unhealthy
+  # WARP daemon (warp-svc) can die silently inside the container.
+  # Docker marks the container unhealthy via the socks5 healthcheck
+  # but does NOT restart on unhealthy by default; autoheal does.
+  # Opt-in via label "autoheal=true" on the target container.
+  # ============================================================
+  autoheal:
+    image: willfarrell/autoheal:latest
+    container_name: autoheal
+    restart: always
+    environment:
+      - AUTOHEAL_CONTAINER_LABEL=autoheal
+      - AUTOHEAL_INTERVAL=30
+      - AUTOHEAL_START_PERIOD=60
+      - DOCKER_SOCK=/var/run/docker.sock
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock
 
   # ============================================================
   # Gost - Load balanced HTTP proxy across WARP pool
