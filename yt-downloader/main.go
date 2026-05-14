@@ -67,6 +67,7 @@ func main() {
 	// API routes
 	api := app.Group("/api")
 	api.Post("/download", handlers.HandleDownload)
+	api.Post("/info", handlers.HandleInfo)
 	api.Get("/status/:id", handlers.HandleStatus)
 	api.Delete("/jobs/:id", handlers.HandleDeleteJob)
 
