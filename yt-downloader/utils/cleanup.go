@@ -44,13 +44,19 @@ func CleanupOldJobs() {
 			continue
 		}
 
+		var createdAt time.Time
 		meta, err := ReadMeta(jobID)
 		if err != nil {
-			DeleteJobDir(jobID)
-			continue
+			prepareMeta, prepErr := ReadPrepareMeta(jobID)
+			if prepErr != nil {
+				DeleteJobDir(jobID)
+				continue
+			}
+			createdAt = time.UnixMilli(prepareMeta.CreatedAt)
+		} else {
+			createdAt = time.UnixMilli(meta.CreatedAt)
 		}
 
-		createdAt := time.UnixMilli(meta.CreatedAt)
 		age := now.Sub(createdAt)
 
 		if age > config.MaxJobAge {

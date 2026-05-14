@@ -74,6 +74,8 @@ func HandleFiles(c *fiber.Ctx) error {
 		c.Set("Content-Type", "image/jpeg")
 	case ".png":
 		c.Set("Content-Type", "image/png")
+	case ".json":
+		c.Set("Content-Type", "application/json")
 	default:
 		c.Set("Content-Type", "application/octet-stream")
 	}

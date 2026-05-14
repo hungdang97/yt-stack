@@ -137,3 +137,12 @@ func generatePrepareStatusToken(jobID string, expires int64) string {
 func ParseExpires(expiresStr string) (int64, error) {
 	return strconv.ParseInt(expiresStr, 10, 64)
 }
+
+// ExtractRawURLFromProxy extracts the original URL from a proxy media URL
+func ExtractRawURLFromProxy(proxyURL string) string {
+	parsed, err := url.Parse(proxyURL)
+	if err != nil {
+		return ""
+	}
+	return parsed.Query().Get("url")
+}

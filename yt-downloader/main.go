@@ -70,6 +70,7 @@ func main() {
 	api.Get("/info", handlers.HandleInfo)
 	api.Post("/prepare", handlers.HandlePrepare)
 	api.Get("/prepare/status/:id", handlers.HandlePrepareStatus)
+	api.Post("/caption", handlers.HandleCaption)
 	api.Get("/status/:id", handlers.HandleStatus)
 	api.Delete("/jobs/:id", handlers.HandleDeleteJob)
 

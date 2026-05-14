@@ -69,6 +69,8 @@ func HandleFiles(c *fiber.Ctx) error {
 		c.Set("Content-Type", "audio/mpeg")
 	case ".m4a":
 		c.Set("Content-Type", "audio/mp4")
+	case ".json":
+		c.Set("Content-Type", "application/json")
 	default:
 		c.Set("Content-Type", "application/octet-stream")
 	}

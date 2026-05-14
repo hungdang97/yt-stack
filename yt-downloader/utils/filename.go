@@ -243,6 +243,8 @@ func ContentTypeFromExt(ext string) string {
 		return "audio/aac"
 	case "alac":
 		return "audio/mp4"
+	case "json":
+		return "application/json"
 	default:
 		return "application/octet-stream"
 	}

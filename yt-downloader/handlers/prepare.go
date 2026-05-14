@@ -25,11 +25,11 @@ type PrepareResponse struct {
 }
 
 type PrepareStatusResponse struct {
-	Status   string  `json:"status"`
-	Progress int     `json:"progress"`
-	VideoURL string  `json:"videoUrl,omitempty"`
-	AudioURL string  `json:"audioUrl,omitempty"`
-	Error    string  `json:"error,omitempty"`
+	Status   string `json:"status"`
+	Progress int    `json:"progress"`
+	VideoURL string `json:"videoUrl,omitempty"`
+	AudioURL string `json:"audioUrl,omitempty"`
+	Error    string `json:"error,omitempty"`
 }
 
 // HandlePrepare handles POST /api/prepare — extracts metadata, starts background download of video+audio

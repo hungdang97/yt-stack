@@ -54,18 +54,24 @@ func cleanupOldJobs() {
 			continue
 		}
 
+		var createdAt time.Time
 		metaPath := filepath.Join(config.StorageDir, jobID, "meta.json")
 		data, err := os.ReadFile(metaPath)
 		if err != nil {
-			continue
+			prepareMeta, prepErr := ReadPrepareMeta(jobID)
+			if prepErr != nil {
+				continue
+			}
+			createdAt = time.UnixMilli(prepareMeta.CreatedAt)
+		} else {
+			var meta models.Meta
+			if err := json.Unmarshal(data, &meta); err != nil {
+				continue
+			}
+			createdAt = time.UnixMilli(meta.CreatedAt)
 		}
 
-		var meta models.Meta
-		if err := json.Unmarshal(data, &meta); err != nil {
-			continue
-		}
-
-		age := now.Sub(time.UnixMilli(meta.CreatedAt))
+		age := now.Sub(createdAt)
 		if age > config.MaxJobAge {
 			if err := os.RemoveAll(filepath.Join(config.StorageDir, jobID)); err != nil {
 				log.Printf("[Cleanup] Failed to remove %s: %v", jobID, err)
