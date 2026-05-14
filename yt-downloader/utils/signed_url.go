@@ -5,6 +5,7 @@ import (
 	"crypto/sha256"
 	"encoding/hex"
 	"fmt"
+	"net/url"
 	"strconv"
 	"time"
 	"yt-downloader-go/config"
@@ -89,7 +90,7 @@ func generateToken(jobID, filename string, expires int64) string {
 func GenerateMediaProxyURL(rawURL string) string {
 	expires := time.Now().Add(config.SignedURLExpiration).Unix()
 	token := generateMediaToken(rawURL, expires)
-	return fmt.Sprintf("%s/proxy/media?token=%s&expires=%d&url=%s", config.BaseURL, token, expires, rawURL)
+	return fmt.Sprintf("%s/proxy/media?token=%s&expires=%d&url=%s", config.BaseURL, token, expires, url.QueryEscape(rawURL))
 }
 
 // ValidateMediaProxyURL checks if the media proxy token is valid and not expired

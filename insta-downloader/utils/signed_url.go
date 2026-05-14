@@ -6,6 +6,7 @@ import (
 	"encoding/hex"
 	"fmt"
 	"insta-downloader/config"
+	"net/url"
 	"strconv"
 	"time"
 )
@@ -62,7 +63,7 @@ func generateStatusToken(jobID string, expires int64) string {
 func GenerateMediaProxyURL(rawURL string) string {
 	expires := time.Now().Add(config.SignedURLExpiration).Unix()
 	token := generateMediaToken(rawURL, expires)
-	return fmt.Sprintf("%s%s/proxy/media?token=%s&expires=%d&url=%s", config.BaseURL, config.PathPrefix, token, expires, rawURL)
+	return fmt.Sprintf("%s%s/proxy/media?token=%s&expires=%d&url=%s", config.BaseURL, config.PathPrefix, token, expires, url.QueryEscape(rawURL))
 }
 
 // ValidateMediaProxyURL checks if the media proxy token is valid and not expired
