@@ -63,13 +63,25 @@ func HandleFiles(c *fiber.Ctx) error {
 	}
 
 	// Read metadata to get actual output filename
+	// Try regular meta first, fallback to prepare meta
+	var jobStatus string
+	var downloadFilename string
 	meta, err := utils.ReadMeta(jobID)
 	if err != nil {
-		return utils.InternalError(c, "Failed to read job metadata")
+		// Try prepare meta
+		prepareMeta, prepErr := utils.ReadPrepareMeta(jobID)
+		if prepErr != nil {
+			return utils.InternalError(c, "Failed to read job metadata")
+		}
+		jobStatus = prepareMeta.Status
+		downloadFilename = filename // Use raw filename for prepare jobs
+	} else {
+		jobStatus = meta.Status
+		downloadFilename = utils.GenerateOutputFilename(meta)
 	}
 
 	// Check if job is completed
-	if meta.Status != models.StatusCompleted {
+	if jobStatus != models.StatusCompleted {
 		return utils.BadRequest(c, utils.ErrJobNotReady, "Job is not completed yet")
 	}
 
@@ -85,9 +97,6 @@ func HandleFiles(c *fiber.Ctx) error {
 	// Get content type
 	ext := strings.TrimPrefix(filepath.Ext(filename), ".")
 	contentType := utils.ContentTypeFromExt(ext)
-
-	// Generate download filename
-	downloadFilename := utils.GenerateOutputFilename(meta)
 
 	// RFC 5987 encoding for non-ASCII characters
 	encodedFilename := url.PathEscape(downloadFilename)

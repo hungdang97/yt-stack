@@ -35,12 +35,19 @@ func HandleFiles(c *fiber.Ctx) error {
 		})
 	}
 
-	// Check job exists
+	// Check job exists — try regular meta, fallback to prepare meta
+	var title string
 	meta, err := utils.ReadMeta(jobID)
 	if err != nil {
-		return c.Status(fiber.StatusNotFound).JSON(fiber.Map{
-			"error": "Job not found",
-		})
+		prepareMeta, prepErr := utils.ReadPrepareMeta(jobID)
+		if prepErr != nil {
+			return c.Status(fiber.StatusNotFound).JSON(fiber.Map{
+				"error": "Job not found",
+			})
+		}
+		title = prepareMeta.Title
+	} else {
+		title = meta.Title
 	}
 
 	// Build file path
@@ -60,12 +67,14 @@ func HandleFiles(c *fiber.Ctx) error {
 		c.Set("Content-Type", "video/mp4")
 	case ".mp3":
 		c.Set("Content-Type", "audio/mpeg")
+	case ".m4a":
+		c.Set("Content-Type", "audio/mp4")
 	default:
 		c.Set("Content-Type", "application/octet-stream")
 	}
 
 	// Set download headers
-	downloadName := meta.Title + ext
+	downloadName := title + ext
 	c.Set("Content-Disposition", "attachment; filename=\""+downloadName+"\"")
 
 	return c.SendFile(filePath)
