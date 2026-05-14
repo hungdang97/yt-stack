@@ -7,7 +7,7 @@ import (
 	"net/http"
 	"strconv"
 	"strings"
-	"time"
+	"yt-downloader-go/config"
 	"yt-downloader-go/utils"
 
 	"github.com/gofiber/fiber/v2"
@@ -66,9 +66,14 @@ func HandleCaption(c *fiber.Ctx) error {
 		duration, _ = strconv.ParseFloat(durationStr, 64)
 	}
 
-	// Download json3 from YouTube
-	client := &http.Client{Timeout: 30 * time.Second}
-	resp, err := client.Get(rawURL)
+	// Download json3 from YouTube (via WARP proxy)
+	req, err := http.NewRequest("GET", rawURL, nil)
+	if err != nil {
+		return utils.InternalError(c, "Invalid caption URL")
+	}
+	req.Header.Set("User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36")
+
+	resp, err := config.ProxyMediaClient.Do(req)
 	if err != nil {
 		return utils.InternalError(c, fmt.Sprintf("Failed to download caption: %v", err))
 	}
