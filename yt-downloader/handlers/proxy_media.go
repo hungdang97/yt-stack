@@ -36,16 +36,18 @@ func HandleProxyMedia(c *fiber.Ctx) error {
 		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": "invalid URL scheme"})
 	}
 
-	req, err := http.NewRequest("GET", mediaURL, nil)
+	req, err := http.NewRequest(c.Method(), mediaURL, nil)
 	if err != nil {
 		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": "invalid URL"})
 	}
 
 	req.Header.Set("User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36")
 
-	if rangeHeader := c.Get("Range"); rangeHeader != "" {
-		req.Header.Set("Range", rangeHeader)
+	rangeHeader := c.Get("Range")
+	if rangeHeader == "" {
+		rangeHeader = "bytes=0-"
 	}
+	req.Header.Set("Range", rangeHeader)
 
 	resp, err := config.DownloadClient.Do(req)
 	if err != nil {
