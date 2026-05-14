@@ -133,6 +133,30 @@ func generatePrepareStatusToken(jobID string, expires int64) string {
 	return hex.EncodeToString(h.Sum(nil))
 }
 
+// GenerateCaptionURL creates a signed URL that returns parsed subtitle JSON
+func GenerateCaptionURL(rawURL, lang string, duration float64) string {
+	expires := time.Now().Add(config.SignedURLExpiration).Unix()
+	token := generateCaptionToken(rawURL, expires)
+	return fmt.Sprintf("%s/api/caption?token=%s&expires=%d&lang=%s&duration=%v&url=%s",
+		config.BaseURL, token, expires, url.QueryEscape(lang), duration, url.QueryEscape(rawURL))
+}
+
+// ValidateCaptionURL checks if the caption token is valid and not expired
+func ValidateCaptionURL(rawURL, token string, expires int64) bool {
+	if time.Now().Unix() > expires {
+		return false
+	}
+	expectedToken := generateCaptionToken(rawURL, expires)
+	return hmac.Equal([]byte(token), []byte(expectedToken))
+}
+
+func generateCaptionToken(rawURL string, expires int64) string {
+	data := fmt.Sprintf("caption:%s:%d", rawURL, expires)
+	h := hmac.New(sha256.New, []byte(config.SignedURLSecret))
+	h.Write([]byte(data))
+	return hex.EncodeToString(h.Sum(nil))
+}
+
 // ParseExpires converts expires string to int64
 func ParseExpires(expiresStr string) (int64, error) {
 	return strconv.ParseInt(expiresStr, 10, 64)

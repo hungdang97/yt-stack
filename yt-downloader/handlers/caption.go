@@ -5,18 +5,13 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"strconv"
 	"strings"
 	"time"
 	"yt-downloader-go/utils"
 
 	"github.com/gofiber/fiber/v2"
 )
-
-type CaptionRequest struct {
-	URL      string  `json:"url"`
-	Language string  `json:"language,omitempty"`
-	Duration float64 `json:"duration,omitempty"`
-}
 
 type Utterance struct {
 	Start float64 `json:"start"`
@@ -36,33 +31,39 @@ type json3Response struct {
 }
 
 type json3Event struct {
-	TStartMs   int64        `json:"tStartMs"`
-	DDurationMs int64       `json:"dDurationMs"`
-	Segs       []json3Seg   `json:"segs"`
+	TStartMs    int64      `json:"tStartMs"`
+	DDurationMs int64      `json:"dDurationMs"`
+	Segs        []json3Seg `json:"segs"`
 }
 
 type json3Seg struct {
 	UTF8 string `json:"utf8"`
 }
 
-// HandleCaption handles POST /api/caption
+// HandleCaption handles GET /api/caption — downloads YouTube json3 subtitle, parses and returns clean JSON
 func HandleCaption(c *fiber.Ctx) error {
-	var req CaptionRequest
-	if err := c.BodyParser(&req); err != nil {
-		return utils.BadRequest(c, utils.ErrInvalidRequest, "Invalid request body")
+	rawURL := c.Query("url")
+	token := c.Query("token")
+	expiresStr := c.Query("expires")
+	lang := c.Query("lang")
+	durationStr := c.Query("duration")
+
+	if rawURL == "" || token == "" || expiresStr == "" {
+		return utils.BadRequest(c, utils.ErrValidationError, "Missing required parameters")
 	}
 
-	if req.URL == "" {
-		return utils.BadRequest(c, utils.ErrValidationError, "URL is required")
+	expires, err := utils.ParseExpires(expiresStr)
+	if err != nil {
+		return utils.BadRequest(c, utils.ErrInvalidRequest, "Invalid expires")
 	}
 
-	// If it's a proxy URL, extract the raw URL
-	rawURL := req.URL
-	if strings.Contains(rawURL, "/proxy/media?") {
-		extracted := utils.ExtractRawURLFromProxy(rawURL)
-		if extracted != "" {
-			rawURL = extracted
-		}
+	if !utils.ValidateCaptionURL(rawURL, token, expires) {
+		return utils.Forbidden(c, "Invalid or expired token")
+	}
+
+	var duration float64
+	if durationStr != "" {
+		duration, _ = strconv.ParseFloat(durationStr, 64)
 	}
 
 	// Download json3 from YouTube
@@ -91,11 +92,10 @@ func HandleCaption(c *fiber.Ctx) error {
 	// Convert to utterances
 	utterances := make([]Utterance, 0, len(j3.Events))
 	for _, event := range j3.Events {
-		if len(event.Segs) == 0 {
+		if len(event.Segs) == 0 || event.DDurationMs == 0 {
 			continue
 		}
 
-		// Combine all segments in this event
 		var textParts []string
 		for _, seg := range event.Segs {
 			text := strings.TrimSpace(seg.UTF8)
@@ -105,7 +105,6 @@ func HandleCaption(c *fiber.Ctx) error {
 		}
 
 		text := strings.Join(textParts, " ")
-		// Clean up newlines within text
 		text = strings.Join(strings.Fields(text), " ")
 
 		if text == "" {
@@ -122,20 +121,18 @@ func HandleCaption(c *fiber.Ctx) error {
 		})
 	}
 
-	language := req.Language
-	if language == "" {
-		language = detectLanguageFromURL(rawURL)
+	if lang == "" {
+		lang = detectLanguageFromURL(rawURL)
 	}
 
 	return c.JSON(CaptionResponse{
-		Language:   language,
-		Duration:   req.Duration,
+		Language:   lang,
+		Duration:   duration,
 		Utterances: utterances,
 	})
 }
 
 func detectLanguageFromURL(rawURL string) string {
-	// Extract lang= parameter from YouTube timedtext URL
 	idx := strings.Index(rawURL, "lang=")
 	if idx == -1 {
 		return ""
