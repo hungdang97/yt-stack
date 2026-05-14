@@ -46,7 +46,7 @@ func HandleProxyMedia(c *fiber.Ctx) error {
 		req.Header.Set("Range", rangeHeader)
 	}
 
-	resp, err := config.DownloadClient.Do(req)
+	resp, err := config.ProxyMediaClient.Do(req)
 	if err != nil {
 		log.Printf("[ProxyMedia] Failed to fetch: %v", err)
 		return c.Status(fiber.StatusBadGateway).JSON(fiber.Map{"error": "failed to fetch media"})

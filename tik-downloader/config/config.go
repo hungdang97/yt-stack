@@ -82,6 +82,7 @@ var (
 	ExtractClient         *http.Client
 	DownloadClient        *http.Client // With WARP proxy (if configured)
 	DownloadClientNoProxy *http.Client // Direct IP, no proxy
+	ProxyMediaClient      *http.Client // For /proxy/media streaming (no timeout)
 )
 
 func init() {
@@ -122,6 +123,9 @@ func init() {
 	DownloadClient = &http.Client{
 		Transport: downloadTransport,
 		Timeout:   DownloadTimeout,
+	}
+	ProxyMediaClient = &http.Client{
+		Transport: downloadTransport,
 	}
 }
 

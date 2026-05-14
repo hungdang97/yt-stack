@@ -74,6 +74,7 @@ var (
 	ExtractClient         *http.Client
 	DownloadClient        *http.Client
 	DownloadClientNoProxy *http.Client
+	ProxyMediaClient      *http.Client // For /proxy/media streaming (no timeout)
 )
 
 func init() {
@@ -112,6 +113,9 @@ func init() {
 	DownloadClient = &http.Client{
 		Transport: downloadTransport,
 		Timeout:   DownloadTimeout,
+	}
+	ProxyMediaClient = &http.Client{
+		Transport: downloadTransport,
 	}
 }
 

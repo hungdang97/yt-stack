@@ -254,6 +254,7 @@ var (
 	ExtractClient         *http.Client
 	DownloadClient        *http.Client // With WARP proxy
 	DownloadClientNoProxy *http.Client // Direct IP (no proxy)
+	ProxyMediaClient      *http.Client // For /proxy/media streaming (no timeout)
 )
 
 // Transport for Extract API (no proxy - local API)
@@ -296,6 +297,10 @@ func init() {
 	DownloadClientNoProxy = &http.Client{
 		Transport: downloadTransportNoProxy,
 		Timeout:   ChunkTimeout,
+	}
+	ProxyMediaClient = &http.Client{
+		Transport: downloadTransport,
+		// No Timeout — streaming large files can take minutes
 	}
 }
 
