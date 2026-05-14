@@ -68,6 +68,8 @@ func main() {
 	api := app.Group("/api")
 	api.Post("/download", handlers.HandleDownload)
 	api.Get("/info", handlers.HandleInfo)
+	api.Post("/prepare", handlers.HandlePrepare)
+	api.Get("/prepare/status/:id", handlers.HandlePrepareStatus)
 	api.Get("/status/:id", handlers.HandleStatus)
 	api.Delete("/jobs/:id", handlers.HandleDeleteJob)
 

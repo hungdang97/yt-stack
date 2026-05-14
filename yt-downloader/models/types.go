@@ -158,6 +158,22 @@ type AudioSelectionResult struct {
 	AudioLanguageChangeReason string
 }
 
+// PrepareMeta represents prepare job metadata stored in prepare_meta.json
+type PrepareMeta struct {
+	ID        string  `json:"id"`
+	Status    string  `json:"status"`
+	CreatedAt int64   `json:"createdAt"`
+	VideoID   string  `json:"videoId"`
+	Title     string  `json:"title"`
+	Author    string  `json:"author,omitempty"`
+	Duration  float64 `json:"duration"`
+	VideoFile string  `json:"videoFile"`
+	AudioFile string  `json:"audioFile"`
+	VideoSize int64   `json:"videoSize"`
+	AudioSize int64   `json:"audioSize"`
+	Error     string  `json:"error,omitempty"`
+}
+
 // HealthResponse for health check
 // @Description Health check response
 type HealthResponse struct {

@@ -145,6 +145,79 @@ func getDownloadedSize(jobDir, fileName string, expectedSize int64) int64 {
 	return 0
 }
 
+// --- Prepare Meta ---
+
+func GetPrepareMetaPath(jobID string) string {
+	return filepath.Join(GetJobDir(jobID), "prepare_meta.json")
+}
+
+func ReadPrepareMeta(jobID string) (*models.PrepareMeta, error) {
+	data, err := os.ReadFile(GetPrepareMetaPath(jobID))
+	if err != nil {
+		return nil, err
+	}
+	var meta models.PrepareMeta
+	if err := json.Unmarshal(data, &meta); err != nil {
+		return nil, err
+	}
+	return &meta, nil
+}
+
+func WritePrepareMeta(jobID string, meta *models.PrepareMeta) error {
+	data, err := json.MarshalIndent(meta, "", "  ")
+	if err != nil {
+		return err
+	}
+	return os.WriteFile(GetPrepareMetaPath(jobID), data, 0644)
+}
+
+func UpdatePrepareMetaError(jobID string, errMsg string) {
+	meta, err := ReadPrepareMeta(jobID)
+	if err != nil {
+		return
+	}
+	meta.Status = models.StatusError
+	meta.Error = errMsg
+	WritePrepareMeta(jobID, meta)
+}
+
+func UpdatePrepareMetaCompleted(jobID string) {
+	meta, err := ReadPrepareMeta(jobID)
+	if err != nil {
+		return
+	}
+	meta.Status = models.StatusCompleted
+	WritePrepareMeta(jobID, meta)
+}
+
+func CalculatePrepareProgress(meta *models.PrepareMeta) int {
+	if meta.Status == models.StatusCompleted {
+		return 100
+	}
+	if meta.Status == models.StatusError {
+		return 0
+	}
+
+	jobDir := GetJobDir(meta.ID)
+	videoSize := getDownloadedSize(jobDir, meta.VideoFile, meta.VideoSize)
+	audioSize := getDownloadedSize(jobDir, meta.AudioFile, meta.AudioSize)
+
+	videoProgress := 0
+	audioProgress := 0
+	if meta.VideoSize > 0 {
+		videoProgress = int(float64(videoSize) / float64(meta.VideoSize) * 100)
+	}
+	if meta.AudioSize > 0 {
+		audioProgress = int(float64(audioSize) / float64(meta.AudioSize) * 100)
+	}
+
+	videoProgress = min(videoProgress, 100)
+	audioProgress = min(audioProgress, 100)
+
+	progress := int(float64(videoProgress)*0.7 + float64(audioProgress)*0.3)
+	return min(progress, 100)
+}
+
 // CalculateProgress calculates download progress from file sizes
 func CalculateProgress(meta *models.Meta) int {
 	if meta.Status == models.StatusCompleted {

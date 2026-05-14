@@ -99,6 +99,67 @@ func GetFileSize(path string) int64 {
 	return info.Size()
 }
 
+// --- Prepare Meta ---
+
+func GetPrepareMetaPath(jobID string) string {
+	return filepath.Join(GetJobDir(jobID), "prepare_meta.json")
+}
+
+func ReadPrepareMeta(jobID string) (*models.PrepareMeta, error) {
+	data, err := os.ReadFile(GetPrepareMetaPath(jobID))
+	if err != nil {
+		return nil, err
+	}
+	var meta models.PrepareMeta
+	if err := json.Unmarshal(data, &meta); err != nil {
+		return nil, err
+	}
+	return &meta, nil
+}
+
+func WritePrepareMeta(jobID string, meta *models.PrepareMeta) error {
+	data, err := json.MarshalIndent(meta, "", "  ")
+	if err != nil {
+		return err
+	}
+	return os.WriteFile(GetPrepareMetaPath(jobID), data, 0644)
+}
+
+func UpdatePrepareMetaError(jobID string, errMsg string) {
+	meta, err := ReadPrepareMeta(jobID)
+	if err != nil {
+		return
+	}
+	meta.Status = models.StatusError
+	meta.Error = errMsg
+	WritePrepareMeta(jobID, meta)
+}
+
+func UpdatePrepareMetaCompleted(jobID string) {
+	meta, err := ReadPrepareMeta(jobID)
+	if err != nil {
+		return
+	}
+	meta.Status = models.StatusCompleted
+	WritePrepareMeta(jobID, meta)
+}
+
+func CalculatePrepareProgress(meta *models.PrepareMeta) int {
+	if meta.Status == models.StatusCompleted {
+		return 100
+	}
+	if meta.Status == models.StatusError {
+		return 0
+	}
+	if meta.Status == models.StatusProcessing {
+		return 80
+	}
+	if meta.Status == models.StatusDownloading {
+		return 30
+	}
+	return 10
+}
+
 // CalculateProgress calculates download progress from file sizes
 func CalculateProgress(meta *models.Meta) int {
 	if meta.Status == models.StatusCompleted {

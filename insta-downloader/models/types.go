@@ -111,6 +111,20 @@ type InstaExtractResponse struct {
 	Media                []InstaMediaItem `json:"media"`
 }
 
+// PrepareMeta represents prepare job metadata stored in prepare_meta.json
+type PrepareMeta struct {
+	ID        string  `json:"id"`
+	Status    string  `json:"status"`
+	CreatedAt int64   `json:"created_at"`
+	Title     string  `json:"title"`
+	Author    string  `json:"author,omitempty"`
+	Duration  float64 `json:"duration,omitempty"`
+	VideoFile string  `json:"video_file"`
+	AudioFile string  `json:"audio_file"`
+	Error     string  `json:"error,omitempty"`
+	SourceURL string  `json:"source_url"`
+}
+
 // GetVideoURL returns the best DASH video URL
 func (r *InstaExtractResponse) GetVideoURL() string {
 	for _, m := range r.Media {

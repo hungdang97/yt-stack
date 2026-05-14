@@ -55,6 +55,8 @@ func main() {
 	app.Get("/health", handlers.HandleHealth)
 	app.Post("/api/download", handlers.HandleDownload)
 	app.Get("/api/info", handlers.HandleInfo)
+	app.Post("/api/prepare", handlers.HandlePrepare)
+	app.Get("/api/prepare/status/:id", handlers.HandlePrepareStatus)
 	app.Get("/api/status/:id", handlers.HandleStatus)
 	app.Get("/files/:id/:filename", handlers.HandleFiles)
 	app.Get("/proxy/image", handlers.HandleProxyImage)

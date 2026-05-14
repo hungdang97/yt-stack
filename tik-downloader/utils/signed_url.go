@@ -82,6 +82,29 @@ func generateMediaToken(rawURL string, expires int64) string {
 	return hex.EncodeToString(h.Sum(nil))
 }
 
+// GeneratePrepareStatusURL creates a signed status URL for prepare jobs
+func GeneratePrepareStatusURL(jobID string) string {
+	expires := time.Now().Add(config.SignedURLExpiration).Unix()
+	token := generatePrepareStatusToken(jobID, expires)
+	return fmt.Sprintf("%s%s/api/prepare/status/%s?token=%s&expires=%d", config.BaseURL, config.PathPrefix, jobID, token, expires)
+}
+
+// ValidatePrepareStatusURL checks if the prepare status token is valid and not expired
+func ValidatePrepareStatusURL(jobID, token string, expires int64) bool {
+	if time.Now().Unix() > expires {
+		return false
+	}
+	expectedToken := generatePrepareStatusToken(jobID, expires)
+	return hmac.Equal([]byte(token), []byte(expectedToken))
+}
+
+func generatePrepareStatusToken(jobID string, expires int64) string {
+	data := fmt.Sprintf("prepare:%s:%d", jobID, expires)
+	h := hmac.New(sha256.New, []byte(config.SignedURLSecret))
+	h.Write([]byte(data))
+	return hex.EncodeToString(h.Sum(nil))
+}
+
 // ParseExpires converts expires string to int64
 func ParseExpires(expiresStr string) (int64, error) {
 	return strconv.ParseInt(expiresStr, 10, 64)

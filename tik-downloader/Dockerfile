@@ -19,8 +19,8 @@ FROM alpine:3.19
 
 WORKDIR /app
 
-# Install CA certificates for HTTPS requests
-RUN apk add --no-cache ca-certificates wget
+# Install CA certificates and ffmpeg (needed for prepare audio extraction)
+RUN apk add --no-cache ca-certificates wget ffmpeg
 
 # Copy binary
 COPY --from=builder /build/tik-downloader .
