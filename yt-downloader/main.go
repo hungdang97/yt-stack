@@ -77,6 +77,9 @@ func main() {
 	// Stream serving (FFmpeg pipe)
 	app.Get("/stream/:id", handlers.HandleStream)
 
+	// Media proxy (signed URL)
+	app.Get("/proxy/media", handlers.HandleProxyMedia)
+
 	// Health check
 	app.Get("/health", handlers.HandleHealth)
 

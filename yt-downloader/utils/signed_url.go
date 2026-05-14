@@ -85,6 +85,30 @@ func generateToken(jobID, filename string, expires int64) string {
 	return hex.EncodeToString(h.Sum(nil))
 }
 
+// GenerateMediaProxyURL creates a signed proxy URL for media content (video/audio/subtitle)
+func GenerateMediaProxyURL(rawURL string) string {
+	expires := time.Now().Add(config.SignedURLExpiration).Unix()
+	token := generateMediaToken(rawURL, expires)
+	return fmt.Sprintf("%s/proxy/media?token=%s&expires=%d&url=%s", config.BaseURL, token, expires, rawURL)
+}
+
+// ValidateMediaProxyURL checks if the media proxy token is valid and not expired
+func ValidateMediaProxyURL(rawURL, token string, expires int64) bool {
+	if time.Now().Unix() > expires {
+		return false
+	}
+	expectedToken := generateMediaToken(rawURL, expires)
+	return hmac.Equal([]byte(token), []byte(expectedToken))
+}
+
+// generateMediaToken creates HMAC-SHA256 token for media proxy URLs
+func generateMediaToken(rawURL string, expires int64) string {
+	data := fmt.Sprintf("media:%s:%d", rawURL, expires)
+	h := hmac.New(sha256.New, []byte(config.SignedURLSecret))
+	h.Write([]byte(data))
+	return hex.EncodeToString(h.Sum(nil))
+}
+
 // ParseExpires converts expires string to int64
 func ParseExpires(expiresStr string) (int64, error) {
 	return strconv.ParseInt(expiresStr, 10, 64)

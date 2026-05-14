@@ -76,6 +76,7 @@ func main() {
 	app.Get("/api/status/:id", handlers.HandleStatus)
 	app.Get("/files/:id/:filename", handlers.HandleFiles)
 	app.Get("/proxy/image", handlers.HandleProxyImage)
+	app.Get("/proxy/media", handlers.HandleProxyMedia)
 
 	log.Println("=== Routes ===")
 	log.Println("  POST /api/download     - Create download job")
