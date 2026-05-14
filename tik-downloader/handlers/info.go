@@ -9,10 +9,6 @@ import (
 	"github.com/gofiber/fiber/v2"
 )
 
-type InfoRequest struct {
-	URL string `json:"url"`
-}
-
 type SubtitleInfo struct {
 	Lang          string `json:"lang"`
 	URL           string `json:"url"`
@@ -30,7 +26,7 @@ type InfoResponse struct {
 	Subtitles []SubtitleInfo `json:"subtitles"`
 }
 
-// HandleInfo handles POST /api/info — returns video metadata for preview without downloading
+// HandleInfo handles GET /api/info?url=<video_url> — returns video metadata for preview without downloading
 func HandleInfo(c *fiber.Ctx) error {
 	hubToken := c.Get("X-Hub-Token")
 	if hubToken != config.HubToken {
@@ -39,20 +35,14 @@ func HandleInfo(c *fiber.Ctx) error {
 		})
 	}
 
-	var req InfoRequest
-	if err := c.BodyParser(&req); err != nil {
-		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{
-			"error": "Invalid request body",
-		})
-	}
-
-	if req.URL == "" {
+	reqURL := c.Query("url")
+	if reqURL == "" {
 		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{
 			"error": "URL is required",
 		})
 	}
 
-	videoID, err := utils.ExtractVideoID(req.URL)
+	videoID, err := utils.ExtractVideoID(reqURL)
 	if err != nil {
 		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{
 			"error": fmt.Sprintf("Invalid TikTok URL: %v", err),

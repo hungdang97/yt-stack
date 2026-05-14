@@ -7,11 +7,6 @@ import (
 	"github.com/gofiber/fiber/v2"
 )
 
-type InfoRequest struct {
-	URL     string `json:"url"`
-	Premium bool   `json:"premium,omitempty"`
-}
-
 type SubtitleInfo struct {
 	Lang          string `json:"lang"`
 	URL           string `json:"url"`
@@ -33,7 +28,7 @@ type InfoResponse struct {
 	Subtitles         []SubtitleInfo `json:"subtitles"`
 }
 
-// HandleInfo handles POST /api/info — returns video metadata for preview without downloading
+// HandleInfo handles GET /api/info?url=<video_url> — returns video metadata for preview without downloading
 func HandleInfo(c *fiber.Ctx) error {
 	const hubToken = "1234567890987654321234567890987654321"
 	token := c.Get("X-Hub-Token")
@@ -43,21 +38,17 @@ func HandleInfo(c *fiber.Ctx) error {
 		})
 	}
 
-	var req InfoRequest
-	if err := c.BodyParser(&req); err != nil {
-		return utils.BadRequest(c, utils.ErrInvalidRequest, "Invalid request body")
-	}
-
-	if req.URL == "" {
+	reqURL := c.Query("url")
+	if reqURL == "" {
 		return utils.BadRequest(c, utils.ErrValidationError, "URL is required")
 	}
 
-	videoID, err := utils.ExtractVideoID(req.URL)
+	videoID, err := utils.ExtractVideoID(reqURL)
 	if err != nil {
 		return utils.BadRequest(c, utils.ErrInvalidURL, err.Error())
 	}
 
-	extractData, err := services.Extract(videoID, req.Premium)
+	extractData, err := services.Extract(videoID, false)
 	if err != nil {
 		return utils.InternalError(c, "Failed to fetch video metadata")
 	}

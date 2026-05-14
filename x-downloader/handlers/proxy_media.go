@@ -1,6 +1,7 @@
 package handlers
 
 import (
+	"bufio"
 	"io"
 	"log"
 	"net/http"
@@ -51,9 +52,9 @@ func HandleProxyMedia(c *fiber.Ctx) error {
 		log.Printf("[ProxyMedia] Failed to fetch: %v", err)
 		return c.Status(fiber.StatusBadGateway).JSON(fiber.Map{"error": "failed to fetch media"})
 	}
-	defer resp.Body.Close()
 
 	if resp.StatusCode != http.StatusOK && resp.StatusCode != http.StatusPartialContent {
+		resp.Body.Close()
 		return c.Status(resp.StatusCode).JSON(fiber.Map{"error": "upstream error"})
 	}
 
@@ -66,9 +67,25 @@ func HandleProxyMedia(c *fiber.Ctx) error {
 	c.Set("Access-Control-Allow-Origin", "*")
 	c.Status(resp.StatusCode)
 
-	_, err = io.Copy(c.Response().BodyWriter(), resp.Body)
-	if err != nil {
-		log.Printf("[ProxyMedia] Stream error: %v", err)
-	}
+	c.Context().SetBodyStreamWriter(func(w *bufio.Writer) {
+		defer resp.Body.Close()
+		buf := make([]byte, 32*1024)
+		for {
+			n, readErr := resp.Body.Read(buf)
+			if n > 0 {
+				if _, writeErr := w.Write(buf[:n]); writeErr != nil {
+					return
+				}
+				w.Flush()
+			}
+			if readErr != nil {
+				if readErr != io.EOF {
+					log.Printf("[ProxyMedia] Stream error: %v", readErr)
+				}
+				return
+			}
+		}
+	})
+
 	return nil
 }
