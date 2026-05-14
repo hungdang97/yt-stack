@@ -1,10 +1,9 @@
 package handlers
 
 import (
-	"bufio"
-	"io"
 	"log"
 	"net/http"
+	"strconv"
 	"strings"
 
 	"yt-downloader-go/config"
@@ -44,11 +43,9 @@ func HandleProxyMedia(c *fiber.Ctx) error {
 
 	req.Header.Set("User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36")
 
-	rangeHeader := c.Get("Range")
-	if rangeHeader == "" {
-		rangeHeader = "bytes=0-"
+	if rangeHeader := c.Get("Range"); rangeHeader != "" {
+		req.Header.Set("Range", rangeHeader)
 	}
-	req.Header.Set("Range", rangeHeader)
 
 	resp, err := config.DownloadClient.Do(req)
 	if err != nil {
@@ -70,26 +67,18 @@ func HandleProxyMedia(c *fiber.Ctx) error {
 	c.Set("Access-Control-Allow-Origin", "*")
 	c.Status(resp.StatusCode)
 
-	// Stream directly to client without buffering entire response
-	c.Context().SetBodyStreamWriter(func(w *bufio.Writer) {
-		defer resp.Body.Close()
-		buf := make([]byte, 32*1024)
-		for {
-			n, readErr := resp.Body.Read(buf)
-			if n > 0 {
-				if _, writeErr := w.Write(buf[:n]); writeErr != nil {
-					return
-				}
-				w.Flush()
-			}
-			if readErr != nil {
-				if readErr != io.EOF {
-					log.Printf("[ProxyMedia] Stream error: %v", readErr)
-				}
-				return
-			}
+	// Stream with Content-Length preserved (required by clients like Deepgram)
+	// SetBodyStream streams directly without buffering, AND keeps Content-Length header
+	contentLength := resp.ContentLength
+	if contentLength < 0 {
+		if cl := resp.Header.Get("Content-Length"); cl != "" {
+			contentLength, _ = strconv.ParseInt(cl, 10, 64)
 		}
-	})
+	}
+	if contentLength < 0 {
+		contentLength = -1
+	}
+	c.Context().Response.SetBodyStream(resp.Body, int(contentLength))
 
 	return nil
 }

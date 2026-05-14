@@ -1,10 +1,9 @@
 package handlers
 
 import (
-	"bufio"
-	"io"
 	"log"
 	"net/http"
+	"strconv"
 	"strings"
 
 	"insta-downloader/config"
@@ -67,25 +66,16 @@ func HandleProxyMedia(c *fiber.Ctx) error {
 	c.Set("Access-Control-Allow-Origin", "*")
 	c.Status(resp.StatusCode)
 
-	c.Context().SetBodyStreamWriter(func(w *bufio.Writer) {
-		defer resp.Body.Close()
-		buf := make([]byte, 32*1024)
-		for {
-			n, readErr := resp.Body.Read(buf)
-			if n > 0 {
-				if _, writeErr := w.Write(buf[:n]); writeErr != nil {
-					return
-				}
-				w.Flush()
-			}
-			if readErr != nil {
-				if readErr != io.EOF {
-					log.Printf("[ProxyMedia] Stream error: %v", readErr)
-				}
-				return
-			}
+	contentLength := resp.ContentLength
+	if contentLength < 0 {
+		if cl := resp.Header.Get("Content-Length"); cl != "" {
+			contentLength, _ = strconv.ParseInt(cl, 10, 64)
 		}
-	})
+	}
+	if contentLength < 0 {
+		contentLength = -1
+	}
+	c.Context().Response.SetBodyStream(resp.Body, int(contentLength))
 
 	return nil
 }
