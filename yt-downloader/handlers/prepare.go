@@ -25,11 +25,13 @@ type PrepareResponse struct {
 }
 
 type PrepareStatusResponse struct {
-	Status        string              `json:"status"`
-	Progress      int                 `json:"progress"`
-	VideoProgress *PrepareFileStatus  `json:"videoProgress"`
-	AudioProgress *PrepareFileStatus  `json:"audioProgress"`
-	Error         string              `json:"error,omitempty"`
+	Status        string             `json:"status"`
+	Progress      int                `json:"progress"`
+	VideoURL      string             `json:"videoUrl,omitempty"`
+	AudioURL      string             `json:"audioUrl,omitempty"`
+	VideoProgress *PrepareFileStatus `json:"videoProgress"`
+	AudioProgress *PrepareFileStatus `json:"audioProgress"`
+	Error         string             `json:"error,omitempty"`
 }
 
 type PrepareFileStatus struct {
@@ -202,6 +204,8 @@ func HandlePrepareStatus(c *fiber.Ctx) error {
 
 	if meta.Status == models.StatusCompleted {
 		response.Progress = 100
+		response.VideoURL = videoStatus.URL
+		response.AudioURL = audioStatus.URL
 	}
 
 	if meta.Status == models.StatusError {
