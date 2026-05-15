@@ -191,19 +191,24 @@ func UpdatePrepareMetaCompleted(jobID string) {
 }
 
 func CalculatePrepareProgress(meta *models.PrepareMeta) int {
+	v, a := CalculatePrepareProgressSeparate(meta)
+	progress := int(float64(v)*0.7 + float64(a)*0.3)
+	return min(progress, 100)
+}
+
+// CalculatePrepareProgressSeparate returns video and audio progress separately (0-100 each)
+func CalculatePrepareProgressSeparate(meta *models.PrepareMeta) (videoProgress, audioProgress int) {
 	if meta.Status == models.StatusCompleted {
-		return 100
+		return 100, 100
 	}
 	if meta.Status == models.StatusError {
-		return 0
+		return 0, 0
 	}
 
 	jobDir := GetJobDir(meta.ID)
 	videoSize := getDownloadedSize(jobDir, meta.VideoFile, meta.VideoSize)
 	audioSize := getDownloadedSize(jobDir, meta.AudioFile, meta.AudioSize)
 
-	videoProgress := 0
-	audioProgress := 0
 	if meta.VideoSize > 0 {
 		videoProgress = int(float64(videoSize) / float64(meta.VideoSize) * 100)
 	}
@@ -211,11 +216,7 @@ func CalculatePrepareProgress(meta *models.PrepareMeta) int {
 		audioProgress = int(float64(audioSize) / float64(meta.AudioSize) * 100)
 	}
 
-	videoProgress = min(videoProgress, 100)
-	audioProgress = min(audioProgress, 100)
-
-	progress := int(float64(videoProgress)*0.7 + float64(audioProgress)*0.3)
-	return min(progress, 100)
+	return min(videoProgress, 100), min(audioProgress, 100)
 }
 
 // CalculateProgress calculates download progress from file sizes

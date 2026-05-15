@@ -25,11 +25,16 @@ type PrepareResponse struct {
 }
 
 type PrepareStatusResponse struct {
-	Status   string `json:"status"`
+	Status        string              `json:"status"`
+	Progress      int                 `json:"progress"`
+	VideoProgress *PrepareFileStatus  `json:"videoProgress"`
+	AudioProgress *PrepareFileStatus  `json:"audioProgress"`
+	Error         string              `json:"error,omitempty"`
+}
+
+type PrepareFileStatus struct {
 	Progress int    `json:"progress"`
-	VideoURL string `json:"videoUrl,omitempty"`
-	AudioURL string `json:"audioUrl,omitempty"`
-	Error    string `json:"error,omitempty"`
+	URL      string `json:"url,omitempty"`
 }
 
 // HandlePrepare handles POST /api/prepare — extracts metadata, starts background download of video+audio
@@ -173,15 +178,30 @@ func HandlePrepareStatus(c *fiber.Ctx) error {
 		return utils.NotFound(c, utils.ErrJobNotFound, "Job not found")
 	}
 
+	videoProgress, audioProgress := utils.CalculatePrepareProgressSeparate(meta)
+
+	videoStatus := &PrepareFileStatus{Progress: videoProgress}
+	audioStatus := &PrepareFileStatus{Progress: audioProgress}
+
+	// Return signed URL as soon as each file is done (progress == 100)
+	if videoProgress == 100 {
+		videoStatus.URL = utils.GenerateSignedURL(jobID, meta.VideoFile)
+	}
+	if audioProgress == 100 {
+		audioStatus.URL = utils.GenerateSignedURL(jobID, meta.AudioFile)
+	}
+
+	overallProgress := int(float64(videoProgress)*0.7 + float64(audioProgress)*0.3)
+
 	response := PrepareStatusResponse{
-		Status:   meta.Status,
-		Progress: utils.CalculatePrepareProgress(meta),
+		Status:        meta.Status,
+		Progress:      min(overallProgress, 100),
+		VideoProgress: videoStatus,
+		AudioProgress: audioStatus,
 	}
 
 	if meta.Status == models.StatusCompleted {
 		response.Progress = 100
-		response.VideoURL = utils.GenerateSignedURL(jobID, meta.VideoFile)
-		response.AudioURL = utils.GenerateSignedURL(jobID, meta.AudioFile)
 	}
 
 	if meta.Status == models.StatusError {
