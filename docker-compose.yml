@@ -613,6 +613,10 @@ services:
     restart: always
     ports:
       - "8500:8500"
+    environment:
+      - BASE_DOMAIN=${BASE_DOMAIN}
+      - DOWNLOAD_SUBDOMAIN=${DOWNLOAD_SUBDOMAIN}
+      - PATH_PREFIX=/tts
     healthcheck:
       test: [ "CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8500/health')" ]
       interval: 30s

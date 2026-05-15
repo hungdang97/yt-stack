@@ -43,6 +43,30 @@ NATURAL_CHARS_PER_SEC = float(os.getenv("CHARS_PER_SEC", "15"))
 # Cap tốc độ tăng — quá nhanh thì giọng dị, người nghe khó tiếp nhận.
 MAX_RATE_PCT = int(os.getenv("MAX_RATE_PCT", "50"))
 
+# Public-facing URL building. VPS-agent injects BASE_DOMAIN ("ytconvert.org")
+# and DOWNLOAD_SUBDOMAIN ("vps-xxxxxx") into the container env; PATH_PREFIX
+# matches the nginx location ("/tts"). When set, /submit and /status return
+# absolute URLs the client can hit directly without round-tripping the hub.
+BASE_DOMAIN = os.getenv("BASE_DOMAIN", "")
+DOWNLOAD_SUBDOMAIN = os.getenv("DOWNLOAD_SUBDOMAIN", "")
+PATH_PREFIX = os.getenv("PATH_PREFIX", "/tts").rstrip("/")
+PUBLIC_BASE_URL = (
+    f"https://{DOWNLOAD_SUBDOMAIN}.{BASE_DOMAIN}"
+    if BASE_DOMAIN and DOWNLOAD_SUBDOMAIN
+    else ""
+)
+
+
+def _public_url(internal_path: str) -> str:
+    """Map an internal handler path ("/status/abc") to the externally
+    routable URL ("https://vps-xxx.ytconvert.org/tts/status/abc") when the
+    container knows its public hostname; otherwise fall back to the prefixed
+    relative path for local/dev runs.
+    """
+    path = f"{PATH_PREFIX}{internal_path}"
+    return f"{PUBLIC_BASE_URL}{path}" if PUBLIC_BASE_URL else path
+
+
 OUTPUT_DIR.mkdir(parents=True, exist_ok=True)
 CACHE_DIR.mkdir(parents=True, exist_ok=True)
 
@@ -107,7 +131,11 @@ async def submit(req: SubmitRequest, bg: BackgroundTasks) -> dict:
     async with JOBS_LOCK:
         JOBS[job_id] = job
     bg.add_task(run_job, job_id, req)
-    return {"job_id": job_id, "status_url": f"/status/{job_id}"}
+    return {
+        "job_id": job_id,
+        "status_url": _public_url(f"/status/{job_id}"),
+        "download_url": _public_url(f"/download/{job_id}"),
+    }
 
 
 @app.get("/status/{job_id}")
@@ -123,7 +151,7 @@ async def status(job_id: str) -> dict:
         "total": job.total,
         "completed": job.completed,
         "error": job.error,
-        "output_url": f"/download/{job_id}" if job.state == "done" else None,
+        "output_url": _public_url(f"/download/{job_id}") if job.state == "done" else None,
     }
 
 
