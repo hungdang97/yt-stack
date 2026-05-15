@@ -2,6 +2,7 @@ package handlers
 
 import (
 	"bufio"
+	"encoding/json"
 	"fmt"
 	"io"
 	"net/http"
@@ -25,7 +26,22 @@ type CaptionResponse struct {
 	Utterances []Utterance `json:"utterances"`
 }
 
-// HandleCaption handles GET /api/caption — downloads YouTube VTT subtitle, parses and returns clean JSON
+// YouTube json3 format structures (fallback for manual subtitles)
+type json3Response struct {
+	Events []json3Event `json:"events"`
+}
+
+type json3Event struct {
+	TStartMs    int64      `json:"tStartMs"`
+	DDurationMs int64      `json:"dDurationMs"`
+	Segs        []json3Seg `json:"segs"`
+}
+
+type json3Seg struct {
+	UTF8 string `json:"utf8"`
+}
+
+// HandleCaption handles GET /api/caption — downloads subtitle, parses and returns clean JSON
 func HandleCaption(c *fiber.Ctx) error {
 	rawURL := c.Query("url")
 	token := c.Query("token")
@@ -51,30 +67,34 @@ func HandleCaption(c *fiber.Ctx) error {
 		duration, _ = strconv.ParseFloat(durationStr, 64)
 	}
 
-	// Download VTT from YouTube CDN (via WARP proxy)
-	req, err := http.NewRequest("GET", rawURL, nil)
-	if err != nil {
-		return utils.InternalError(c, "Invalid caption URL")
+	// Resolve the actual VTT/json3 URL
+	// If URL is an HLS manifest (googlevideo.com), fetch it to extract the real VTT URL inside
+	fetchURL := rawURL
+	if strings.Contains(rawURL, "googlevideo.com") && strings.Contains(rawURL, "hls_timedtext_playlist") {
+		resolvedURL, err := resolveHLSSubtitleURL(rawURL)
+		if err != nil {
+			return utils.InternalError(c, fmt.Sprintf("Failed to resolve HLS subtitle: %v", err))
+		}
+		fetchURL = resolvedURL
 	}
-	req.Header.Set("User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36")
 
-	resp, err := config.ProxyMediaClient.Do(req)
+	// Download subtitle content (via WARP proxy)
+	body, statusCode, err := fetchContent(fetchURL)
 	if err != nil {
 		return utils.InternalError(c, fmt.Sprintf("Failed to download caption: %v", err))
 	}
-	defer resp.Body.Close()
-
-	if resp.StatusCode != http.StatusOK {
-		return utils.InternalError(c, fmt.Sprintf("Caption download returned status %d", resp.StatusCode))
+	if statusCode != http.StatusOK {
+		return utils.InternalError(c, fmt.Sprintf("Caption download returned status %d", statusCode))
 	}
 
-	body, err := io.ReadAll(resp.Body)
-	if err != nil {
-		return utils.InternalError(c, "Failed to read caption data")
+	// Parse based on content format
+	var utterances []Utterance
+	content := string(body)
+	if strings.HasPrefix(strings.TrimSpace(content), "WEBVTT") {
+		utterances = parseVTT(content)
+	} else {
+		utterances = parseJSON3(body)
 	}
-
-	// Parse WebVTT format
-	utterances := parseVTT(string(body))
 
 	if lang == "" {
 		lang = detectLanguageFromURL(rawURL)
@@ -85,6 +105,89 @@ func HandleCaption(c *fiber.Ctx) error {
 		Duration:   duration,
 		Utterances: utterances,
 	})
+}
+
+// resolveHLSSubtitleURL fetches an HLS m3u8 manifest and extracts the VTT URL inside
+func resolveHLSSubtitleURL(m3u8URL string) (string, error) {
+	body, statusCode, err := fetchContent(m3u8URL)
+	if err != nil {
+		return "", err
+	}
+	if statusCode != http.StatusOK {
+		return "", fmt.Errorf("HLS manifest returned status %d", statusCode)
+	}
+
+	// Parse m3u8 — find the first non-comment, non-empty line (the VTT URL)
+	scanner := bufio.NewScanner(strings.NewReader(string(body)))
+	for scanner.Scan() {
+		line := strings.TrimSpace(scanner.Text())
+		if line == "" || strings.HasPrefix(line, "#") {
+			continue
+		}
+		// This is the VTT segment URL
+		return line, nil
+	}
+	return "", fmt.Errorf("no VTT URL found in HLS manifest")
+}
+
+// fetchContent downloads content from a URL via WARP proxy
+func fetchContent(url string) ([]byte, int, error) {
+	req, err := http.NewRequest("GET", url, nil)
+	if err != nil {
+		return nil, 0, err
+	}
+	req.Header.Set("User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36")
+
+	resp, err := config.ProxyMediaClient.Do(req)
+	if err != nil {
+		return nil, 0, err
+	}
+	defer resp.Body.Close()
+
+	body, err := io.ReadAll(resp.Body)
+	if err != nil {
+		return nil, resp.StatusCode, err
+	}
+	return body, resp.StatusCode, nil
+}
+
+// parseJSON3 parses YouTube json3 subtitle format
+func parseJSON3(body []byte) []Utterance {
+	var j3 json3Response
+	if err := json.Unmarshal(body, &j3); err != nil {
+		return nil
+	}
+
+	utterances := make([]Utterance, 0, len(j3.Events))
+	for _, event := range j3.Events {
+		if len(event.Segs) == 0 {
+			continue
+		}
+
+		var textParts []string
+		for _, seg := range event.Segs {
+			text := strings.TrimSpace(seg.UTF8)
+			if text != "" {
+				textParts = append(textParts, text)
+			}
+		}
+
+		text := strings.Join(textParts, " ")
+		text = strings.Join(strings.Fields(text), " ")
+		if text == "" {
+			continue
+		}
+
+		start := float64(event.TStartMs) / 1000.0
+		end := float64(event.TStartMs+event.DDurationMs) / 1000.0
+
+		utterances = append(utterances, Utterance{
+			Start: start,
+			End:   end,
+			Text:  text,
+		})
+	}
+	return utterances
 }
 
 // parseVTTTimestamp parses "HH:MM:SS.mmm" or "MM:SS.mmm" to seconds
