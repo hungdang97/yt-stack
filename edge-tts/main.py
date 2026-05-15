@@ -20,6 +20,7 @@ from __future__ import annotations
 import asyncio
 import hashlib
 import os
+import time
 import traceback
 import uuid
 from pathlib import Path
@@ -116,6 +117,43 @@ async def index() -> str:
 @app.get("/health")
 async def health() -> dict:
     return {"status": "ok"}
+
+
+# Lazy 1-hour cache for the voice list. Microsoft's catalog only changes when
+# a new voice is published, so refetching on every call would waste a WebSocket
+# round-trip for nothing.
+_VOICES_CACHE: Optional[list[dict]] = None
+_VOICES_CACHE_AT = 0.0
+_VOICES_CACHE_TTL = 3600
+_VOICES_LOCK = asyncio.Lock()
+
+
+async def _get_voices() -> list[dict]:
+    global _VOICES_CACHE, _VOICES_CACHE_AT
+    if _VOICES_CACHE is not None and time.time() - _VOICES_CACHE_AT < _VOICES_CACHE_TTL:
+        return _VOICES_CACHE
+    async with _VOICES_LOCK:
+        # Double-check after acquiring the lock (another coroutine may have
+        # populated the cache while we were waiting).
+        if _VOICES_CACHE is not None and time.time() - _VOICES_CACHE_AT < _VOICES_CACHE_TTL:
+            return _VOICES_CACHE
+        raw = await edge_tts.list_voices()
+        _VOICES_CACHE = [
+            {"name": v["ShortName"], "gender": v["Gender"], "locale": v["Locale"]}
+            for v in raw
+        ]
+        _VOICES_CACHE_AT = time.time()
+    return _VOICES_CACHE
+
+
+@app.get("/voices")
+async def voices(locale: str = "") -> list[dict]:
+    """List supported voices. Optional ?locale=vi-VN filter (case-insensitive)."""
+    vs = await _get_voices()
+    if locale:
+        loc = locale.lower()
+        vs = [v for v in vs if v["locale"].lower() == loc]
+    return vs
 
 
 @app.post("/submit")
