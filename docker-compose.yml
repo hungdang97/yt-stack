@@ -603,6 +603,30 @@ services:
     networks:
       - backend
 
+  # Edge TTS dubbing service — sinh MP3/M4A từ utterances + timestamps
+  edge-tts:
+    build:
+      context: ./edge-tts
+      dockerfile: Dockerfile
+    image: edge-tts:latest
+    container_name: edge-tts
+    restart: always
+    ports:
+      - "8500:8500"
+    healthcheck:
+      test: [ "CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8500/health')" ]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 10s
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
+    networks:
+      - backend
+
   # Nginx reverse proxy with SSL
   nginx:
     platform: linux/amd64

@@ -1,0 +1,128 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+  <meta charset="UTF-8">
+  <title>TTS Dubbing</title>
+  <style>
+    * { box-sizing: border-box; }
+    body { font-family: -apple-system, sans-serif; max-width: 900px; margin: 40px auto; padding: 0 20px; color: #222; }
+    h1 { margin-bottom: 0.4em; }
+    .row { margin: 14px 0; }
+    label { display: block; font-size: 13px; color: #666; margin-bottom: 4px; }
+    select, button, textarea { font: inherit; padding: 8px 10px; border: 1px solid #ccc; border-radius: 4px; }
+    textarea { width: 100%; min-height: 240px; font-family: ui-monospace, monospace; font-size: 12px; }
+    button { background: #1976d2; color: white; border: none; padding: 10px 22px; cursor: pointer; border-radius: 4px; }
+    button:hover { background: #1565c0; }
+    button:disabled { background: #aaa; cursor: not-allowed; }
+    .bar { height: 14px; background: #e8e8e8; border-radius: 7px; overflow: hidden; }
+    .fill { height: 100%; background: linear-gradient(90deg, #4CAF50, #66BB6A); transition: width 0.3s; }
+    .meta { font-size: 13px; color: #555; margin-top: 6px; }
+    .error { color: #d32f2f; padding: 10px; background: #ffebee; border-radius: 4px; }
+    audio { width: 100%; margin-top: 10px; }
+    code { background: #f4f4f4; padding: 2px 6px; border-radius: 3px; font-size: 12px; }
+  </style>
+</head>
+<body>
+
+<h1>🎙️ TTS Dubbing</h1>
+<p style="color:#666">Paste utterances JSON từ output của <code>/translate</code> hoặc <code>/transcribe</code>, chọn voice, submit. Service tự cắt segments, ghép timeline thành MP3.</p>
+
+<div class="row">
+  <label>Voice</label>
+  <select id="voice">
+    <optgroup label="Tiếng Việt">
+      <option value="vi-VN-NamMinhNeural">Nam Minh — nam</option>
+      <option value="vi-VN-HoaiMyNeural">Hoài My — nữ</option>
+    </optgroup>
+    <optgroup label="English (US)">
+      <option value="en-US-AriaNeural">Aria — nữ</option>
+      <option value="en-US-GuyNeural">Guy — nam</option>
+      <option value="en-US-JennyNeural">Jenny — nữ</option>
+    </optgroup>
+    <optgroup label="English (UK)">
+      <option value="en-GB-SoniaNeural">Sonia — nữ</option>
+      <option value="en-GB-RyanNeural">Ryan — nam</option>
+    </optgroup>
+  </select>
+</div>
+
+<div class="row">
+  <label>JSON utterances (chỉ cần phần <code>utterances</code> — service sẽ tự thêm voice)</label>
+  <textarea id="payload" placeholder='{
+  "utterances": [
+    {"start": 0, "end": 1.6, "text": "Xin chào thế giới"},
+    {"start": 2, "end": 3.5, "text": "Hôm nay trời rất đẹp"}
+  ]
+}'></textarea>
+</div>
+
+<div class="row">
+  <button id="btn" onclick="submitJob()">Dub</button>
+</div>
+
+<div id="status"></div>
+<div id="player"></div>
+
+<script>
+const $ = id => document.getElementById(id);
+
+async function submitJob() {
+  const btn = $('btn');
+  const voice = $('voice').value;
+  let payload;
+  try {
+    payload = JSON.parse($('payload').value);
+  } catch (e) {
+    $('status').innerHTML = `<div class="error">JSON parse error: ${e.message}</div>`;
+    return;
+  }
+  if (!payload.utterances || !payload.utterances.length) {
+    $('status').innerHTML = `<div class="error">Cần ít nhất 1 utterance</div>`;
+    return;
+  }
+  const body = { voice, utterances: payload.utterances };
+  btn.disabled = true;
+  $('player').innerHTML = '';
+  $('status').innerHTML = '<div class="meta">Submitting…</div>';
+
+  try {
+    const r = await fetch('/submit', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(body),
+    });
+    const data = await r.json();
+    if (!r.ok) throw new Error(data.detail || 'submit failed');
+    poll(data.job_id);
+  } catch (e) {
+    $('status').innerHTML = `<div class="error">${e.message}</div>`;
+    btn.disabled = false;
+  }
+}
+
+async function poll(jobId) {
+  const r = await fetch('/status/' + jobId);
+  const s = await r.json();
+  const pct = (s.progress * 100).toFixed(0);
+  let html = `<div class="bar"><div class="fill" style="width:${pct}%"></div></div>`;
+  html += `<div class="meta">Job <code>${jobId}</code> · <b>${s.state}</b> · ${s.completed}/${s.total} · ${pct}%</div>`;
+  if (s.error) html += `<div class="error">${s.error}</div>`;
+  $('status').innerHTML = html;
+
+  if (s.state === 'done') {
+    $('player').innerHTML = `
+      <audio controls src="${s.output_url}"></audio>
+      <div class="meta"><a href="${s.output_url}" download="${jobId}.m4a">⬇ Download ${jobId}.m4a</a></div>`;
+    $('btn').disabled = false;
+    return;
+  }
+  if (s.state === 'failed') {
+    $('btn').disabled = false;
+    return;
+  }
+  setTimeout(() => poll(jobId), 1000);
+}
+</script>
+
+</body>
+</html>

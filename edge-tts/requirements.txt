@@ -1,0 +1,9 @@
+fastapi>=0.110
+uvicorn[standard]>=0.27
+edge-tts>=6.1
+pydub>=0.25
+pydantic>=2.0
+# Backport audioop module that Python 3.13+ removed; pydub still needs it.
+# (Python 3.11 in the Docker image already has audioop built in, so this
+#  marker keeps the install a no-op there.)
+audioop-lts>=0.2; python_version >= "3.13"
