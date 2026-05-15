@@ -64,6 +64,7 @@ func HandleFiles(c *fiber.Ctx) error {
 
 	// Read metadata to get actual output filename
 	// Try regular meta first, fallback to prepare meta
+	var isPrepareJob bool
 	var jobStatus string
 	var downloadFilename string
 	meta, err := utils.ReadMeta(jobID)
@@ -73,6 +74,7 @@ func HandleFiles(c *fiber.Ctx) error {
 		if prepErr != nil {
 			return utils.InternalError(c, "Failed to read job metadata")
 		}
+		isPrepareJob = true
 		jobStatus = prepareMeta.Status
 		downloadFilename = filename // Use raw filename for prepare jobs
 	} else {
@@ -80,9 +82,14 @@ func HandleFiles(c *fiber.Ctx) error {
 		downloadFilename = utils.GenerateOutputFilename(meta)
 	}
 
-	// Check if job is completed
-	if jobStatus != models.StatusCompleted {
+	// For prepare jobs: allow serving individual files that are already downloaded
+	// even if the overall job isn't completed yet (e.g. audio finishes before video)
+	// For regular jobs: require full completion
+	if !isPrepareJob && jobStatus != models.StatusCompleted {
 		return utils.BadRequest(c, utils.ErrJobNotReady, "Job is not completed yet")
+	}
+	if isPrepareJob && jobStatus == models.StatusError {
+		return utils.BadRequest(c, utils.ErrJobNotReady, "Job failed")
 	}
 
 	// Build file path
