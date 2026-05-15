@@ -147,9 +147,9 @@ def map_audio_stream(fmt):
 
 
 def _pick_subtitle_url(tracks):
-    """Pick the JSON3 format URL from a list of subtitle tracks (easiest to parse)."""
+    """Pick the VTT format URL from a list of subtitle tracks (CDN-served, avoids 429)."""
     for t in tracks:
-        if t.get('ext') == 'json3':
+        if t.get('ext') == 'vtt':
             return t.get('url')
     # Fallback to first available
     return tracks[0].get('url') if tracks else None

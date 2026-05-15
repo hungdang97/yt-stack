@@ -1,7 +1,7 @@
 package handlers
 
 import (
-	"encoding/json"
+	"bufio"
 	"fmt"
 	"io"
 	"net/http"
@@ -25,22 +25,7 @@ type CaptionResponse struct {
 	Utterances []Utterance `json:"utterances"`
 }
 
-// YouTube json3 format structures
-type json3Response struct {
-	Events []json3Event `json:"events"`
-}
-
-type json3Event struct {
-	TStartMs    int64      `json:"tStartMs"`
-	DDurationMs int64      `json:"dDurationMs"`
-	Segs        []json3Seg `json:"segs"`
-}
-
-type json3Seg struct {
-	UTF8 string `json:"utf8"`
-}
-
-// HandleCaption handles GET /api/caption — downloads YouTube json3 subtitle, parses and returns clean JSON
+// HandleCaption handles GET /api/caption — downloads YouTube VTT subtitle, parses and returns clean JSON
 func HandleCaption(c *fiber.Ctx) error {
 	rawURL := c.Query("url")
 	token := c.Query("token")
@@ -66,7 +51,7 @@ func HandleCaption(c *fiber.Ctx) error {
 		duration, _ = strconv.ParseFloat(durationStr, 64)
 	}
 
-	// Download json3 from YouTube (via WARP proxy)
+	// Download VTT from YouTube CDN (via WARP proxy)
 	req, err := http.NewRequest("GET", rawURL, nil)
 	if err != nil {
 		return utils.InternalError(c, "Invalid caption URL")
@@ -88,43 +73,8 @@ func HandleCaption(c *fiber.Ctx) error {
 		return utils.InternalError(c, "Failed to read caption data")
 	}
 
-	// Parse json3 format
-	var j3 json3Response
-	if err := json.Unmarshal(body, &j3); err != nil {
-		return utils.InternalError(c, "Failed to parse caption data")
-	}
-
-	// Convert to utterances
-	utterances := make([]Utterance, 0, len(j3.Events))
-	for _, event := range j3.Events {
-		if len(event.Segs) == 0 || event.DDurationMs == 0 {
-			continue
-		}
-
-		var textParts []string
-		for _, seg := range event.Segs {
-			text := strings.TrimSpace(seg.UTF8)
-			if text != "" {
-				textParts = append(textParts, text)
-			}
-		}
-
-		text := strings.Join(textParts, " ")
-		text = strings.Join(strings.Fields(text), " ")
-
-		if text == "" {
-			continue
-		}
-
-		start := float64(event.TStartMs) / 1000.0
-		end := float64(event.TStartMs+event.DDurationMs) / 1000.0
-
-		utterances = append(utterances, Utterance{
-			Start: start,
-			End:   end,
-			Text:  text,
-		})
-	}
+	// Parse WebVTT format
+	utterances := parseVTT(string(body))
 
 	if lang == "" {
 		lang = detectLanguageFromURL(rawURL)
@@ -135,6 +85,127 @@ func HandleCaption(c *fiber.Ctx) error {
 		Duration:   duration,
 		Utterances: utterances,
 	})
+}
+
+// parseVTTTimestamp parses "HH:MM:SS.mmm" or "MM:SS.mmm" to seconds
+func parseVTTTimestamp(s string) (float64, bool) {
+	s = strings.TrimSpace(s)
+	parts := strings.Split(s, ":")
+	if len(parts) < 2 || len(parts) > 3 {
+		return 0, false
+	}
+
+	var hours, minutes int
+	var seconds float64
+	var err error
+
+	if len(parts) == 3 {
+		hours, err = strconv.Atoi(parts[0])
+		if err != nil {
+			return 0, false
+		}
+		parts = parts[1:]
+	}
+
+	minutes, err = strconv.Atoi(parts[0])
+	if err != nil {
+		return 0, false
+	}
+
+	seconds, err = strconv.ParseFloat(parts[1], 64)
+	if err != nil {
+		return 0, false
+	}
+
+	return float64(hours)*3600 + float64(minutes)*60 + seconds, true
+}
+
+// parseVTT parses WebVTT content into utterances
+func parseVTT(content string) []Utterance {
+	var utterances []Utterance
+	scanner := bufio.NewScanner(strings.NewReader(content))
+
+	for scanner.Scan() {
+		line := scanner.Text()
+
+		// Look for timestamp lines: "00:00:01.000 --> 00:00:04.000"
+		if !strings.Contains(line, "-->") {
+			continue
+		}
+
+		// Strip position/alignment settings after timestamp
+		timePart := line
+		if idx := strings.Index(timePart, " align:"); idx != -1 {
+			timePart = timePart[:idx]
+		}
+		if idx := strings.Index(timePart, " position:"); idx != -1 {
+			timePart = timePart[:idx]
+		}
+		if idx := strings.Index(timePart, " size:"); idx != -1 {
+			timePart = timePart[:idx]
+		}
+		if idx := strings.Index(timePart, " line:"); idx != -1 {
+			timePart = timePart[:idx]
+		}
+
+		parts := strings.SplitN(timePart, "-->", 2)
+		if len(parts) != 2 {
+			continue
+		}
+
+		start, ok1 := parseVTTTimestamp(parts[0])
+		end, ok2 := parseVTTTimestamp(parts[1])
+		if !ok1 || !ok2 {
+			continue
+		}
+
+		// Collect text lines until blank line
+		var textLines []string
+		for scanner.Scan() {
+			textLine := scanner.Text()
+			if textLine == "" {
+				break
+			}
+			textLines = append(textLines, textLine)
+		}
+
+		// Join and clean text (strip VTT tags like <c>, </c>, etc.)
+		text := strings.Join(textLines, " ")
+		text = stripVTTTags(text)
+		text = strings.Join(strings.Fields(text), " ")
+
+		if text == "" {
+			continue
+		}
+
+		utterances = append(utterances, Utterance{
+			Start: start,
+			End:   end,
+			Text:  text,
+		})
+	}
+
+	return utterances
+}
+
+// stripVTTTags removes WebVTT formatting tags like <c>, </c>, <00:00:01.000>, etc.
+func stripVTTTags(s string) string {
+	var result strings.Builder
+	inTag := false
+	for _, r := range s {
+		if r == '<' {
+			inTag = true
+			continue
+		}
+		if r == '>' {
+			inTag = false
+			continue
+		}
+		if !inTag {
+			result.WriteRune(r)
+		}
+	}
+	return result.String()
 }
 
 func detectLanguageFromURL(rawURL string) string {
