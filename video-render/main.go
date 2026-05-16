@@ -1,7 +1,7 @@
 // Video render service — input: video URL + audio URL + .ass URL.
 // Output: MP4 với subtitle ASS burn-in và audio mới.
 //
-//	POST /render        body {video_url, audio_url, subtitle_url}  → {job_id}
+//	POST /submit        body {video_url, audio_url, subtitle_url}  → {job_id}
 //	GET  /status/{id}   → {state, progress, output_url?}
 //	GET  /download/{id} → MP4 stream
 //	GET  /health        → ok
@@ -108,7 +108,7 @@ func main() {
 		addr = ":" + p
 	}
 	http.HandleFunc("/", handleIndex)
-	http.HandleFunc("/render", handleRender)
+	http.HandleFunc("/submit", handleRender)
 	http.HandleFunc("/status/", handleStatus)
 	http.HandleFunc("/download/", handleDownload)
 	http.HandleFunc("/health", func(w http.ResponseWriter, _ *http.Request) {

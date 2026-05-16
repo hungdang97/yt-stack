@@ -78,7 +78,7 @@ async function submitJob() {
   $('status').innerHTML = '<div class="meta">Submitting…</div>';
 
   try {
-    const r = await fetch('/render', {
+    const r = await fetch('submit', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(body),
@@ -93,7 +93,7 @@ async function submitJob() {
 }
 
 async function poll(jobId) {
-  const r = await fetch('/status/' + jobId);
+  const r = await fetch('status/' + jobId);
   const s = await r.json();
   const pct = (s.progress * 100).toFixed(0);
   let html = `<div class="bar"><div class="fill" style="width:${pct}%"></div></div>`;
