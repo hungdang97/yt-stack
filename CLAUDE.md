@@ -68,7 +68,8 @@ All client traffic enters at `https://hub.ytconvert.org`. The hub picks a health
 | Method | Path | Body / Query | Purpose |
 |---|---|---|---|
 | `POST` | `/api/upload` | multipart `file` | Host .ass / .srt / small file, returns absolute URL + 1h TTL |
-| `POST` | `/api/deepgram/transcribe` | `?url=<audio>` or JSON `{"url": "…"}` | Audio → utterances JSON |
+| `GET` `POST` | `/api/deepgram/transcribe` | `?url=<audio>` or JSON `{"url": "…"}` | Audio → utterances JSON |
+| `POST` | `/api/cleanup` | `{utterances[]}` | Clean ASR utterances (merge cắt câu + fix lỗi + restore punctuation + split câu dài). Giữ ngôn ngữ gốc. |
 | `POST` | `/api/translate` | `{target, source?, utterances[]}` | Translate utterances → target lang |
 | `GET` | `/api/tts/voices?locale=vi-VN` | — | List Edge TTS voices |
 | `POST` | `/api/tts/submit` | `{voice, utterances[]}` | Synthesize dubbed audio → returns `server_id + status_url + download_url` (absolute) |
@@ -181,30 +182,44 @@ Client            Hub                         VPS (load-balanced — có thể k
   │                │                               │ Deepgram Nova-3 API
   │                │ ◄─────────────────────────────│ { language, duration,
   │                │                               │   utterances:[…] }
-  │ ◄──────────────│ utterances (source lang)      │
+  │ ◄──────────────│ utterances (source lang, raw) │
   │                                                │
-  │ ⑤ POST /api/translate {target:"vi", utterances}│
+  │ ⑤ POST /api/cleanup {utterances}               │
+  ├───────────────►│ ─────────────────────────────►│ translate service
+  │                │                               │ /cleanup endpoint:
+  │                │                               │   • merge câu cắt nửa     │
+  │                │                               │   • restore punctuation   │
+  │                │                               │   • fix ASR errors        │
+  │                │                               │   • split câu dài ≤80c    │
+  │                │                               │ KHÔNG đổi ngôn ngữ        │
+  │                │ ◄─────────────────────────────│ {utterances:[cleaned]}    │
+  │ ◄──────────────│ utterances "đẹp"              │
+  │                                                │
+  │ ⑥ POST /api/translate {target:"vi", utterances}│
   ├───────────────►│ ─────────────────────────────►│ translate service
   │                │                               │ chunk + parallel
   │                │                               │ OpenRouter gpt-oss-20b
   │                │ ◄─────────────────────────────│ {target, utterances:[dịch]}
   │ ◄──────────────│ translated utterances         │
   │                                                │
-  │ ⑥ POST /api/tts/submit {voice, utterances}     │
+  │ ⑦ POST /api/tts/submit {voice, utterances}     │
   ├───────────────►│ ─────────────────────────────►│ edge-tts service
-  │                │                               │ MS Edge TTS WebSocket
-  │                │                               │ pydub merge timeline
+  │                │                               │ • normalize số/%/ngày     │
+  │                │                               │ • SSML <break> + <lang>   │
+  │                │                               │ • synth (measure+retry)   │
+  │                │                               │ • atempo stretch + xfade  │
+  │                │                               │ • pydub merge timeline    │
   │                │ ◄─────────────────────────────│ {server_id, status_url,
   │                │                               │  download_url (absolute)}
   │ ◄──────────────│                               │
   │                                                │
-  │ ⑦ poll /api/tts/status/:server_id/:job_id      │
+  │ ⑧ poll /api/tts/status/:server_id/:job_id      │
   ├───────────────►│ ─────────────────────────────►│
   │ ◄────────────── done, dubbed_audio_url         │
   │                                                │
-  │ ⑧ POST /api/render/submit                      │
+  │ ⑨ POST /api/render/submit                      │
   │      { video_url:    ② video,                  │
-  │        audio_url:    ⑦ dubbed_audio_url,       │
+  │        audio_url:    ⑧ dubbed_audio_url,       │
   │        subtitle_url: ① ass_url }               │
   ├───────────────►│ ─────────────────────────────►│ video-render service
   │                │                               │ download 3 URLs parallel
@@ -215,11 +230,11 @@ Client            Hub                         VPS (load-balanced — có thể k
   │                │                               │  download_url (absolute)}
   │ ◄──────────────│                               │
   │                                                │
-  │ ⑨ poll /api/render/status/:server_id/:job_id   │
+  │ ⑩ poll /api/render/status/:server_id/:job_id   │
   ├───────────────►│ ─────────────────────────────►│
   │ ◄────────────── done, output_url (absolute)    │
   │                                                │
-  │ ⑩ GET output_url (direct VPS, bypass hub)      │
+  │ ⑪ GET output_url (direct VPS, bypass hub)      │
   ├────────────────────────────────────────────────►│ /render/download/<id>
   │ ◄────────────── final MP4 (h264 + AAC + subs)  │
 ```

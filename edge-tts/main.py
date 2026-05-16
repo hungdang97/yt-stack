@@ -20,9 +20,11 @@ from __future__ import annotations
 import asyncio
 import hashlib
 import os
+import re
 import time
 import traceback
 import uuid
+from html import escape as html_escape
 from pathlib import Path
 from typing import Optional
 
@@ -31,7 +33,7 @@ from fastapi import BackgroundTasks, FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse, HTMLResponse
 from pydantic import BaseModel
-from pydub import AudioSegment
+from pydub import AudioSegment, effects
 from pydub.silence import detect_leading_silence
 
 # ---------- Config ----------
@@ -51,6 +53,13 @@ SLOT_TOLERANCE_SEC = float(os.getenv("SLOT_TOLERANCE_SEC", "0.2"))
 # Trim silence Edge TTS chèn ~100-300ms ở đầu/cuối mỗi segment. Threshold dB
 # dưới -40 coi như silent — đủ an toàn cho voice Edge (loud, không thì thầm).
 SILENCE_TRIM_DB = float(os.getenv("SILENCE_TRIM_DB", "-40"))
+# Sau khi retry hết rate mà vẫn over slot, thử atempo stretch tới 1.20x.
+# atempo giữ pitch (khác với rate "+75%" đổi pitch nghe lạ); vượt 1.25x thì
+# giọng nghe ép. Cap 1.20 là chuẩn của VideoLingo, vẫn tự nhiên.
+ATEMPO_MAX = float(os.getenv("ATEMPO_MAX", "1.20"))
+# Cross-fade nhỏ ở 2 đầu mỗi segment để bỏ tiếng "click" khi overlay nối tiếp
+# nhau. 30ms vừa đủ — dài hơn ngấm vào nội dung speech.
+CROSSFADE_MS = int(os.getenv("CROSSFADE_MS", "30"))
 
 # Cleanup TTL (giây). Output đã render xóa sau 1h, cache TTS segments giữ
 # lâu hơn (24h) vì cache-hit rate cao khi reuse text/voice giống nhau.
@@ -268,6 +277,125 @@ async def download(job_id: str):
     )
 
 
+# ---------- Text Pre-Process ----------
+# 2 việc trước khi gửi vào Edge TTS:
+#   1. NORMALIZE — chuyển số/%, ngày, $ thành text đầy đủ ("5.2%" → "5 phẩy 2
+#      phần trăm"). Edge TTS đôi khi spell-out hoặc skip — explicit là an toàn.
+#   2. SSML WRAP — bọc <break time="..."/> ở dấu câu để pause tự nhiên, và
+#      <lang xml:lang="en-US"> cho từ tiếng Anh quen thuộc (iPhone, YouTube...)
+#      để voice tiếng Việt không spell-out kiểu "i-pho-nê".
+#
+# Whitelist brand-term thay vì auto-detect (langdetect không reliable cho từ
+# đơn, false positive cao). User extend được list khi cần thêm brand.
+
+_EN_BRAND_TERMS = {
+    # Tech brands hay xuất hiện trong content Việt
+    "iphone", "ipad", "macbook", "mac", "ios", "ipados", "macos",
+    "youtube", "google", "apple", "samsung", "microsoft", "sony", "xiaomi",
+    "chatgpt", "openai", "gpt", "claude", "gemini",
+    "facebook", "instagram", "tiktok", "twitter", "snapchat",
+    "windows", "android", "linux",
+    "airpods", "airpod", "watch", "vision",
+    "pro", "max", "mini", "plus", "ultra", "series", "neural",
+    # Tech terms
+    "ssd", "hdd", "ram", "rom", "cpu", "gpu", "usb", "hdmi", "wifi", "bluetooth",
+    "ai", "ml", "vr", "ar", "api", "url",
+}
+
+
+def _voice_lang(voice: str) -> str:
+    """Extract ISO 639-1 lang code from edge-tts voice name.
+    'vi-VN-HoaiMyNeural' → 'vi'
+    'en-US-JennyNeural'  → 'en'
+    """
+    return voice.split("-")[0].lower() if voice else "en"
+
+
+def normalize_text(text: str, lang: str) -> str:
+    """Expand số / %, $ / ngày / abbreviation → text đầy đủ để Edge TTS đọc
+    tự nhiên thay vì spell-out hoặc skip. Chỉ xử lý case STRUCTURAL (có ký
+    hiệu đặc biệt như %, $, /), không động đến số đơn lẻ vì Edge TTS Vietnamese
+    voice đọc số trong context khá ổn.
+    """
+    if not text:
+        return text
+    out = text
+
+    if lang == "vi":
+        # Currency: $50 / $1.5 → "50 đô la"
+        out = re.sub(r"\$\s*(\d+(?:[.,]\d+)?)", r"\1 đô la", out)
+        # Percent decimal: 5.2% → "5 phẩy 2 phần trăm"
+        out = re.sub(
+            r"(\d+)[.,](\d+)\s*%",
+            lambda m: f"{m.group(1)} phẩy {m.group(2)} phần trăm",
+            out,
+        )
+        # Percent integer: 50% → "50 phần trăm"
+        out = re.sub(r"(\d+)\s*%", r"\1 phần trăm", out)
+        # Date dd/mm/yyyy: 15/3/2024 → "ngày 15 tháng 3 năm 2024"
+        out = re.sub(
+            r"\b(\d{1,2})/(\d{1,2})/(\d{2,4})\b",
+            r"ngày \1 tháng \2 năm \3",
+            out,
+        )
+        # Date dd/mm
+        out = re.sub(r"\b(\d{1,2})/(\d{1,2})\b", r"ngày \1 tháng \2", out)
+        # K suffix: 200k → "200 nghìn"
+        out = re.sub(r"\b(\d+)k\b", r"\1 nghìn", out, flags=re.IGNORECASE)
+        # Hz: "60 Hz" / "60Hz" → "60 héc"
+        out = re.sub(r"\b(\d+)\s*Hz\b", r"\1 héc", out, flags=re.IGNORECASE)
+    elif lang == "en":
+        out = re.sub(r"\$\s*(\d+(?:[.,]\d+)?)", r"\1 dollars", out)
+        out = re.sub(r"(\d+(?:[.,]\d+)?)\s*%", r"\1 percent", out)
+        out = re.sub(r"\bDr\.", "Doctor", out)
+        out = re.sub(r"\bMr\.", "Mister", out)
+        out = re.sub(r"\bMrs\.", "Misses", out)
+        out = re.sub(r"\betc\.", "et cetera", out)
+        out = re.sub(r"\b(\d+)k\b", r"\1 thousand", out, flags=re.IGNORECASE)
+        out = re.sub(r"\b(\d+)\s*Hz\b", r"\1 hertz", out, flags=re.IGNORECASE)
+
+    return out
+
+
+def _wrap_brand_terms(text: str) -> str:
+    """Tìm brand terms trong whitelist và bọc <lang xml:lang='en-US'> để
+    Edge TTS Vietnamese voice tạm switch sang giọng Anh đọc đúng chính tả.
+    Case-insensitive match nhưng giữ nguyên case gốc trong output.
+    """
+    pattern = r"\b(" + "|".join(re.escape(t) for t in _EN_BRAND_TERMS) + r")\b"
+    return re.sub(
+        pattern,
+        lambda m: f'<lang xml:lang="en-US">{m.group(1)}</lang>',
+        text,
+        flags=re.IGNORECASE,
+    )
+
+
+def wrap_ssml(text: str, voice_lang: str = "vi") -> str:
+    """Wrap text trong <speak>...</speak> với 2 enhancement:
+      • <break time="..."/> sau dấu câu để pause tự nhiên
+      • <lang xml:lang="en-US"> cho brand terms (chỉ khi voice_lang='vi')
+
+    Escape XML chars trước khi inject tag để tránh hỏng SSML khi text có '<>&'.
+    """
+    if not text:
+        return text
+    # Escape XML special chars TRƯỚC khi inject tag (tag mình thêm sau ko bị escape)
+    safe = html_escape(text, quote=False)
+
+    # Break sau dấu kết câu (.?!) → 400ms reset intonation
+    safe = re.sub(r"([.?!])(\s|$)", r'\1<break time="400ms"/>\2', safe)
+    # Break sau dấu phẩy/ngắt nhịp → 200ms breath
+    safe = re.sub(r"([,;:])(\s|$)", r'\1<break time="200ms"/>\2', safe)
+
+    # Brand terms — chỉ wrap khi voice là Vietnamese (Edge TTS English voice
+    # đọc brand terms native rồi, không cần <lang> tag).
+    if voice_lang == "vi":
+        safe = _wrap_brand_terms(safe)
+
+    return f"<speak>{safe}</speak>"
+
+
 # ---------- Worker ----------
 def _trim_silence(seg: AudioSegment) -> AudioSegment:
     """Cắt silence đầu + cuối segment. Edge TTS chèn ~100-300ms padding mỗi
@@ -291,6 +419,44 @@ async def _synth_raw(text: str, voice: str, rate: str) -> Path:
     return cache_path
 
 
+async def _atempo_stretch(seg: AudioSegment, factor: float) -> AudioSegment:
+    """Speed up segment bằng ffmpeg atempo filter (giữ pitch). Khác với rate
+    cao của Edge TTS — rate đổi pitch (giọng cao the thé), atempo chỉ thay
+    tempo. ffmpeg atempo cap 0.5-2.0; mình thực tế dùng ≤1.20.
+
+    Implementation: export segment ra file tạm → ffmpeg subprocess → load lại.
+    Phép tử subprocess vì pydub không có atempo built-in.
+    """
+    if factor <= 1.0:
+        return seg  # no stretch needed
+    # Atempo factor được validate trước khi gọi, nhưng safety:
+    factor = min(factor, 2.0)
+
+    tmp_in = CACHE_DIR / f"_atempo_in_{uuid.uuid4().hex[:8]}.mp3"
+    tmp_out = CACHE_DIR / f"_atempo_out_{uuid.uuid4().hex[:8]}.mp3"
+    try:
+        seg.export(str(tmp_in), format="mp3")
+        proc = await asyncio.create_subprocess_exec(
+            "ffmpeg", "-y", "-i", str(tmp_in),
+            "-af", f"atempo={factor:.3f}",
+            "-loglevel", "error",
+            str(tmp_out),
+            stdout=asyncio.subprocess.DEVNULL,
+            stderr=asyncio.subprocess.PIPE,
+        )
+        _, stderr = await proc.communicate()
+        if proc.returncode != 0:
+            print(f"[atempo] ffmpeg failed: {stderr.decode(errors='replace')[:200]}")
+            return seg
+        return AudioSegment.from_mp3(str(tmp_out))
+    finally:
+        for p in (tmp_in, tmp_out):
+            try:
+                p.unlink(missing_ok=True)
+            except OSError:
+                pass
+
+
 async def _synth_fit(
     text: str, voice: str, slot_seconds: float
 ) -> tuple[AudioSegment, str]:
@@ -298,22 +464,39 @@ async def _synth_fit(
     đo duration. Nếu vừa slot (± tolerance) thì dùng. Hết retry vẫn over →
     clip cuối segment (giữ phần đầu câu, mất phần cuối).
 
+    Pre-process text MỘT LẦN trước retry loop (rate-independent):
+      • normalize số/%/ngày → text đầy đủ
+      • SSML wrap với <break> ở dấu câu + <lang> tag cho brand terms
+
     Trả về (segment đã trim, rate dùng) — rate cho logging/debug, segment
     sẵn sàng overlay vào timeline.
     """
+    lang = _voice_lang(voice)
+    processed = wrap_ssml(normalize_text(text, lang), lang)
+
     last_seg: Optional[AudioSegment] = None
     last_rate = RETRY_RATES[-1]
 
     for rate in RETRY_RATES:
-        raw_path = await _synth_raw(text, voice, rate)
+        raw_path = await _synth_raw(processed, voice, rate)
         seg = _trim_silence(AudioSegment.from_mp3(str(raw_path)))
         last_seg, last_rate = seg, rate
         if seg.duration_seconds <= slot_seconds + SLOT_TOLERANCE_SEC:
             return seg, rate
 
-    # Hết retry mà vẫn dài → clip cuối. Giữ đầu vì câu mở thường quan trọng
-    # hơn câu kết; mất 1-2 từ cuối chấp nhận hơn là đè vào câu kế.
+    # Hết retry rate mà vẫn dài → thử atempo stretch (giữ pitch). Atempo chỉ
+    # dùng được khi ratio ≤ ATEMPO_MAX (1.20x), vượt thì giọng nghe ép.
     assert last_seg is not None
+    ratio = last_seg.duration_seconds / max(slot_seconds, 0.001)
+    if ratio <= ATEMPO_MAX:
+        stretched = await _atempo_stretch(last_seg, ratio)
+        if stretched.duration_seconds <= slot_seconds + SLOT_TOLERANCE_SEC:
+            return stretched, f"{last_rate}+atempo{ratio:.2f}"
+        # Atempo không đạt expected (ffmpeg lỗi hoặc rounding) → tiếp tục clip
+        last_seg = stretched
+
+    # Cuối cùng: clip cuối. Giữ đầu vì câu mở thường quan trọng hơn câu kết;
+    # mất 1-2 từ cuối chấp nhận hơn là đè vào câu kế.
     clipped = last_seg[: int(slot_seconds * 1000)]
     return clipped, f"{last_rate}+clip"
 
@@ -350,16 +533,30 @@ async def run_job(job_id: str, req: SubmitRequest) -> None:
         # === Bước 3: Assemble — overlay segment ĐÃ TRIM vào silence track ===
         # Vì đã trim silence đầu/cuối + đảm bảo fit slot ở bước 2, mỗi segment
         # đặt đúng u.start là speech bắt đầu ngay đó, không drift.
+        # Mỗi segment có fade_in/fade_out CROSSFADE_MS để bỏ "click" boundary
+        # khi câu trước/sau dính sát nhau.
         total_ms = int(max(u.end for u in req.utterances) * 1000)
         track = AudioSegment.silent(duration=total_ms)
         clipped_count = 0
+        stretched_count = 0
         for u, seg, rate in results:
+            if CROSSFADE_MS > 0 and len(seg) > 2 * CROSSFADE_MS:
+                seg = seg.fade_in(CROSSFADE_MS).fade_out(CROSSFADE_MS)
             track = track.overlay(seg, position=int(u.start * 1000))
             if rate.endswith("+clip"):
                 clipped_count += 1
+            elif "+atempo" in rate:
+                stretched_count += 1
 
-        if clipped_count:
-            print(f"[job {job_id}] {clipped_count}/{len(results)} utterances clipped (text too long for slot even at max rate)")
+        if clipped_count or stretched_count:
+            print(
+                f"[job {job_id}] {clipped_count} clipped, {stretched_count} atempo-stretched "
+                f"out of {len(results)} utterances"
+            )
+
+        # Volume normalize TOÀN TRACK — peak ~ -1dBFS. Tránh câu to câu nhỏ
+        # khi nhiều segment merge lại (mỗi segment volume hơi khác do TTS).
+        track = effects.normalize(track)
 
         # Output M4A (AAC) — drop-in cho mp4 video, merge bằng `-c copy`
         # không cần re-encode (nhanh hơn ~10-30x so với MP3-in-MP4).

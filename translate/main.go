@@ -157,6 +157,7 @@ func main() {
 		addr = ":" + p
 	}
 	http.HandleFunc("/translate", handleTranslate)
+	http.HandleFunc("/cleanup", handleCleanup)
 	http.HandleFunc("/health", func(w http.ResponseWriter, _ *http.Request) {
 		// vps-agent đọc "version" để hiện Ready trên hub dashboard.
 		w.Header().Set("Content-Type", "application/json")
@@ -363,6 +364,8 @@ func translateChunkOnce(items map[string]string, source, target string) (map[str
 	prompt := fmt.Sprintf(`Translate the VALUES of this JSON object from %s to %s.
 Return a JSON object with EXACTLY the same keys, only the values translated.
 Preserve tone, register, and meaning. Keep proper nouns unchanged.
+Keep translation length similar to source (±20%% character count) — if literal
+translation runs long, shorten naturally (drop filler, contract phrases).
 No prose, no markdown — just the JSON object.
 
 Input:
@@ -456,6 +459,309 @@ func callOpenRouter(body chatRequest) (*chatResponse, error) {
 func shouldFailover(status int) bool {
 	return status == 401 || status == 403 || status == 429 || status >= 500
 }
+
+// =================== CLEANUP endpoint ===================
+//
+// POST /cleanup
+//
+//	{ "utterances": [{start, end, text}, ...] }
+//
+// Mục đích: làm sạch transcript từ ASR / YouTube auto-caption TRƯỚC khi đi
+// translate hoặc TTS. ASR raw output thường có:
+//   - Câu cắt giữa chừng (YouTube cắt theo time, không theo grammar)
+//   - Thiếu dấu câu
+//   - Lỗi ASR rõ ràng ("đọc bass" cho "đọc pass")
+//   - Số/đơn vị malformed ("11.7 triệu000đ")
+//   - Filler ("um", "uh", "kiểu kiểu")
+//   - Proper noun không nhất quán
+//
+// LLM xử lý 5 việc cùng lúc, GIỮ NGUYÊN ngôn ngữ gốc (không dịch). Output
+// mỗi utterance là MẢNG sub-utterances (1+ phần tử) — nếu câu sạch sẵn thì
+// trả mảng 1 phần tử. Nếu câu dài, LLM split thành 2-3 chunk ≤80 chars.
+//
+// Backend Go re-distribute timestamp proportional theo char count cho từng
+// sub-utterance — đảm bảo timeline khớp nhịp speaker gốc.
+type (
+	cleanupRequest struct {
+		Utterances []utterance `json:"utterances"`
+	}
+	cleanupResponse struct {
+		Utterances []utterance `json:"utterances"`
+	}
+	// cleanedItem: kết quả cleanup cho 1 utterance source.
+	// Pos = vị trí gốc trong request. Chunks = 1 hoặc nhiều sub-utterance.
+	cleanedItem struct {
+		Pos    int
+		Chunks []string
+	}
+)
+
+func handleCleanup(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost {
+		writeError(w, http.StatusMethodNotAllowed, "method not allowed")
+		return
+	}
+	var req cleanupRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		writeError(w, http.StatusBadRequest, "invalid json: "+err.Error())
+		return
+	}
+	if len(req.Utterances) > maxUtterances {
+		writeError(w, http.StatusBadRequest, fmt.Sprintf(
+			"too many utterances: %d (max %d)", len(req.Utterances), maxUtterances))
+		return
+	}
+	if len(req.Utterances) == 0 {
+		writeJSON(w, http.StatusOK, cleanupResponse{Utterances: []utterance{}})
+		return
+	}
+	out, err := cleanup(req)
+	if err != nil {
+		writeError(w, http.StatusBadGateway, "openrouter: "+err.Error())
+		return
+	}
+	writeJSON(w, http.StatusOK, out)
+}
+
+// cleanup: tái dùng cùng pattern chunk-parallel của translate.
+// 1. Filter non-empty utterances + nhớ Pos gốc.
+// 2. Chunk theo byte + item count (cùng limit translate).
+// 3. Chạy cleanupChunk song song.
+// 4. Map kết quả về Pos gốc, expand split → utterances mới với timestamp
+//    được chia tỷ lệ theo char count.
+func cleanup(req cleanupRequest) (cleanupResponse, error) {
+	items := make([]indexedText, 0, len(req.Utterances))
+	for i, u := range req.Utterances {
+		if strings.TrimSpace(u.Text) != "" {
+			items = append(items, indexedText{Pos: i, Text: u.Text})
+		}
+	}
+	if len(items) == 0 {
+		return cleanupResponse{Utterances: req.Utterances}, nil
+	}
+
+	chunks := chunkInputs(items, maxChunkChars, maxChunkItems)
+	results := make([][]cleanedItem, len(chunks))
+	errs := make([]error, len(chunks))
+	sem := make(chan struct{}, maxConcurrent)
+	var wg sync.WaitGroup
+	for i, chunk := range chunks {
+		wg.Add(1)
+		sem <- struct{}{}
+		go func(idx int, c []indexedText) {
+			defer wg.Done()
+			defer func() { <-sem }()
+			results[idx], errs[idx] = cleanupChunk(c)
+		}(i, chunk)
+	}
+	wg.Wait()
+
+	for i, err := range errs {
+		if err != nil {
+			return cleanupResponse{}, fmt.Errorf("chunk %d/%d: %w", i+1, len(chunks), err)
+		}
+	}
+
+	// Pos → chunks map cho lookup nhanh khi rebuild theo thứ tự gốc.
+	cleaned := make(map[int][]string, len(items))
+	for _, r := range results {
+		for _, item := range r {
+			cleaned[item.Pos] = item.Chunks
+		}
+	}
+
+	// Rebuild output preserving original order. Empty utterances pass-through
+	// nguyên văn. Split → distribute timestamp proportional char-count.
+	out := make([]utterance, 0, len(req.Utterances))
+	for i, u := range req.Utterances {
+		subChunks, ok := cleaned[i]
+		if !ok || len(subChunks) == 0 {
+			out = append(out, u) // empty hoặc skip — pass-through
+			continue
+		}
+		if len(subChunks) == 1 {
+			out = append(out, utterance{Start: u.Start, End: u.End, Text: subChunks[0]})
+			continue
+		}
+		// Multi-chunk: chia duration theo tỷ lệ ký tự (dùng rune cho UTF-8).
+		totalRunes := 0
+		runeCounts := make([]int, len(subChunks))
+		for j, c := range subChunks {
+			runeCounts[j] = len([]rune(c))
+			totalRunes += runeCounts[j]
+		}
+		if totalRunes == 0 {
+			out = append(out, u)
+			continue
+		}
+		duration := u.End - u.Start
+		cursor := u.Start
+		for j, c := range subChunks {
+			subDur := duration * float64(runeCounts[j]) / float64(totalRunes)
+			end := cursor + subDur
+			if j == len(subChunks)-1 {
+				end = u.End // tránh sai số float dồn
+			}
+			out = append(out, utterance{Start: cursor, End: end, Text: c})
+			cursor = end
+		}
+	}
+
+	return cleanupResponse{Utterances: out}, nil
+}
+
+// cleanupChunk: mỗi key trả về MẢNG sub-utterance (≥1). Retry pattern giống
+// translateChunk — chỉ retry keys thiếu chứ không retry cả chunk.
+func cleanupChunk(items []indexedText) ([]cleanedItem, error) {
+	pending := make(map[string]string, len(items))
+	keyToPos := make(map[string]int, len(items))
+	for i, it := range items {
+		k := fmt.Sprintf("u%d", i)
+		pending[k] = it.Text
+		keyToPos[k] = it.Pos
+	}
+
+	done := make(map[string][]string, len(items))
+	var lastErr error
+
+	for attempt := 0; attempt <= chunkRetries; attempt++ {
+		if attempt > 0 {
+			time.Sleep(time.Duration(attempt) * chunkRetryBaseDelay)
+			log.Printf("cleanup chunk retry %d/%d, %d items still pending", attempt, chunkRetries, len(pending))
+		}
+		result, err := cleanupChunkOnce(pending)
+		if err != nil {
+			lastErr = err
+			continue
+		}
+		for k, v := range result {
+			if _, want := pending[k]; want && len(v) > 0 {
+				// Lọc trim empty strings (LLM đôi khi sinh chunk rỗng).
+				clean := make([]string, 0, len(v))
+				for _, s := range v {
+					if strings.TrimSpace(s) != "" {
+						clean = append(clean, strings.TrimSpace(s))
+					}
+				}
+				if len(clean) > 0 {
+					done[k] = clean
+					delete(pending, k)
+				}
+			}
+		}
+		if len(pending) == 0 {
+			break
+		}
+	}
+
+	if len(pending) > 0 {
+		if lastErr == nil {
+			lastErr = fmt.Errorf("%d items missing after retries", len(pending))
+		}
+		return nil, lastErr
+	}
+
+	out := make([]cleanedItem, len(items))
+	for i, it := range items {
+		k := fmt.Sprintf("u%d", i)
+		out[i] = cleanedItem{Pos: it.Pos, Chunks: done[k]}
+	}
+	return out, nil
+}
+
+// cleanupChunkOnce: gửi 1 LLM call. Schema yêu cầu mỗi value là array of
+// string (minItems=1), strict mode để OpenRouter reject response sai shape.
+func cleanupChunkOnce(items map[string]string) (map[string][]string, error) {
+	properties := make(map[string]any, len(items))
+	required := make([]string, 0, len(items))
+	for k := range items {
+		properties[k] = map[string]any{
+			"type":     "array",
+			"items":    map[string]string{"type": "string"},
+			"minItems": 1,
+		}
+		required = append(required, k)
+	}
+	schema := map[string]any{
+		"type":                 "object",
+		"properties":           properties,
+		"required":             required,
+		"additionalProperties": false,
+	}
+
+	inputJSON, _ := json.Marshal(items)
+	prompt := fmt.Sprintf(`You are cleaning ASR / YouTube auto-caption transcript utterances.
+The input is a JSON object where each value is a raw transcript chunk. The chunks
+are often cut mid-sentence (auto-caption cuts by time, not by grammar), may have
+ASR errors, missing punctuation, malformed numbers, or inconsistent proper noun
+spellings.
+
+For each key, return an ARRAY of 1+ sub-utterances after applying ALL of:
+
+1. RESPLIT: if cleaned text > 80 characters, split into 2-3 sub-chunks at a
+   natural grammar boundary (after comma, period, conjunction). Each ≤80 chars.
+2. PUNCTUATION: restore missing commas / periods / question marks if obvious
+   from context.
+3. ASR FIX: fix obvious typos and malformed numbers
+   (e.g. "11.7 triệu000đ" → "11.7 triệu đồng"; "120 H" → "120 Hz" if context
+   clearly means hertz).
+4. FILLER: remove speech disfluencies ("um", "uh", "kiểu kiểu", "ờ", "à") ONLY
+   when they are clearly fillers, NOT meaningful content.
+5. PROPER NOUN: normalize inconsistent spellings within this batch (pick one
+   canonical form, e.g. "Onway"/"Oneway" → "Oneway").
+
+CRITICAL RULES:
+- DO NOT translate to any other language. Keep the ORIGINAL language.
+- DO NOT merge content across different keys — each key is processed
+  independently (merging would lose timestamp boundaries).
+- If a key's text is already clean and ≤80 chars, return [original_text] as
+  a 1-item array.
+- Return JSON only, no prose, no markdown.
+
+Input:
+%s`, string(inputJSON))
+
+	resp, err := callOpenRouter(chatRequest{
+		Model:       openRouterModel,
+		Temperature: temperature,
+		MaxTokens:   maxOutputTokens,
+		Reasoning:   &reasoningOpt{Effort: "low", Exclude: true},
+		ResponseFormat: &responseFormat{
+			Type: "json_schema",
+			JSONSchema: jsonSchema{
+				Name:   "cleanup",
+				Strict: true,
+				Schema: schema,
+			},
+		},
+		Plugins:  []pluginRef{{ID: "response-healing"}},
+		Messages: []chatMessage{{Role: "user", Content: prompt}},
+	})
+	if err != nil {
+		return nil, err
+	}
+	if len(resp.Choices) == 0 {
+		return nil, errors.New("no choices in response")
+	}
+	return parseObjectArray(resp.Choices[0].Message.Content)
+}
+
+// parseObjectArray: parse map[string][]string (cleanup response shape).
+// Tolerant với rác đuôi / markdown — cắt từ '{' đầu tới '}' cuối.
+func parseObjectArray(s string) (map[string][]string, error) {
+	start := strings.Index(s, "{")
+	end := strings.LastIndex(s, "}")
+	if start < 0 || end <= start {
+		return nil, fmt.Errorf("no json object in response: %s", snippet(s, 200))
+	}
+	var out map[string][]string
+	if err := json.Unmarshal([]byte(s[start:end+1]), &out); err != nil {
+		return nil, fmt.Errorf("parse json object: %w", err)
+	}
+	return out, nil
+}
+
+// =================== end CLEANUP ===================
 
 func writeError(w http.ResponseWriter, status int, msg string) {
 	writeJSON(w, status, map[string]string{"error": msg})
