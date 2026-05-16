@@ -49,6 +49,181 @@ yt-downloader, tik-downloader, insta-downloader, fb-downloader & x-downloader us
 | **nginx** | - | nginx:alpine | 80/443 | SSL termination (Let's Encrypt), rate limiting (30 req/s), routes `/` → yt, `/tik/` → tik, `/insta/` → insta, `/fb/` → fb, `/x/` → x |
 | **gost** | - | ginuerzh/gost | 1111/2222 | Load-balanced WARP proxy pool (5 instances) + direct proxy |
 
+## Hub API Reference
+
+All client traffic enters at `https://hub.ytconvert.org`. The hub picks a healthy VPS (load-balanced), forwards the request, and either streams the response back or returns absolute VPS URLs the client can hit directly.
+
+### Public — core download
+
+| Method | Path | Purpose |
+|---|---|---|
+| `GET` | `/health` | Hub + servers summary |
+| `GET` | `/stats` | Aggregated stats |
+| `GET` | `/api/info?url=…` | Metadata only (no download) |
+| `POST` | `/api/download` | Quick download → returns proxy streaming URLs |
+| `POST` | `/api/prepare` | Start background download to VPS disk → returns `status_url` + signed file URLs |
+
+### Public — render pipeline
+
+| Method | Path | Body / Query | Purpose |
+|---|---|---|---|
+| `POST` | `/api/upload` | multipart `file` | Host .ass / .srt / small file, returns absolute URL + 1h TTL |
+| `POST` | `/api/deepgram/transcribe` | `?url=<audio>` or JSON `{"url": "…"}` | Audio → utterances JSON |
+| `POST` | `/api/translate` | `{target, source?, utterances[]}` | Translate utterances → target lang |
+| `GET` | `/api/tts/voices?locale=vi-VN` | — | List Edge TTS voices |
+| `POST` | `/api/tts/submit` | `{voice, utterances[]}` | Synthesize dubbed audio → returns `server_id + status_url + download_url` (absolute) |
+| `GET` | `/api/tts/status/:server_id/:job_id` | — | TTS job state |
+| `GET` | `/api/tts/download/:server_id/:job_id` | — | Stream M4A |
+| `POST` | `/api/render/submit` | `{video_url, audio_url, subtitle_url}` | Merge → MP4 with subtitle burn-in, returns `server_id + URLs` |
+| `GET` | `/api/render/status/:server_id/:job_id` | — | Render progress (download → encoding) |
+| `GET` | `/api/render/download/:server_id/:job_id` | — | Stream final MP4 |
+
+### Public — VPS Agent registration
+
+| Method | Path | Purpose |
+|---|---|---|
+| `POST` | `/api/server-config/register` | VPS-agent registers itself |
+| `GET` | `/api/server-config/:server_ip` | Fetch config to generate `.env` |
+| `POST` | `/api/server-config/:server_ip/heartbeat` | Heartbeat + service health + system metrics |
+
+### Admin — Basic Auth at `/admin/*`
+
+| Method | Path | Purpose |
+|---|---|---|
+| `GET POST PUT DELETE` | `/admin/api/servers[/:id]` | CRUD servers |
+| `POST` | `/admin/api/vps/:server_ip/restart/:service` | Pull + rebuild + restart 1 service on 1 VPS |
+| `POST` | `/admin/api/restart-all/:service` | Same, across every enabled VPS |
+| `GET` | `/admin/api/stats` | System stats |
+| `GET POST DELETE` | `/admin/api/cloudflare-domains[/:domain]` | Manage DNS records |
+| `GET` | `/admin/api/platform-stats` | Per-platform request counts |
+
+---
+
+## Sequence Diagrams
+
+### Flow 1 — Pure download video (no caption/dub)
+
+Use case: client wants the MP4 + M4A files of a YouTube/TikTok/etc. video.
+
+```
+Client                 Hub                       VPS-A (yt-downloader)
+  │                     │                              │
+  │ ① POST /api/prepare {url, license_key?}            │
+  ├────────────────────►│                              │
+  │                     │ validate license             │
+  │                     │ detectPlatform → /api or /tik
+  │                     │ pick VPS (Weighted LC)       │
+  │                     │ POST <vps>/api/prepare       │
+  │                     ├─────────────────────────────►│
+  │                     │                              │ extract metadata
+  │                     │                              │ start bg download
+  │                     │                              │ video.mp4 + audio.m4a
+  │                     │                              │ (saved to /storage)
+  │                     │ ◄─────────────────────────────┤
+  │                     │ 201 { status_url,            │
+  │                     │       video_url (signed),    │
+  │                     │       audio_url (signed),    │
+  │                     │       subtitles[],           │
+  │                     │       title, duration }      │
+  │ ◄───────────────────┤                              │
+  │                                                    │
+  │ ② poll status_url tới progress=100%               │
+  ├────────────────────────────────────────────────────►│
+  │ ◄──────────────────── done                         │
+  │                                                    │
+  │ ③ GET video_url (direct VPS — không qua hub)       │
+  ├────────────────────────────────────────────────────►│ /files/<id>/video.mp4
+  │ ◄──────────────────── MP4 stream                   │
+  │                                                    │
+  │ ③' (optional) GET audio_url cùng cách              │
+  ├────────────────────────────────────────────────────►│ /files/<id>/audio.m4a
+  │ ◄──────────────────── M4A stream                   │
+```
+
+Hub đụng VPS chỉ 1 lần (bước ①). Sau đó client gọi thẳng VPS qua signed URL, **bypass hub** để tiết kiệm bandwidth.
+
+### Flow 2 — Prepare → Render video with caption (full dub pipeline)
+
+Use case: tải video YouTube, thay tiếng dub bằng giọng Vietnamese, burn subtitle vào MP4 cuối.
+
+```
+Client            Hub                         VPS (load-balanced — có thể khác nhau mỗi step)
+  │                │                               │
+  │ ① POST /api/upload  multipart file=subtitle.ass│
+  ├───────────────►│                               │
+  │                │ pick VPS → POST <vps>/upload/ │
+  │                │ ─────────────────────────────►│ upload service
+  │                │                               │ save → /tmp/upload-files
+  │                │ ◄─────────────────────────────│ { url, expires_at }
+  │ ◄──────────────│ ass_url (absolute https URL)  │
+  │                                                │
+  │ ② POST /api/prepare {url: youtube.com/...}     │
+  ├───────────────►│ ─────────────────────────────►│ yt-downloader
+  │                │                               │ bg download video+audio
+  │                │ ◄─────────────────────────────│ { status_url, video_url,
+  │                │                               │   audio_url (signed) }
+  │ ◄──────────────│                               │
+  │                                                │
+  │ ③ poll prepare status tới done                 │
+  ├────────────────────────────────────────────────►│
+  │ ◄────────────── done                           │
+  │                                                │
+  │ ④ POST /api/deepgram/transcribe ?url=audio_url │
+  ├───────────────►│ ─────────────────────────────►│ deepgram service
+  │                │                               │ fetch audio_url
+  │                │                               │ Deepgram Nova-3 API
+  │                │ ◄─────────────────────────────│ { language, duration,
+  │                │                               │   utterances:[…] }
+  │ ◄──────────────│ utterances (source lang)      │
+  │                                                │
+  │ ⑤ POST /api/translate {target:"vi", utterances}│
+  ├───────────────►│ ─────────────────────────────►│ translate service
+  │                │                               │ chunk + parallel
+  │                │                               │ OpenRouter gpt-oss-20b
+  │                │ ◄─────────────────────────────│ {target, utterances:[dịch]}
+  │ ◄──────────────│ translated utterances         │
+  │                                                │
+  │ ⑥ POST /api/tts/submit {voice, utterances}     │
+  ├───────────────►│ ─────────────────────────────►│ edge-tts service
+  │                │                               │ MS Edge TTS WebSocket
+  │                │                               │ pydub merge timeline
+  │                │ ◄─────────────────────────────│ {server_id, status_url,
+  │                │                               │  download_url (absolute)}
+  │ ◄──────────────│                               │
+  │                                                │
+  │ ⑦ poll /api/tts/status/:server_id/:job_id      │
+  ├───────────────►│ ─────────────────────────────►│
+  │ ◄────────────── done, dubbed_audio_url         │
+  │                                                │
+  │ ⑧ POST /api/render/submit                      │
+  │      { video_url:    ② video,                  │
+  │        audio_url:    ⑦ dubbed_audio_url,       │
+  │        subtitle_url: ① ass_url }               │
+  ├───────────────►│ ─────────────────────────────►│ video-render service
+  │                │                               │ download 3 URLs parallel
+  │                │                               │ ffprobe duration
+  │                │                               │ ffmpeg burn ASS + AAC
+  │                │                               │ -progress pipe:1 → live %
+  │                │ ◄─────────────────────────────│ {server_id, status_url,
+  │                │                               │  download_url (absolute)}
+  │ ◄──────────────│                               │
+  │                                                │
+  │ ⑨ poll /api/render/status/:server_id/:job_id   │
+  ├───────────────►│ ─────────────────────────────►│
+  │ ◄────────────── done, output_url (absolute)    │
+  │                                                │
+  │ ⑩ GET output_url (direct VPS, bypass hub)      │
+  ├────────────────────────────────────────────────►│ /render/download/<id>
+  │ ◄────────────── final MP4 (h264 + AAC + subs)  │
+```
+
+**Optional shortcuts**:
+- Skip ④⑤⑥⑦ nếu chỉ muốn burn subtitle giữ audio gốc → ⑧ dùng `audio_url` từ bước ②
+- Skip ⑤ nếu client tự dịch utterances → ⑥ dùng utterances của client
+- Skip ⑥⑦ nếu client tự sản xuất audio → ⑧ dùng URL audio của client
+
+---
+
 ## Common Commands
 
 ### Full Stack (Docker Compose)
