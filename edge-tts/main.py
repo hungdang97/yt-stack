@@ -32,18 +32,25 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse, HTMLResponse
 from pydantic import BaseModel
 from pydub import AudioSegment
+from pydub.silence import detect_leading_silence
 
 # ---------- Config ----------
 LISTEN_PORT = int(os.getenv("PORT", "8500"))
 OUTPUT_DIR = Path(os.getenv("OUTPUT_DIR", "/tmp/dubbing-output"))
 CACHE_DIR = Path(os.getenv("CACHE_DIR", "/tmp/dubbing-cache"))
 TTS_CONCURRENCY = int(os.getenv("TTS_CONCURRENCY", "4"))
-# Ước lượng tốc độ đọc tự nhiên — dùng để tính rate cần để text fit trong slot.
-# 15 char/s là rough cho tiếng Việt; với tiếng Anh có thể cao hơn nhưng
-# từ ngắn hơn nên trung bình tương đương.
-NATURAL_CHARS_PER_SEC = float(os.getenv("CHARS_PER_SEC", "15"))
-# Cap tốc độ tăng — quá nhanh thì giọng dị, người nghe khó tiếp nhận.
-MAX_RATE_PCT = int(os.getenv("MAX_RATE_PCT", "50"))
+
+# === Sync tuning ===
+# Thay vì ước lượng rate theo công thức char/s (hay sai vì mỗi voice khác
+# tốc độ tự nhiên), giờ MEASURE-AND-RETRY: synth → đo duration → nếu vượt
+# slot thì re-synth ở rate cao hơn. RETRY_RATES là dãy rate sẽ thử lần lượt.
+# Lần đầu "+0%" (giọng tự nhiên) — 90% câu fit ngay, không tốn synth lại.
+RETRY_RATES = [r.strip() for r in os.getenv("RETRY_RATES", "+0%,+25%,+50%,+75%").split(",")]
+# Dung sai khi so duration vs slot — 0.2s để bù dao động đo và padding nhỏ.
+SLOT_TOLERANCE_SEC = float(os.getenv("SLOT_TOLERANCE_SEC", "0.2"))
+# Trim silence Edge TTS chèn ~100-300ms ở đầu/cuối mỗi segment. Threshold dB
+# dưới -40 coi như silent — đủ an toàn cho voice Edge (loud, không thì thầm).
+SILENCE_TRIM_DB = float(os.getenv("SILENCE_TRIM_DB", "-40"))
 
 # Cleanup TTL (giây). Output đã render xóa sau 1h, cache TTS segments giữ
 # lâu hơn (24h) vì cache-hit rate cao khi reuse text/voice giống nhau.
@@ -262,57 +269,97 @@ async def download(job_id: str):
 
 
 # ---------- Worker ----------
-def _compute_rate(text: str, slot_seconds: float) -> str:
-    """Tính rate cần để text vừa khít slot. Format edge-tts: '+N%' hoặc '+0%'."""
-    if slot_seconds <= 0:
-        return "+0%"
-    natural = len(text) / NATURAL_CHARS_PER_SEC
-    if natural <= slot_seconds:
-        return "+0%"
-    pct = min(MAX_RATE_PCT, int(round((natural / slot_seconds - 1) * 100)))
-    return f"+{pct}%"
+def _trim_silence(seg: AudioSegment) -> AudioSegment:
+    """Cắt silence đầu + cuối segment. Edge TTS chèn ~100-300ms padding mỗi
+    bên — không trim thì 100 câu liên tiếp lệch dồn về cảm giác sync.
+    Threshold -40dB an toàn cho voice Edge (loud); nếu segment toàn silent
+    (hỏng) thì giữ nguyên để gọi biết mà error.
+    """
+    start_trim = detect_leading_silence(seg, silence_threshold=SILENCE_TRIM_DB)
+    end_trim = detect_leading_silence(seg.reverse(), silence_threshold=SILENCE_TRIM_DB)
+    if start_trim + end_trim >= len(seg):
+        return seg
+    return seg[start_trim : len(seg) - end_trim]
+
+
+async def _synth_raw(text: str, voice: str, rate: str) -> Path:
+    """Synth 1 rate cụ thể, cache theo (text, voice, rate). Không trim."""
+    cache_key = hashlib.md5(f"{text}|{voice}|{rate}".encode()).hexdigest()
+    cache_path = CACHE_DIR / f"{cache_key}.mp3"
+    if not cache_path.exists():
+        await edge_tts.Communicate(text, voice, rate=rate).save(str(cache_path))
+    return cache_path
+
+
+async def _synth_fit(
+    text: str, voice: str, slot_seconds: float
+) -> tuple[AudioSegment, str]:
+    """Measure-and-retry: thử RETRY_RATES lần lượt. Synth → trim silence →
+    đo duration. Nếu vừa slot (± tolerance) thì dùng. Hết retry vẫn over →
+    clip cuối segment (giữ phần đầu câu, mất phần cuối).
+
+    Trả về (segment đã trim, rate dùng) — rate cho logging/debug, segment
+    sẵn sàng overlay vào timeline.
+    """
+    last_seg: Optional[AudioSegment] = None
+    last_rate = RETRY_RATES[-1]
+
+    for rate in RETRY_RATES:
+        raw_path = await _synth_raw(text, voice, rate)
+        seg = _trim_silence(AudioSegment.from_mp3(str(raw_path)))
+        last_seg, last_rate = seg, rate
+        if seg.duration_seconds <= slot_seconds + SLOT_TOLERANCE_SEC:
+            return seg, rate
+
+    # Hết retry mà vẫn dài → clip cuối. Giữ đầu vì câu mở thường quan trọng
+    # hơn câu kết; mất 1-2 từ cuối chấp nhận hơn là đè vào câu kế.
+    assert last_seg is not None
+    clipped = last_seg[: int(slot_seconds * 1000)]
+    return clipped, f"{last_rate}+clip"
 
 
 async def run_job(job_id: str, req: SubmitRequest) -> None:
     job = JOBS[job_id]
     try:
-        # === Bước 1: Plan — bỏ utterance rỗng, tính rate cho mỗi utterance ===
-        plan: list[tuple[Utterance, str, str]] = []
+        # === Bước 1: Plan — bỏ utterance rỗng ===
+        plan: list[Utterance] = []
         for u in req.utterances:
             text = (u.text or "").strip()
-            if not text:
-                continue
-            plan.append((u, text, _compute_rate(text, u.end - u.start)))
+            if text:
+                plan.append(Utterance(start=u.start, end=u.end, text=text))
 
         if not plan:
             raise ValueError("no non-empty utterances to synthesize")
 
-        # === Bước 2: Synth song song với semaphore ===
+        # === Bước 2: Synth song song với semaphore (measure-and-retry) ===
         sem = asyncio.Semaphore(TTS_CONCURRENCY)
         completed_count = 0
 
-        async def synth(u: Utterance, text: str, rate: str) -> tuple[Utterance, Path]:
+        async def synth_one(u: Utterance) -> tuple[Utterance, AudioSegment, str]:
             nonlocal completed_count
-            cache_key = hashlib.md5(f"{text}|{req.voice}|{rate}".encode()).hexdigest()
-            cache_path = CACHE_DIR / f"{cache_key}.mp3"
             async with sem:
-                if not cache_path.exists():
-                    tts = edge_tts.Communicate(text, req.voice, rate=rate)
-                    await tts.save(str(cache_path))
+                seg, rate = await _synth_fit(u.text, req.voice, u.end - u.start)
             completed_count += 1
             job.completed = completed_count
             # 90% cho synth, 10% còn lại cho assemble.
             job.progress = completed_count / len(plan) * 0.9
-            return u, cache_path
+            return u, seg, rate
 
-        segments = await asyncio.gather(*(synth(u, t, r) for u, t, r in plan))
+        results = await asyncio.gather(*(synth_one(u) for u in plan))
 
-        # === Bước 3: Assemble — overlay từng segment vào silence track ===
+        # === Bước 3: Assemble — overlay segment ĐÃ TRIM vào silence track ===
+        # Vì đã trim silence đầu/cuối + đảm bảo fit slot ở bước 2, mỗi segment
+        # đặt đúng u.start là speech bắt đầu ngay đó, không drift.
         total_ms = int(max(u.end for u in req.utterances) * 1000)
         track = AudioSegment.silent(duration=total_ms)
-        for u, seg_path in segments:
-            seg = AudioSegment.from_mp3(str(seg_path))
+        clipped_count = 0
+        for u, seg, rate in results:
             track = track.overlay(seg, position=int(u.start * 1000))
+            if rate.endswith("+clip"):
+                clipped_count += 1
+
+        if clipped_count:
+            print(f"[job {job_id}] {clipped_count}/{len(results)} utterances clipped (text too long for slot even at max rate)")
 
         # Output M4A (AAC) — drop-in cho mp4 video, merge bằng `-c copy`
         # không cần re-encode (nhanh hơn ~10-30x so với MP3-in-MP4).
