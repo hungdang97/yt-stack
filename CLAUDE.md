@@ -224,10 +224,16 @@ Client            Hub                         VPS (load-balanced — có thể k
   │ ◄────────────── final MP4 (h264 + AAC + subs)  │
 ```
 
-**Optional shortcuts**:
-- Skip ④⑤⑥⑦ nếu chỉ muốn burn subtitle giữ audio gốc → ⑧ dùng `audio_url` từ bước ②
-- Skip ⑤ nếu client tự dịch utterances → ⑥ dùng utterances của client
-- Skip ⑥⑦ nếu client tự sản xuất audio → ⑧ dùng URL audio của client
+**4 biến thể của Flow 2** — chọn audio nào đi vào render là quyết định chính:
+
+| Biến thể | Audio đi vào render | Subtitle | Khi nào dùng |
+|---|---|---|---|
+| **2a · Caption only** | `audio_url` từ ② (gốc) | `ass_url` từ ① | Giữ tiếng gốc, chỉ thêm phụ đề. **Skip ④⑤⑥⑦.** |
+| **2b · Dub-only (edge-tts riêng)** | dubbed audio từ ⑥-⑦ | `ass_url` từ ① (hoặc bỏ) | Client đã có utterances (vd chép tay, từ DB) → gọi thẳng `/api/tts/submit`. **Skip ④⑤**, vào thẳng ⑥. |
+| **2c · Full pipeline** | dubbed audio từ ⑥-⑦ | `ass_url` từ ① | Có audio tiếng gốc, muốn dịch + lồng tiếng + sub. **Chạy đủ ④→⑨.** |
+| **2d · Custom audio** | URL audio mp3/m4a do client tự host | `ass_url` từ ① | Đã có file thu âm sẵn (vd voice actor) → upload lên `/api/upload` rồi đưa URL vào ⑧. **Skip ④⑤⑥⑦.** |
+
+Tóm lại: `/api/tts/submit` là một **bước độc lập** — client có thể gọi nó với utterances bất kỳ (tự viết, từ ⑤ translate, từ ④ deepgram trực tiếp, từ DB ngoài, v.v.). Tương tự `/api/upload` cho custom audio. Render chỉ cần 3 URL cuối, không quan tâm chúng đến từ đâu.
 
 ---
 
