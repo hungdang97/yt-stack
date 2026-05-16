@@ -16,12 +16,6 @@ import (
 // HandleDownload handles POST /api/download
 func HandleDownload(c *fiber.Ctx) error {
 	// Verify Hub token
-	hubToken := c.Get("X-Hub-Token")
-	if hubToken != config.HubToken {
-		return c.Status(fiber.StatusUnauthorized).JSON(fiber.Map{
-			"error": "Unauthorized",
-		})
-	}
 
 	// Parse request
 	var req models.DownloadRequest

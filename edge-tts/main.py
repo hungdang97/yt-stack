@@ -44,6 +44,12 @@ NATURAL_CHARS_PER_SEC = float(os.getenv("CHARS_PER_SEC", "15"))
 # Cap tốc độ tăng — quá nhanh thì giọng dị, người nghe khó tiếp nhận.
 MAX_RATE_PCT = int(os.getenv("MAX_RATE_PCT", "50"))
 
+# Cleanup TTL (giây). Output đã render xóa sau 1h, cache TTS segments giữ
+# lâu hơn (24h) vì cache-hit rate cao khi reuse text/voice giống nhau.
+OUTPUT_TTL_SEC = int(os.getenv("OUTPUT_TTL_SEC", "3600"))
+CACHE_TTL_SEC = int(os.getenv("CACHE_TTL_SEC", "86400"))
+CLEANUP_INTERVAL_SEC = int(os.getenv("CLEANUP_INTERVAL_SEC", "600"))
+
 # Public-facing URL building. VPS-agent injects BASE_DOMAIN ("ytconvert.org")
 # and DOWNLOAD_SUBDOMAIN ("vps-xxxxxx") into the container env; PATH_PREFIX
 # matches the nginx location ("/tts"). When set, /submit and /status return
@@ -87,7 +93,7 @@ class SubmitRequest(BaseModel):
 class Job:
     """In-memory job state."""
 
-    __slots__ = ("id", "state", "progress", "error", "output_path", "total", "completed")
+    __slots__ = ("id", "state", "progress", "error", "output_path", "total", "completed", "created_at")
 
     def __init__(self, job_id: str) -> None:
         self.id = job_id
@@ -97,6 +103,7 @@ class Job:
         self.output_path: Optional[Path] = None
         self.total = 0
         self.completed = 0
+        self.created_at = time.time()
 
 
 JOBS: dict[str, Job] = {}
@@ -105,6 +112,38 @@ JOBS_LOCK = asyncio.Lock()
 
 # ---------- App ----------
 app = FastAPI(title="Edge TTS Dubbing")
+
+
+# Background cleanup task — định kỳ xoá output cũ + cache cũ + job state cũ.
+async def _cleanup_loop() -> None:
+    while True:
+        try:
+            now = time.time()
+            # 1. Xoá output files cũ + remove job khỏi state map.
+            async with JOBS_LOCK:
+                stale = [jid for jid, j in JOBS.items() if now - j.created_at > OUTPUT_TTL_SEC]
+                for jid in stale:
+                    j = JOBS.pop(jid, None)
+                    if j and j.output_path and j.output_path.exists():
+                        try:
+                            j.output_path.unlink()
+                        except OSError:
+                            pass
+            # 2. Xoá cache MP3 segments lâu hơn (cache-hit valuable).
+            for f in CACHE_DIR.glob("*.mp3"):
+                try:
+                    if now - f.stat().st_mtime > CACHE_TTL_SEC:
+                        f.unlink()
+                except OSError:
+                    continue
+        except Exception as e:  # noqa: BLE001
+            print(f"[cleanup] error: {e}")
+        await asyncio.sleep(CLEANUP_INTERVAL_SEC)
+
+
+@app.on_event("startup")
+async def _start_cleanup() -> None:
+    asyncio.create_task(_cleanup_loop())
 
 
 @app.get("/", response_class=HTMLResponse)

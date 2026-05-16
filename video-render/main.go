@@ -36,11 +36,22 @@ import (
 const (
 	listenAddr = ":8501"
 	workRoot   = "/tmp/video-render"
-	// Re-encode settings — medium preset cân giữa speed và size.
-	x264Preset = "medium"
+	// Re-encode settings — fast preset = ~3-5x realtime, file size lớn hơn
+	// ~10% so với medium, chất lượng dùng cho subtitle burn-in chấp nhận tốt.
+	x264Preset = "fast"
 	x264CRF    = "23"
 	aacBitrate = "128k"
+
+	// Concurrent ffmpeg cap để tránh 5+ job đua CPU làm chậm cả lũ.
+	maxConcurrentRenders = 2
+
+	// Cleanup: xoá job dir + state sau TTL.
+	jobTTL          = 1 * time.Hour
+	cleanupInterval = 10 * time.Minute
 )
+
+// renderSlots cap số ffmpeg subprocess chạy song song.
+var renderSlots = make(chan struct{}, maxConcurrentRenders)
 
 // Public URL building. VPS-agent inject BASE_DOMAIN ("ytconvert.org") và
 // DOWNLOAD_SUBDOMAIN ("vps-xxxxxx") vào container env. PATH_PREFIX khớp với
@@ -107,6 +118,8 @@ func main() {
 	if p := os.Getenv("PORT"); p != "" {
 		addr = ":" + p
 	}
+	go cleanupLoop()
+
 	http.HandleFunc("/", handleIndex)
 	http.HandleFunc("/submit", handleRender)
 	http.HandleFunc("/status/", handleStatus)
@@ -218,6 +231,11 @@ func run(id string, req renderRequest) {
 	if j == nil {
 		return
 	}
+	// Cap concurrent ffmpeg subprocesses — block ở slot rỗng. Job phụ ngồi
+	// chờ ở state "queued" cho tới khi có slot.
+	renderSlots <- struct{}{}
+	defer func() { <-renderSlots }()
+
 	jobDir := filepath.Join(workRoot, id)
 	if err := os.MkdirAll(jobDir, 0o755); err != nil {
 		fail(j, "mkdir: "+err.Error())
@@ -440,4 +458,33 @@ func tail(s string, n int) string {
 		return s
 	}
 	return "..." + s[len(s)-n:]
+}
+
+// cleanupLoop định kỳ xoá job dir + state cũ hơn jobTTL. Goroutine chạy
+// suốt vòng đời container. Nếu một job đang in_progress khi tới TTL nó vẫn
+// bị xoá — chấp nhận vì TTL đặt đủ dài (1h, lâu hơn 99% render time).
+func cleanupLoop() {
+	for range time.Tick(cleanupInterval) {
+		cutoff := time.Now().Add(-jobTTL)
+		jobsMu.Lock()
+		var stale []string
+		for id, j := range jobs {
+			if j.CreatedAt.Before(cutoff) {
+				stale = append(stale, id)
+			}
+		}
+		for _, id := range stale {
+			delete(jobs, id)
+		}
+		jobsMu.Unlock()
+		for _, id := range stale {
+			dir := filepath.Join(workRoot, id)
+			if err := os.RemoveAll(dir); err != nil {
+				log.Printf("cleanup %s: %v", id, err)
+			}
+		}
+		if len(stale) > 0 {
+			log.Printf("cleanup: removed %d stale jobs", len(stale))
+		}
+	}
 }

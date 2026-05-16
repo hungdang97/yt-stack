@@ -2,7 +2,6 @@ package handlers
 
 import (
 	"fmt"
-	"tik-downloader/config"
 	"tik-downloader/services"
 	"tik-downloader/utils"
 
@@ -28,12 +27,6 @@ type InfoResponse struct {
 
 // HandleInfo handles GET /api/info?url=<video_url> — returns video metadata for preview without downloading
 func HandleInfo(c *fiber.Ctx) error {
-	hubToken := c.Get("X-Hub-Token")
-	if hubToken != config.HubToken {
-		return c.Status(fiber.StatusUnauthorized).JSON(fiber.Map{
-			"error": "Unauthorized",
-		})
-	}
 
 	reqURL := c.Query("url")
 	if reqURL == "" {

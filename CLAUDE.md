@@ -42,6 +42,8 @@ yt-downloader, tik-downloader, insta-downloader, fb-downloader & x-downloader us
 | **x-extractor** | Python 3.11 | FastAPI | 8003 | X/Twitter media extraction via yt-dlp + impersonate |
 | **edge-tts** | Python 3.11 | FastAPI | 8500 | TTS dubbing — sinh MP3/M4A từ utterances JSON qua Microsoft Edge TTS, ghép timeline bằng pydub + ffmpeg |
 | **video-render** | Go 1.24 | stdlib | 8501 | Merge video + audio + .ass subtitle thành MP4 cuối (h264 + AAC, ASS burn-in qua libass) |
+| **deepgram** | Go 1.24 | stdlib | 8502 | Speech-to-text — audio URL → utterances JSON qua Deepgram Nova-3 |
+| **translate** | Go 1.24 | stdlib | 8503 | Subtitle translation — utterances JSON → dịch sang ngôn ngữ target qua OpenRouter |
 | **vps-agent** | Go 1.24 | Fiber v2 | 9000 | Orchestration: config fetch, deploy, heartbeat |
 | **nginx** | - | nginx:alpine | 80/443 | SSL termination (Let's Encrypt), rate limiting (30 req/s), routes `/` → yt, `/tik/` → tik, `/insta/` → insta, `/fb/` → fb, `/x/` → x |
 | **gost** | - | ginuerzh/gost | 1111/2222 | Load-balanced WARP proxy pool (5 instances) + direct proxy |

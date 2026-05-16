@@ -37,10 +37,6 @@ type PrepareStatusResponse struct {
 
 // HandlePrepare handles POST /api/prepare
 func HandlePrepare(c *fiber.Ctx) error {
-	hubToken := c.Get("X-Hub-Token")
-	if hubToken != config.HubToken {
-		return c.Status(fiber.StatusUnauthorized).JSON(fiber.Map{"error": "Unauthorized"})
-	}
 
 	var req models.DownloadRequest
 	if err := c.BodyParser(&req); err != nil {

@@ -603,6 +603,54 @@ services:
     networks:
       - backend
 
+  # Translate service — utterances JSON → translated utterances via OpenRouter
+  translate:
+    build:
+      context: ./translate
+      dockerfile: Dockerfile
+    image: translate:latest
+    container_name: translate
+    restart: always
+    ports:
+      - "8503:8503"
+    healthcheck:
+      test: [ "CMD", "wget", "-qO-", "http://localhost:8503/health" ]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 10s
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
+    networks:
+      - backend
+
+  # Deepgram speech-to-text service — audio URL → utterances JSON
+  deepgram:
+    build:
+      context: ./deepgram
+      dockerfile: Dockerfile
+    image: deepgram:latest
+    container_name: deepgram
+    restart: always
+    ports:
+      - "8502:8502"
+    healthcheck:
+      test: [ "CMD", "wget", "-qO-", "http://localhost:8502/health" ]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 10s
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
+    networks:
+      - backend
+
   # Video render service — merge video + audio + .ass subtitle thành MP4
   video-render:
     build:

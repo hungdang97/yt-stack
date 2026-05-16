@@ -45,13 +45,6 @@ type PrepareFileStatus struct {
 
 // HandlePrepare handles POST /api/prepare — extracts metadata, starts background download of video+audio
 func HandlePrepare(c *fiber.Ctx) error {
-	const hubToken = "1234567890987654321234567890987654321"
-	token := c.Get("X-Hub-Token")
-	if token != hubToken {
-		return c.Status(fiber.StatusForbidden).JSON(fiber.Map{
-			"error": "Unauthorized: Invalid or missing hub token",
-		})
-	}
 
 	var req models.DownloadRequest
 	if err := c.BodyParser(&req); err != nil {

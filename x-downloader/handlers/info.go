@@ -2,8 +2,6 @@ package handlers
 
 import (
 	"fmt"
-
-	"x-downloader/config"
 	"x-downloader/models"
 	"x-downloader/services"
 	"x-downloader/utils"
@@ -30,12 +28,6 @@ type InfoResponse struct {
 
 // HandleInfo handles GET /api/info?url=<post_url> — returns post metadata for preview without downloading
 func HandleInfo(c *fiber.Ctx) error {
-	hubToken := c.Get("X-Hub-Token")
-	if hubToken != config.HubToken {
-		return c.Status(fiber.StatusUnauthorized).JSON(fiber.Map{
-			"error": "Unauthorized",
-		})
-	}
 
 	reqURL := c.Query("url")
 	if reqURL == "" {
