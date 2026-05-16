@@ -74,7 +74,7 @@ All client traffic enters at `https://hub.ytconvert.org`. The hub picks a health
 | `POST` | `/api/tts/submit` | `{voice, utterances[]}` | Synthesize dubbed audio → returns `server_id + status_url + download_url` (absolute) |
 | `GET` | `/api/tts/status/:server_id/:job_id` | — | TTS job state |
 | `GET` | `/api/tts/download/:server_id/:job_id` | — | Stream M4A |
-| `POST` | `/api/render/submit` | `{video_url, audio_url, subtitle_url}` | Merge → MP4 with subtitle burn-in, returns `server_id + URLs` |
+| `POST` | `/api/render/submit` | `{video_url, subtitle_url, audio_url?}` | Merge → MP4 with subtitle burn-in. `audio_url` optional — bỏ trống ⇒ output silent (video + caption, không có tiếng) |
 | `GET` | `/api/render/status/:server_id/:job_id` | — | Render progress (download → encoding) |
 | `GET` | `/api/render/download/:server_id/:job_id` | — | Stream final MP4 |
 

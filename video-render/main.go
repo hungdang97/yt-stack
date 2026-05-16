@@ -166,8 +166,9 @@ func handleRender(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusBadRequest, "invalid json: "+err.Error())
 		return
 	}
-	if req.VideoURL == "" || req.AudioURL == "" || req.SubtitleURL == "" {
-		writeError(w, http.StatusBadRequest, "video_url, audio_url, subtitle_url all required")
+	// audio_url là optional — bỏ trống thì output video silent (subtitle-only).
+	if req.VideoURL == "" || req.SubtitleURL == "" {
+		writeError(w, http.StatusBadRequest, "video_url and subtitle_url are required (audio_url is optional)")
 		return
 	}
 
@@ -243,15 +244,20 @@ func run(id string, req renderRequest) {
 	}
 
 	videoPath := filepath.Join(jobDir, "video.mp4")
-	audioPath := filepath.Join(jobDir, "audio.m4a")
 	subPath := filepath.Join(jobDir, "subtitle.ass")
+	// audio_url empty → skip download, render sẽ output silent video.
+	audioPath := ""
+	downloads := map[string]string{
+		videoPath: req.VideoURL,
+		subPath:   req.SubtitleURL,
+	}
+	if req.AudioURL != "" {
+		audioPath = filepath.Join(jobDir, "audio.m4a")
+		downloads[audioPath] = req.AudioURL
+	}
 
 	setState(j, "processing", "downloading", 0.05)
-	if err := parallelDownload(map[string]string{
-		videoPath: req.VideoURL,
-		audioPath: req.AudioURL,
-		subPath:   req.SubtitleURL,
-	}); err != nil {
+	if err := parallelDownload(downloads); err != nil {
 		fail(j, "download: "+err.Error())
 		return
 	}
@@ -280,17 +286,26 @@ func renderVideo(j *job, video, audio, subtitle, output string) error {
 		totalSec = 1 // avoid div-by-zero; progress will just clamp at 100%
 	}
 
-	cmd := exec.Command("ffmpeg", "-y",
-		"-i", video,
-		"-i", audio,
-		"-map", "0:v:0",
-		"-map", "1:a:0",
+	// Build ffmpeg args động. audio == "" → output silent video (chỉ video
+	// stream + subtitle burn-in, không có audio track).
+	args := []string{"-y", "-i", video}
+	if audio != "" {
+		args = append(args, "-i", audio)
+	}
+	args = append(args, "-map", "0:v:0")
+	if audio != "" {
+		args = append(args, "-map", "1:a:0")
+	}
+	args = append(args,
 		"-vf", "ass='"+subArg+"'",
 		"-c:v", "libx264",
 		"-preset", x264Preset,
 		"-crf", x264CRF,
-		"-c:a", "aac",
-		"-b:a", aacBitrate,
+	)
+	if audio != "" {
+		args = append(args, "-c:a", "aac", "-b:a", aacBitrate)
+	}
+	args = append(args,
 		"-movflags", "+faststart",
 		// -progress pipe:1 makes ffmpeg emit machine-readable progress lines
 		// (key=value, refreshed ~twice per second) on stdout so we can update
@@ -298,6 +313,7 @@ func renderVideo(j *job, video, audio, subtitle, output string) error {
 		"-progress", "pipe:1",
 		output,
 	)
+	cmd := exec.Command("ffmpeg", args...)
 
 	stdout, err := cmd.StdoutPipe()
 	if err != nil {
