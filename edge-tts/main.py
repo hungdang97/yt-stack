@@ -28,6 +28,7 @@ from typing import Optional
 
 import edge_tts
 from fastapi import BackgroundTasks, FastAPI, HTTPException
+from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse, HTMLResponse
 from pydantic import BaseModel
 from pydub import AudioSegment
@@ -112,6 +113,18 @@ JOBS_LOCK = asyncio.Lock()
 
 # ---------- App ----------
 app = FastAPI(title="Edge TTS Dubbing")
+
+# CORS mở cho mọi origin để client local (file://, localhost) gọi thẳng VPS
+# không bị browser block. Service không lưu auth cookie nên allow_credentials=False
+# là đủ an toàn — endpoints không hỗ trợ auth, payload đã public.
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"],
+    allow_credentials=False,
+    allow_methods=["*"],
+    allow_headers=["*"],
+    max_age=86400,
+)
 
 
 # Background cleanup task — định kỳ xoá output cũ + cache cũ + job state cũ.

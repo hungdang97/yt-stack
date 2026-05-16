@@ -163,7 +163,23 @@ func main() {
 		_, _ = w.Write([]byte(`{"status":"ok","version":"1.0.0"}`))
 	})
 	log.Printf("translate listening on %s", addr)
-	log.Fatal(http.ListenAndServe(addr, nil))
+	log.Fatal(http.ListenAndServe(addr, corsMiddleware(http.DefaultServeMux)))
+}
+
+// corsMiddleware đáp ứng preflight + gắn header * cho mọi origin.
+// Cho phép gọi từ file:// local và localhost mà không bị browser block.
+func corsMiddleware(next http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Access-Control-Allow-Origin", "*")
+		w.Header().Set("Access-Control-Allow-Methods", "GET, POST, PUT, DELETE, OPTIONS")
+		w.Header().Set("Access-Control-Allow-Headers", "*")
+		w.Header().Set("Access-Control-Max-Age", "86400")
+		if r.Method == http.MethodOptions {
+			w.WriteHeader(http.StatusNoContent)
+			return
+		}
+		next.ServeHTTP(w, r)
+	})
 }
 
 func handleTranslate(w http.ResponseWriter, r *http.Request) {

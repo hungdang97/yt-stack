@@ -83,7 +83,23 @@ func main() {
 	})
 
 	log.Printf("upload listening on %s (storage=%s, ttl=%s)", addr, storageDir, fileTTL)
-	log.Fatal(http.ListenAndServe(addr, nil))
+	log.Fatal(http.ListenAndServe(addr, corsMiddleware(http.DefaultServeMux)))
+}
+
+// corsMiddleware đáp ứng preflight + gắn header * cho mọi origin.
+// Cho phép gọi từ file:// local và localhost mà không bị browser block.
+func corsMiddleware(next http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Access-Control-Allow-Origin", "*")
+		w.Header().Set("Access-Control-Allow-Methods", "GET, POST, PUT, DELETE, OPTIONS")
+		w.Header().Set("Access-Control-Allow-Headers", "*")
+		w.Header().Set("Access-Control-Max-Age", "86400")
+		if r.Method == http.MethodOptions {
+			w.WriteHeader(http.StatusNoContent)
+			return
+		}
+		next.ServeHTTP(w, r)
+	})
 }
 
 func handleUpload(w http.ResponseWriter, r *http.Request) {
