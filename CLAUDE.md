@@ -101,43 +101,50 @@ All client traffic enters at `https://hub.ytconvert.org`. The hub picks a health
 
 ## Sequence Diagrams
 
-### Flow 1 — Pure download video (no caption/dub)
+### Flow 1 — Pure download (1 lệnh ra file cuối)
 
-Use case: client wants the MP4 + M4A files of a YouTube/TikTok/etc. video.
+Use case: client (app mobile, web) chọn link + chất lượng + format → backend tự
+chọn stream, transcode/merge nếu cần, trả về **1 file MP4/M4A/MP3** sẵn sàng dùng.
 
 ```
 Client                 Hub                       VPS-A (yt-downloader)
   │                     │                              │
-  │ ① POST /api/prepare {url, license_key?}            │
+  │ ① POST /api/download                               │
+  │    { url:    "youtube.com/watch?v=…",              │
+  │      os:     "windows",         // device          │
+  │      license_key: "…",                             │
+  │      output: { type:    "video",  // hoặc audio    │
+  │                format:  "mp4",    // mp4/mp3/m4a/… │
+  │                quality: "1080p" },                 │
+  │      audio:   { language: "en" },     // optional  │
+  │      trim:    { start: 10, end: 60 }, // optional  │
+  │      enableMetadata: false }                       │
   ├────────────────────►│                              │
   │                     │ validate license             │
-  │                     │ detectPlatform → /api or /tik
+  │                     │ detectPlatform (yt/tik/fb/…) │
   │                     │ pick VPS (Weighted LC)       │
-  │                     │ POST <vps>/api/prepare       │
+  │                     │ POST <vps>/api/download      │
   │                     ├─────────────────────────────►│
-  │                     │                              │ extract metadata
-  │                     │                              │ start bg download
-  │                     │                              │ video.mp4 + audio.m4a
-  │                     │                              │ (saved to /storage)
+  │                     │                              │ extract metadata via …-extractor
+  │                     │                              │ select best stream khớp quality + audio lang
+  │                     │                              │ create job ID
+  │                     │                              │ start bg download + transcode + merge
   │                     │ ◄─────────────────────────────┤
-  │                     │ 201 { status_url,            │
-  │                     │       video_url (signed),    │
-  │                     │       audio_url (signed),    │
-  │                     │       subtitles[],           │
-  │                     │       title, duration }      │
+  │                     │ 200 { statusUrl (signed),    │
+  │                     │       title, duration,       │
+  │                     │       selectedQuality,       │
+  │                     │       qualityChanged + lý do,│
+  │                     │       audioLanguageChanged,  │
+  │                     │       needsReencode }        │
   │ ◄───────────────────┤                              │
   │                                                    │
-  │ ② poll status_url tới progress=100%               │
+  │ ② poll statusUrl tới done (download + transcode)   │
   ├────────────────────────────────────────────────────►│
-  │ ◄──────────────────── done                         │
+  │ ◄──────────────────── { status, progress, file_url } │
   │                                                    │
-  │ ③ GET video_url (direct VPS — không qua hub)       │
-  ├────────────────────────────────────────────────────►│ /files/<id>/video.mp4
-  │ ◄──────────────────── MP4 stream                   │
-  │                                                    │
-  │ ③' (optional) GET audio_url cùng cách              │
-  ├────────────────────────────────────────────────────►│ /files/<id>/audio.m4a
-  │ ◄──────────────────── M4A stream                   │
+  │ ③ GET file_url (direct VPS — không qua hub)        │
+  ├────────────────────────────────────────────────────►│ /files/<id>/<filename>.mp4
+  │ ◄──────────────────── final file stream            │
 ```
 
 Hub đụng VPS chỉ 1 lần (bước ①). Sau đó client gọi thẳng VPS qua signed URL, **bypass hub** để tiết kiệm bandwidth.
