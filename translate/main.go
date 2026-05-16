@@ -527,8 +527,8 @@ func handleCleanup(w http.ResponseWriter, r *http.Request) {
 // 1. Filter non-empty utterances + nhớ Pos gốc.
 // 2. Chunk theo byte + item count (cùng limit translate).
 // 3. Chạy cleanupChunk song song.
-// 4. Map kết quả về Pos gốc, expand split → utterances mới với timestamp
-//    được chia tỷ lệ theo char count.
+// 4. Rebuild output: empty array của LLM = "key này absorbed bởi key trước".
+//    Backend gộp timestamp của các key absorbed vào key chứa cleaned text.
 func cleanup(req cleanupRequest) (cleanupResponse, error) {
 	items := make([]indexedText, 0, len(req.Utterances))
 	for i, u := range req.Utterances {
@@ -562,7 +562,7 @@ func cleanup(req cleanupRequest) (cleanupResponse, error) {
 		}
 	}
 
-	// Pos → chunks map cho lookup nhanh khi rebuild theo thứ tự gốc.
+	// Pos → chunks. Empty slice (LLM trả []) = "key này absorbed bởi key trước".
 	cleaned := make(map[int][]string, len(items))
 	for _, r := range results {
 		for _, item := range r {
@@ -570,41 +570,70 @@ func cleanup(req cleanupRequest) (cleanupResponse, error) {
 		}
 	}
 
-	// Rebuild output preserving original order. Empty utterances pass-through
-	// nguyên văn. Split → distribute timestamp proportional char-count.
+	// Rebuild: dùng index-loop để khi gặp key có nội dung, "nuốt" các key
+	// absorbed (empty array) phía sau → timestamp range mở rộng tương ứng.
 	out := make([]utterance, 0, len(req.Utterances))
-	for i, u := range req.Utterances {
+	i := 0
+	for i < len(req.Utterances) {
+		u := req.Utterances[i]
 		subChunks, ok := cleaned[i]
-		if !ok || len(subChunks) == 0 {
-			out = append(out, u) // empty hoặc skip — pass-through
-			continue
-		}
-		if len(subChunks) == 1 {
-			out = append(out, utterance{Start: u.Start, End: u.End, Text: subChunks[0]})
-			continue
-		}
-		// Multi-chunk: chia duration theo tỷ lệ ký tự (dùng rune cho UTF-8).
-		totalRunes := 0
-		runeCounts := make([]int, len(subChunks))
-		for j, c := range subChunks {
-			runeCounts[j] = len([]rune(c))
-			totalRunes += runeCounts[j]
-		}
-		if totalRunes == 0 {
+
+		// Source utterance rỗng (không gửi LLM) → pass-through.
+		if !ok {
 			out = append(out, u)
+			i++
 			continue
 		}
-		duration := u.End - u.Start
-		cursor := u.Start
-		for j, c := range subChunks {
-			subDur := duration * float64(runeCounts[j]) / float64(totalRunes)
-			end := cursor + subDur
-			if j == len(subChunks)-1 {
-				end = u.End // tránh sai số float dồn
-			}
-			out = append(out, utterance{Start: cursor, End: end, Text: c})
-			cursor = end
+
+		// Key absorbed nhưng không có previous key chứa nội dung — edge case
+		// (LLM bug). Pass-through để không mất utterance.
+		if len(subChunks) == 0 {
+			out = append(out, u)
+			i++
+			continue
 		}
+
+		// Look ahead: bao nhiêu key kế tiếp được absorbed vào key này?
+		endIdx := i
+		for j := i + 1; j < len(req.Utterances); j++ {
+			next, hasNext := cleaned[j]
+			if hasNext && len(next) == 0 {
+				endIdx = j
+			} else {
+				break
+			}
+		}
+		rangeEnd := req.Utterances[endIdx].End
+
+		// Distribute subChunks theo char count trên timestamp range
+		// [u.Start, rangeEnd]. 1 chunk thì giữ nguyên range.
+		if len(subChunks) == 1 {
+			out = append(out, utterance{Start: u.Start, End: rangeEnd, Text: subChunks[0]})
+		} else {
+			totalRunes := 0
+			runeCounts := make([]int, len(subChunks))
+			for j, c := range subChunks {
+				runeCounts[j] = len([]rune(c))
+				totalRunes += runeCounts[j]
+			}
+			if totalRunes == 0 {
+				out = append(out, u)
+			} else {
+				duration := rangeEnd - u.Start
+				cursor := u.Start
+				for j, c := range subChunks {
+					subDur := duration * float64(runeCounts[j]) / float64(totalRunes)
+					end := cursor + subDur
+					if j == len(subChunks)-1 {
+						end = rangeEnd
+					}
+					out = append(out, utterance{Start: cursor, End: end, Text: c})
+					cursor = end
+				}
+			}
+		}
+
+		i = endIdx + 1
 	}
 
 	return cleanupResponse{Utterances: out}, nil
@@ -635,19 +664,29 @@ func cleanupChunk(items []indexedText) ([]cleanedItem, error) {
 			continue
 		}
 		for k, v := range result {
-			if _, want := pending[k]; want && len(v) > 0 {
-				// Lọc trim empty strings (LLM đôi khi sinh chunk rỗng).
-				clean := make([]string, 0, len(v))
-				for _, s := range v {
-					if strings.TrimSpace(s) != "" {
-						clean = append(clean, strings.TrimSpace(s))
-					}
-				}
-				if len(clean) > 0 {
-					done[k] = clean
-					delete(pending, k)
+			if _, want := pending[k]; !want {
+				continue
+			}
+			// EMPTY array = "key này absorbed bởi key trước" (merge marker).
+			// Đây là response hợp lệ — backend sẽ xử lý ở stage rebuild.
+			if len(v) == 0 {
+				done[k] = []string{}
+				delete(pending, k)
+				continue
+			}
+			// Lọc trim empty strings trong array (LLM đôi khi sinh chunk rỗng).
+			clean := make([]string, 0, len(v))
+			for _, s := range v {
+				if strings.TrimSpace(s) != "" {
+					clean = append(clean, strings.TrimSpace(s))
 				}
 			}
+			if len(clean) > 0 {
+				done[k] = clean
+				delete(pending, k)
+			}
+			// Nếu sau filter còn array rỗng (tất cả strings rỗng) → giữ pending
+			// để retry.
 		}
 		if len(pending) == 0 {
 			break
@@ -670,7 +709,8 @@ func cleanupChunk(items []indexedText) ([]cleanedItem, error) {
 }
 
 // cleanupChunkOnce: gửi 1 LLM call. Schema yêu cầu mỗi value là array of
-// string (minItems=1), strict mode để OpenRouter reject response sai shape.
+// string. minItems=0 để cho phép empty array = "key này absorbed bởi key
+// trước đó". Strict mode để OpenRouter reject response sai shape.
 func cleanupChunkOnce(items map[string]string) (map[string][]string, error) {
 	properties := make(map[string]any, len(items))
 	required := make([]string, 0, len(items))
@@ -678,7 +718,7 @@ func cleanupChunkOnce(items map[string]string) (map[string][]string, error) {
 		properties[k] = map[string]any{
 			"type":     "array",
 			"items":    map[string]string{"type": "string"},
-			"minItems": 1,
+			"minItems": 0,
 		}
 		required = append(required, k)
 	}
@@ -691,32 +731,60 @@ func cleanupChunkOnce(items map[string]string) (map[string][]string, error) {
 
 	inputJSON, _ := json.Marshal(items)
 	prompt := fmt.Sprintf(`You are cleaning ASR / YouTube auto-caption transcript utterances.
-The input is a JSON object where each value is a raw transcript chunk. The chunks
-are often cut mid-sentence (auto-caption cuts by time, not by grammar), may have
-ASR errors, missing punctuation, malformed numbers, or inconsistent proper noun
-spellings.
+The input is a JSON object where each value is a raw transcript chunk. Chunks
+are often cut mid-word or mid-sentence (auto-caption cuts by time, not grammar),
+have ASR typos, missing punctuation, or inconsistent proper noun spellings.
 
-For each key, return an ARRAY of 1+ sub-utterances after applying ALL of:
+Goal: produce CLEAN, GRAMMATICALLY-COMPLETE sentences.
 
-1. RESPLIT: if cleaned text > 80 characters, split into 2-3 sub-chunks at a
-   natural grammar boundary (after comma, period, conjunction). Each ≤80 chars.
-2. PUNCTUATION: restore missing commas / periods / question marks if obvious
-   from context.
-3. ASR FIX: fix obvious typos and malformed numbers
-   (e.g. "11.7 triệu000đ" → "11.7 triệu đồng"; "120 H" → "120 Hz" if context
-   clearly means hertz).
-4. FILLER: remove speech disfluencies ("um", "uh", "kiểu kiểu", "ờ", "à") ONLY
-   when they are clearly fillers, NOT meaningful content.
-5. PROPER NOUN: normalize inconsistent spellings within this batch (pick one
-   canonical form, e.g. "Onway"/"Oneway" → "Oneway").
+For each input key, return a JSON ARRAY (possibly empty). The array semantics:
 
-CRITICAL RULES:
-- DO NOT translate to any other language. Keep the ORIGINAL language.
-- DO NOT merge content across different keys — each key is processed
-  independently (merging would lose timestamp boundaries).
-- If a key's text is already clean and ≤80 chars, return [original_text] as
-  a 1-item array.
-- Return JSON only, no prose, no markdown.
+  • 1 item: this key holds 1 clean sentence (its own, possibly merged from
+    next keys; or split into multiple — see SPLIT below).
+  • multiple items: this key's content was a long sentence that you split into
+    sub-sentences (each ≤80 chars).
+  • EMPTY [] : this key's content was ABSORBED by a previous key (merged into
+    that key's sentence). Backend will extend the previous key's timestamp to
+    cover this absorbed key.
+
+RULES:
+
+1. MERGE across keys when needed.
+   If a key ends mid-word/mid-sentence AND the next key is its continuation,
+   merge them into ONE complete sentence. Put the result in the FIRST key's
+   array, return [] for the absorbed key.
+
+   Example:
+     Input:  {"u0": "Chào mừng các bạn đã quay trở lại với ng",
+              "u1": "channel. Sau khá là nhiều tranh cãi về"}
+     Output: {"u0": ["Chào mừng các bạn đã quay trở lại với kênh Channel.",
+                     "Sau khá là nhiều tranh cãi về..."],
+              "u1": []}
+
+2. SPLIT long sentences.
+   If cleaned text > 80 chars, split into 2-3 sub-sentences at natural grammar
+   boundary (after period, comma, conjunction). Each ≤80 chars. Put split
+   chunks as multiple items in the same key's array.
+
+3. FIX obvious errors.
+   • Punctuation: restore missing commas/periods if obvious from context.
+   • ASR typos: "11.7 triệu000đ" → "11.7 triệu đồng"; "120 H" → "120 Hz" if
+     context clearly indicates hertz.
+   • Filler removal: drop "um", "uh", "ờ", "à", "kiểu kiểu" when clearly speech
+     disfluency, NOT meaningful content.
+   • Proper nouns: normalize inconsistent spellings within this batch
+     (e.g. "Onway"/"Oneway" → "Oneway"; pick one canonical form).
+
+4. ALREADY CLEAN.
+   If a key's text is already a complete clean sentence ≤80 chars, return
+   [original_text] as 1-item array (no change needed).
+
+CRITICAL:
+• DO NOT translate to any other language. Keep ORIGINAL language.
+• Cover every key's content EXACTLY ONCE across all output arrays (either
+  in its own array, or absorbed into a previous key's array).
+• Process keys in input order; don't reorder.
+• Return JSON only, no prose, no markdown.
 
 Input:
 %s`, string(inputJSON))
