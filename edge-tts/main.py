@@ -13,7 +13,7 @@ GET  /health                                                      → ok
   semaphore, (3) assemble bằng pydub: overlay segment lên silence track
   ở đúng vị trí start.
 - Cache TTS theo md5(text+voice+rate) → tái dùng segment giống nhau.
-- Job state lưu in-memory (MVP). Restart = mất queue.
+- Job state lưu in-memory (MVP). Restart = mất state đang chạy.
 """
 from __future__ import annotations
 
@@ -98,7 +98,7 @@ class Job:
 
     def __init__(self, job_id: str) -> None:
         self.id = job_id
-        self.state = "queued"  # queued → processing → done | failed
+        self.state = "processing"  # processing → done | failed
         self.progress = 0.0
         self.error: Optional[str] = None
         self.output_path: Optional[Path] = None
@@ -275,7 +275,6 @@ def _compute_rate(text: str, slot_seconds: float) -> str:
 
 async def run_job(job_id: str, req: SubmitRequest) -> None:
     job = JOBS[job_id]
-    job.state = "processing"
     try:
         # === Bước 1: Plan — bỏ utterance rỗng, tính rate cho mỗi utterance ===
         plan: list[tuple[Utterance, str, str]] = []

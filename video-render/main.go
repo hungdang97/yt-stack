@@ -42,16 +42,10 @@ const (
 	x264CRF    = "23"
 	aacBitrate = "128k"
 
-	// Concurrent ffmpeg cap để tránh 5+ job đua CPU làm chậm cả lũ.
-	maxConcurrentRenders = 2
-
 	// Cleanup: xoá job dir + state sau TTL.
 	jobTTL          = 1 * time.Hour
 	cleanupInterval = 10 * time.Minute
 )
-
-// renderSlots cap số ffmpeg subprocess chạy song song.
-var renderSlots = make(chan struct{}, maxConcurrentRenders)
 
 // Public URL building. VPS-agent inject BASE_DOMAIN ("ytconvert.org") và
 // DOWNLOAD_SUBDOMAIN ("vps-xxxxxx") vào container env. PATH_PREFIX khớp với
@@ -97,7 +91,7 @@ type renderRequest struct {
 
 type job struct {
 	ID         string
-	State      string  // queued | processing | done | failed
+	State      string  // processing | done | failed
 	Progress   float64 // 0..1, mostly stage-based: 0.3 = downloaded, 1.0 = encoded
 	Stage      string  // "downloading" | "rendering" | ""
 	Error      string
@@ -189,7 +183,7 @@ func handleRender(w http.ResponseWriter, r *http.Request) {
 	}
 
 	id := newJobID()
-	j := &job{ID: id, State: "queued", CreatedAt: time.Now()}
+	j := &job{ID: id, State: "processing", CreatedAt: time.Now()}
 	jobsMu.Lock()
 	jobs[id] = j
 	jobsMu.Unlock()
@@ -248,10 +242,6 @@ func run(id string, req renderRequest) {
 	if j == nil {
 		return
 	}
-	// Cap concurrent ffmpeg subprocesses — block ở slot rỗng. Job phụ ngồi
-	// chờ ở state "queued" cho tới khi có slot.
-	renderSlots <- struct{}{}
-	defer func() { <-renderSlots }()
 
 	jobDir := filepath.Join(workRoot, id)
 	if err := os.MkdirAll(jobDir, 0o755); err != nil {
