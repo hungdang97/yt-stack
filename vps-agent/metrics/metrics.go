@@ -94,6 +94,7 @@ var serviceEndpoints = map[string]string{
 	"uni-downloader":   "http://localhost:5006/health",
 	"uni-extractor":    "http://localhost:8004/health",
 	"edge-tts":         "http://localhost:8500/health",
+	"video-render":     "http://localhost:8501/health",
 }
 
 // services to check health via TCP port (no /health endpoint)

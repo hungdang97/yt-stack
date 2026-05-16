@@ -1,0 +1,9 @@
+video-render
+work/
+*.mp4
+*.m4a
+*.ass
+.env
+.idea/
+.vscode/
+.DS_Store

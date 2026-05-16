@@ -603,6 +603,34 @@ services:
     networks:
       - backend
 
+  # Video render service — merge video + audio + .ass subtitle thành MP4
+  video-render:
+    build:
+      context: ./video-render
+      dockerfile: Dockerfile
+    image: video-render:latest
+    container_name: video-render
+    restart: always
+    ports:
+      - "8501:8501"
+    environment:
+      - BASE_DOMAIN=${BASE_DOMAIN}
+      - DOWNLOAD_SUBDOMAIN=${DOWNLOAD_SUBDOMAIN}
+      - PATH_PREFIX=/render
+    healthcheck:
+      test: [ "CMD", "wget", "-qO-", "http://localhost:8501/health" ]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 10s
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
+    networks:
+      - backend
+
   # Edge TTS dubbing service — sinh MP3/M4A từ utterances + timestamps
   edge-tts:
     build:

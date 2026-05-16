@@ -1,0 +1,123 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+  <meta charset="UTF-8">
+  <title>Video Render</title>
+  <style>
+    * { box-sizing: border-box; }
+    body { font-family: -apple-system, sans-serif; max-width: 900px; margin: 40px auto; padding: 0 20px; color: #222; }
+    h1 { margin-bottom: 0.4em; }
+    .row { margin: 12px 0; }
+    label { display: block; font-size: 13px; color: #666; margin-bottom: 4px; }
+    input[type=url], input[type=text] { width: 100%; font: inherit; padding: 8px 10px; border: 1px solid #ccc; border-radius: 4px; }
+    button { font: inherit; background: #1976d2; color: white; border: none; padding: 10px 22px; cursor: pointer; border-radius: 4px; margin-right: 8px; }
+    button:hover { background: #1565c0; }
+    button:disabled { background: #aaa; cursor: not-allowed; }
+    button.secondary { background: #f4f4f4; color: #333; border: 1px solid #ccc; }
+    button.secondary:hover { background: #ebebeb; }
+    .bar { height: 14px; background: #e8e8e8; border-radius: 7px; overflow: hidden; margin: 10px 0; }
+    .fill { height: 100%; background: linear-gradient(90deg, #4CAF50, #66BB6A); transition: width 0.3s; }
+    .meta { font-size: 13px; color: #555; }
+    .error { color: #d32f2f; padding: 10px; background: #ffebee; border-radius: 4px; margin: 10px 0; }
+    video { width: 100%; margin-top: 10px; border-radius: 4px; background: #000; }
+    code { background: #f4f4f4; padding: 2px 6px; border-radius: 3px; font-size: 12px; }
+    .grid3 { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 8px; }
+    @media (max-width: 700px) { .grid3 { grid-template-columns: 1fr; } }
+  </style>
+</head>
+<body>
+
+<h1>🎬 Video Render</h1>
+<p style="color:#666">3 input URL → MP4 cuối: <code>video</code> (gốc) + <code>audio</code> (dub) + <code>subtitle</code> (.ass) burn-in.</p>
+
+<div class="row">
+  <label>Video URL (.mp4)</label>
+  <input id="videoUrl" type="url" placeholder="https://.../video.mp4">
+</div>
+
+<div class="row">
+  <label>Audio URL (.m4a / .mp3) — thường là output từ edge-tts</label>
+  <input id="audioUrl" type="url" placeholder="https://.../audio.m4a">
+</div>
+
+<div class="row">
+  <label>Subtitle URL (.ass)</label>
+  <input id="subtitleUrl" type="url" placeholder="https://.../subtitle.ass">
+</div>
+
+<div class="row">
+  <button id="btn" onclick="submitJob()">Render</button>
+  <button class="secondary" onclick="fillSample()">Fill sample URLs</button>
+</div>
+
+<div id="status"></div>
+<div id="player"></div>
+
+<script>
+const $ = id => document.getElementById(id);
+
+function fillSample() {
+  // 2:37 complex animation demo (8 styles, 28 events, 10 scenes)
+  $('videoUrl').value    = 'http://127.0.0.1:8088/test-video-157s.mp4';
+  $('audioUrl').value    = 'http://127.0.0.1:8088/test-audio-157s.m4a';
+  $('subtitleUrl').value = 'http://127.0.0.1:8088/complex-anim.ass';
+}
+
+async function submitJob() {
+  const body = {
+    video_url:    $('videoUrl').value.trim(),
+    audio_url:    $('audioUrl').value.trim(),
+    subtitle_url: $('subtitleUrl').value.trim(),
+  };
+  if (!body.video_url || !body.audio_url || !body.subtitle_url) {
+    $('status').innerHTML = '<div class="error">Cần đủ 3 URL</div>';
+    return;
+  }
+  $('btn').disabled = true;
+  $('player').innerHTML = '';
+  $('status').innerHTML = '<div class="meta">Submitting…</div>';
+
+  try {
+    const r = await fetch('/render', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(body),
+    });
+    const data = await r.json();
+    if (!r.ok) throw new Error(data.error || 'submit failed');
+    poll(data.job_id);
+  } catch (e) {
+    $('status').innerHTML = `<div class="error">${e.message}</div>`;
+    $('btn').disabled = false;
+  }
+}
+
+async function poll(jobId) {
+  const r = await fetch('/status/' + jobId);
+  const s = await r.json();
+  const pct = (s.progress * 100).toFixed(0);
+  let html = `<div class="bar"><div class="fill" style="width:${pct}%"></div></div>`;
+  html += `<div class="meta">Job <code>${jobId}</code> · <b>${s.state}</b>`;
+  if (s.stage) html += ` · ${s.stage}`;
+  html += ` · ${pct}%</div>`;
+  if (s.error) html += `<div class="error">${s.error}</div>`;
+  $('status').innerHTML = html;
+
+  if (s.state === 'done') {
+    const url = s.output_url;
+    $('player').innerHTML = `
+      <video controls src="${url}"></video>
+      <div class="meta" style="margin-top:6px"><a href="${url}" download="${jobId}.mp4">⬇ Download ${jobId}.mp4</a></div>`;
+    $('btn').disabled = false;
+    return;
+  }
+  if (s.state === 'failed') {
+    $('btn').disabled = false;
+    return;
+  }
+  setTimeout(() => poll(jobId), 1000);
+}
+</script>
+
+</body>
+</html>
