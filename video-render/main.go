@@ -112,7 +112,9 @@ func main() {
 	http.HandleFunc("/status/", handleStatus)
 	http.HandleFunc("/download/", handleDownload)
 	http.HandleFunc("/health", func(w http.ResponseWriter, _ *http.Request) {
-		_, _ = w.Write([]byte("ok"))
+		// vps-agent đọc field "version" để hiện trạng thái Ready trên hub dashboard.
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = w.Write([]byte(`{"status":"ok","version":"1.0.0"}`))
 	})
 	log.Printf("video-render listening on %s (work=%s)", addr, workRoot)
 	log.Fatal(http.ListenAndServe(addr, nil))

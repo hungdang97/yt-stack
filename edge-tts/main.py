@@ -116,7 +116,8 @@ async def index() -> str:
 
 @app.get("/health")
 async def health() -> dict:
-    return {"status": "ok"}
+    # vps-agent đọc field "version" để hiện trạng thái Ready trên hub dashboard.
+    return {"status": "ok", "version": "1.0.0"}
 
 
 # Lazy 1-hour cache for the voice list. Microsoft's catalog only changes when
