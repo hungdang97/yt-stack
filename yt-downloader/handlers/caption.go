@@ -96,6 +96,11 @@ func HandleCaption(c *fiber.Ctx) error {
 		utterances = parseJSON3(body)
 	}
 
+	// YouTube auto-captions overlap end[i] với start[i+1] để rolling-display
+	// trên player của họ — pass-through vào pipeline render thì libass đè dòng
+	// lên nhau. Clip lại để 1 lúc chỉ có 1 cue trên màn hình.
+	utterances = clipOverlaps(utterances)
+
 	if lang == "" {
 		lang = detectLanguageFromURL(rawURL)
 	}
@@ -309,6 +314,19 @@ func stripVTTTags(s string) string {
 		}
 	}
 	return result.String()
+}
+
+// clipOverlaps: nếu end[i] > start[i+1] thì set end[i] = start[i+1]. Mục đích
+// để 1 thời điểm chỉ có 1 cue hiển thị — tránh libass đè 2 dòng lên nhau khi
+// burn-in. YouTube auto-caption mặc định overlap ~1-2s liên tục, không sửa
+// thì render ra ký tự chồng nhau.
+func clipOverlaps(utts []Utterance) []Utterance {
+	for i := 0; i < len(utts)-1; i++ {
+		if utts[i].End > utts[i+1].Start {
+			utts[i].End = utts[i+1].Start
+		}
+	}
+	return utts
 }
 
 func detectLanguageFromURL(rawURL string) string {
