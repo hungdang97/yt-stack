@@ -47,7 +47,7 @@ MAX_RATE_PCT = int(os.getenv("MAX_RATE_PCT", "50"))
 # Cleanup TTL (giây). Output đã render xóa sau 1h, cache TTS segments giữ
 # lâu hơn (24h) vì cache-hit rate cao khi reuse text/voice giống nhau.
 OUTPUT_TTL_SEC = int(os.getenv("OUTPUT_TTL_SEC", "3600"))
-CACHE_TTL_SEC = int(os.getenv("CACHE_TTL_SEC", "86400"))
+CACHE_TTL_SEC = int(os.getenv("CACHE_TTL_SEC", "3600"))
 CLEANUP_INTERVAL_SEC = int(os.getenv("CLEANUP_INTERVAL_SEC", "600"))
 
 # Public-facing URL building. VPS-agent injects BASE_DOMAIN ("ytconvert.org")

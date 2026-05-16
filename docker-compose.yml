@@ -603,6 +603,34 @@ services:
     networks:
       - backend
 
+  # File upload service — host .ass / .srt / small files với 1h TTL
+  upload:
+    build:
+      context: ./upload
+      dockerfile: Dockerfile
+    image: upload:latest
+    container_name: upload
+    restart: always
+    ports:
+      - "8504:8504"
+    environment:
+      - BASE_DOMAIN=${BASE_DOMAIN}
+      - DOWNLOAD_SUBDOMAIN=${DOWNLOAD_SUBDOMAIN}
+      - PATH_PREFIX=/upload
+    healthcheck:
+      test: [ "CMD", "wget", "-qO-", "http://localhost:8504/health" ]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 10s
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
+    networks:
+      - backend
+
   # Translate service — utterances JSON → translated utterances via OpenRouter
   translate:
     build:
