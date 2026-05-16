@@ -364,8 +364,6 @@ func translateChunkOnce(items map[string]string, source, target string) (map[str
 	prompt := fmt.Sprintf(`Translate the VALUES of this JSON object from %s to %s.
 Return a JSON object with EXACTLY the same keys, only the values translated.
 Preserve tone, register, and meaning. Keep proper nouns unchanged.
-Keep translation length similar to source (±20%% character count) — if literal
-translation runs long, shorten naturally (drop filler, contract phrases).
 No prose, no markdown — just the JSON object.
 
 Input:
