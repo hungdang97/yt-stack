@@ -8,9 +8,18 @@
 //	  "language": "en",
 //	  "duration": 25.93,
 //	  "utterances": [
-//	    { "start": 0.48, "end": 1.6, "text": "Alright." }
+//	    {
+//	      "start": 0.48, "end": 1.6, "text": "Alright.",
+//	      "words": [
+//	        { "text": "Alright.", "start": 0.48, "end": 1.6 }
+//	      ]
+//	    }
 //	  ]
 //	}
+//
+// words[] dùng PunctuatedWord (sau smart_format), fallback raw word.
+// Empty → omit field. Caller chọn utterance-level (text) hoặc
+// word-level (words[]) tuỳ use case (karaoke, lip-sync, fine align...).
 package main
 
 import (
@@ -66,9 +75,20 @@ type (
 		} `json:"results"`
 	}
 	dgUtterance struct {
-		Start      float64 `json:"start"`
-		End        float64 `json:"end"`
-		Transcript string  `json:"transcript"`
+		Start      float64  `json:"start"`
+		End        float64  `json:"end"`
+		Transcript string   `json:"transcript"`
+		Words      []dgWord `json:"words"`
+	}
+	// dgWord: từng từ trong utterance, có timestamp ms-precision.
+	// PunctuatedWord = phiên bản đã smart_format (viết hoa + dấu câu);
+	// rơi xuống Word raw nếu Deepgram không trả ra.
+	dgWord struct {
+		Word            string  `json:"word"`
+		PunctuatedWord  string  `json:"punctuated_word"`
+		Start           float64 `json:"start"`
+		End             float64 `json:"end"`
+		Confidence      float64 `json:"confidence"`
 	}
 )
 
@@ -83,6 +103,12 @@ type (
 		Start float64 `json:"start"`
 		End   float64 `json:"end"`
 		Text  string  `json:"text"`
+		Words []word  `json:"words,omitempty"`
+	}
+	word struct {
+		Text  string  `json:"text"`
+		Start float64 `json:"start"`
+		End   float64 `json:"end"`
 	}
 )
 
@@ -155,7 +181,8 @@ func extractAudioURL(r *http.Request) string {
 }
 
 // buildTranscript maps Deepgram's payload to our public shape.
-// Empty/whitespace utterances are skipped.
+// Empty/whitespace utterances are skipped. Mỗi utterance kèm words[]
+// có timestamp ms-precision — caller chọn dùng utterance hoặc word-level.
 func buildTranscript(dg *deepgramResponse) transcript {
 	out := transcript{
 		Duration:   dg.Metadata.Duration,
@@ -168,10 +195,28 @@ func buildTranscript(dg *deepgramResponse) transcript {
 		if strings.TrimSpace(u.Transcript) == "" {
 			continue
 		}
+		// Map words. Ưu tiên PunctuatedWord (đã smart_format) nếu có,
+		// fallback Word raw. Lọc word rỗng do an toàn.
+		words := make([]word, 0, len(u.Words))
+		for _, w := range u.Words {
+			text := w.PunctuatedWord
+			if text == "" {
+				text = w.Word
+			}
+			if strings.TrimSpace(text) == "" {
+				continue
+			}
+			words = append(words, word{
+				Text:  text,
+				Start: w.Start,
+				End:   w.End,
+			})
+		}
 		out.Utterances = append(out.Utterances, utterance{
 			Start: u.Start,
 			End:   u.End,
 			Text:  u.Transcript,
+			Words: words,
 		})
 	}
 	return out
