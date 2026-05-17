@@ -32,6 +32,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse, HTMLResponse
 from pydantic import BaseModel, field_validator
 from pydub import AudioSegment
+from pydub.exceptions import CouldntDecodeError
 from pydub.silence import detect_leading_silence
 
 # ---------- Config ----------
@@ -186,9 +187,16 @@ async def _cleanup_loop() -> None:
                         except OSError:
                             pass
             # 2. Xoá cache MP3 segments lâu hơn (cache-hit valuable).
+            #    Dọn cả tmp file (kết thúc .tmp.mp3) — rơi rớt nếu synth fail.
             for f in CACHE_DIR.glob("*.mp3"):
                 try:
-                    if now - f.stat().st_mtime > CACHE_TTL_SEC:
+                    age = now - f.stat().st_mtime
+                    is_tmp = ".tmp" in f.name
+                    # Tmp file: xoá nếu > 5 phút (đủ lâu để chắc chắn rơi rớt).
+                    # Cache file: xoá theo TTL chuẩn.
+                    if is_tmp and age > 300:
+                        f.unlink()
+                    elif not is_tmp and age > CACHE_TTL_SEC:
                         f.unlink()
                 except OSError:
                     continue
@@ -318,12 +326,44 @@ def _trim_silence(seg: AudioSegment) -> AudioSegment:
     return seg[start_trim : len(seg) - end_trim]
 
 
-async def _synth_raw(text: str, voice: str, rate: str) -> Path:
-    """Synth 1 rate cụ thể, cache theo (text, voice, rate). Không trim."""
+async def _synth_raw(text: str, voice: str, rate: str, force: bool = False) -> Path:
+    """Synth 1 rate cụ thể, cache theo (text, voice, rate). Không trim.
+
+    Atomic write + verify decode. Tránh 4 issue:
+      1. Race: 2 utterance cùng (text, voice, rate) → cùng path; cùng save →
+         byte trộn. Mỗi call ghi tmp unique → rename atomic, last writer wins
+         nhưng file luôn nguyên vẹn.
+      2. Partial write: TTS WebSocket fail giữa chừng → file dở. Tmp + rename
+         đảm bảo cache_path chỉ tồn tại khi đã save xong.
+      3. Empty output: voice/text lạ → file 0-byte. Reject nếu < 100 bytes.
+      4. Output undecodable: byte hợp lệ nhưng không phải MPEG frame. Verify
+         bằng AudioSegment.from_mp3() trước khi promote → đảm bảo cache_path
+         lúc nào cũng decode được.
+
+    `force=True` skip cache check — dùng để recover khi cache cũ corrupt.
+    """
     cache_key = hashlib.md5(f"{text}|{voice}|{rate}".encode()).hexdigest()
     cache_path = CACHE_DIR / f"{cache_key}.mp3"
-    if not cache_path.exists():
-        await edge_tts.Communicate(text, voice, rate=rate).save(str(cache_path))
+
+    if not force and cache_path.exists() and cache_path.stat().st_size > 100:
+        return cache_path
+
+    tmp_path = CACHE_DIR / f"{cache_key}.{uuid.uuid4().hex[:8]}.tmp.mp3"
+    try:
+        await edge_tts.Communicate(text, voice, rate=rate).save(str(tmp_path))
+        if not tmp_path.exists() or tmp_path.stat().st_size <= 100:
+            raise ValueError(f"empty/tiny TTS output for text {text[:60]!r}")
+        # Verify decodable trước khi promote — nếu không decode được thì
+        # file cache cũng vô dụng, vứt đi luôn.
+        AudioSegment.from_mp3(str(tmp_path))
+        tmp_path.replace(cache_path)
+    except Exception:
+        if tmp_path.exists():
+            try:
+                tmp_path.unlink()
+            except OSError:
+                pass
+        raise
     return cache_path
 
 
@@ -342,7 +382,13 @@ async def _synth_fit(
 
     for rate in RETRY_RATES:
         raw_path = await _synth_raw(text, voice, rate)
-        seg = _trim_silence(AudioSegment.from_mp3(str(raw_path)))
+        try:
+            seg = _trim_silence(AudioSegment.from_mp3(str(raw_path)))
+        except CouldntDecodeError:
+            # File cache từ run cũ corrupt (trước khi có verify-on-write).
+            # Force synth lại, lần này sẽ có verify nên đảm bảo decode được.
+            raw_path = await _synth_raw(text, voice, rate, force=True)
+            seg = _trim_silence(AudioSegment.from_mp3(str(raw_path)))
         last_seg, last_rate = seg, rate
         if seg.duration_seconds <= slot_seconds + SLOT_TOLERANCE_SEC:
             return seg, rate
