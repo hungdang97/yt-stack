@@ -29,11 +29,20 @@ import (
 const (
 	listenAddr  = ":8502"
 	httpTimeout = 10 * time.Minute
+	// Tham số Deepgram Nova-3 cho caption quality cao:
+	//   smart_format=true   → tự thêm punctuation, viết hoa, số/ngày/tiền
+	//   filler_words=false  → bỏ "um", "uh", "you know" — caption sạch hơn
+	//   utterances=true     → segment theo câu, có start/end per utterance
+	//   utt_split=0.8       → pause ≥0.8s mới tách utterance mới (tránh
+	//                          1 câu bị xé vụn vì người nói thở giữa câu)
+	//   detect_language=true → auto-detect tiếng nguồn, không cần client báo
 	deepgramURL = "https://api.deepgram.com/v1/listen" +
 		"?model=nova-3" +
 		"&detect_language=true" +
 		"&utterances=true" +
-		"&smart_format=true"
+		"&utt_split=0.8" +
+		"&smart_format=true" +
+		"&filler_words=false"
 )
 
 // Failover order: try apiKeys[0]; on auth/rate-limit/5xx move to next.
