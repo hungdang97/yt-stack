@@ -30,7 +30,7 @@ import edge_tts
 from fastapi import BackgroundTasks, FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse, HTMLResponse
-from pydantic import BaseModel
+from pydantic import BaseModel, field_validator
 from pydub import AudioSegment
 from pydub.silence import detect_leading_silence
 
@@ -87,10 +87,46 @@ CACHE_DIR.mkdir(parents=True, exist_ok=True)
 
 
 # ---------- Models ----------
+def _parse_timestamp(v) -> float:
+    """Chấp nhận nhiều format cho start/end:
+      - float / int: 11.98
+      - SRT  string: "00:00:11,980"
+      - VTT  string: "00:00:11.980"
+      - MM:SS string: "01:11.98"
+      - Plain string float: "11.98"
+    Trả về giây (float). Raise ValueError nếu không parse được.
+    """
+    if isinstance(v, (int, float)):
+        return float(v)
+    if not isinstance(v, str):
+        raise ValueError(f"timestamp must be number or string, got {type(v).__name__}")
+    s = v.strip().replace(",", ".")
+    # Plain float ("11.98" / "11")
+    try:
+        return float(s)
+    except ValueError:
+        pass
+    # Colon-separated: HH:MM:SS hoặc MM:SS
+    parts = s.split(":")
+    try:
+        if len(parts) == 3:
+            return float(parts[0]) * 3600 + float(parts[1]) * 60 + float(parts[2])
+        if len(parts) == 2:
+            return float(parts[0]) * 60 + float(parts[1])
+    except ValueError:
+        pass
+    raise ValueError(f"cannot parse timestamp: {v!r}")
+
+
 class Utterance(BaseModel):
     start: float
     end: float
     text: str
+
+    @field_validator("start", "end", mode="before")
+    @classmethod
+    def _coerce_timestamp(cls, v):
+        return _parse_timestamp(v)
 
 
 class SubmitRequest(BaseModel):
