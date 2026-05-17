@@ -8,6 +8,7 @@ import (
 	"net/http"
 	"strconv"
 	"strings"
+	"unicode/utf8"
 	"yt-downloader-go/config"
 	"yt-downloader-go/utils"
 
@@ -18,6 +19,17 @@ type Utterance struct {
 	Start float64 `json:"start"`
 	End   float64 `json:"end"`
 	Text  string  `json:"text"`
+	Words []Word  `json:"words,omitempty"`
+}
+
+// Word — fake word-level timestamp. Native YouTube caption KHÔNG có word
+// timing thật (chỉ line-level), nên distribute proportional theo rune count
+// trên text. Shape giống deepgram service để FE dùng 1 format thống nhất
+// cho karaoke / fine-grained align.
+type Word struct {
+	Text  string  `json:"text"`
+	Start float64 `json:"start"`
+	End   float64 `json:"end"`
 }
 
 type CaptionResponse struct {
@@ -100,6 +112,12 @@ func HandleCaption(c *fiber.Ctx) error {
 	// trên player của họ — pass-through vào pipeline render thì libass đè dòng
 	// lên nhau. Clip lại để 1 lúc chỉ có 1 cue trên màn hình.
 	utterances = clipOverlaps(utterances)
+
+	// Estimate word-level timestamps proportional theo rune count.
+	// Shape giống /api/deepgram để FE dùng 1 format thống nhất cho
+	// karaoke caption / fine align. Field words[] có omitempty nên
+	// client cũ chỉ đọc text/start/end vẫn work.
+	fillWords(utterances)
 
 	if lang == "" {
 		lang = detectLanguageFromURL(rawURL)
@@ -327,6 +345,57 @@ func clipOverlaps(utts []Utterance) []Utterance {
 		}
 	}
 	return utts
+}
+
+// distributeWords: estimate word-level timestamps bằng cách chia time
+// proportional theo rune count. Native YT caption không có word timing
+// thật, nên đây là approximation đủ tốt cho karaoke / sync use cases.
+//
+// Algorithm:
+//   1. Split text bằng whitespace → tokens
+//   2. Đếm rune mỗi token (UTF-8 aware cho VN/JA/ZH)
+//   3. Chia duration cho mỗi token theo tỉ lệ rune_count / total_runes
+//   4. Token cuối lấy end = utt.End (tránh sai số float dồn)
+//
+// Nếu text rỗng hoặc không có whitespace → trả nil (omitempty bỏ field).
+func distributeWords(text string, start, end float64) []Word {
+	tokens := strings.Fields(text)
+	if len(tokens) == 0 {
+		return nil
+	}
+	runeCounts := make([]int, len(tokens))
+	totalRunes := 0
+	for i, t := range tokens {
+		runeCounts[i] = utf8.RuneCountInString(t)
+		totalRunes += runeCounts[i]
+	}
+	if totalRunes == 0 {
+		return nil
+	}
+	duration := end - start
+	if duration <= 0 {
+		return nil
+	}
+	words := make([]Word, len(tokens))
+	cursor := start
+	for i, t := range tokens {
+		subDur := duration * float64(runeCounts[i]) / float64(totalRunes)
+		wEnd := cursor + subDur
+		if i == len(tokens)-1 {
+			wEnd = end // anchor cuối, tránh drift do float
+		}
+		words[i] = Word{Text: t, Start: cursor, End: wEnd}
+		cursor = wEnd
+	}
+	return words
+}
+
+// fillWords: gắn words[] estimate cho mọi utterance trong slice.
+// Chạy SAU clipOverlaps để timestamps đã chuẩn.
+func fillWords(utts []Utterance) {
+	for i := range utts {
+		utts[i].Words = distributeWords(utts[i].Text, utts[i].Start, utts[i].End)
+	}
 }
 
 func detectLanguageFromURL(rawURL string) string {
