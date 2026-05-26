@@ -79,37 +79,79 @@ func Collect(projectDir string) (*SystemMetrics, error) {
 	return m, nil
 }
 
-// services to check health via HTTP /health endpoint
-var serviceEndpoints = map[string]string{
-	"yt-downloader":    "http://localhost:5001/health",
-	"yt-extractor":     "http://localhost:8300/health",
-	"tik-downloader":   "http://localhost:5002/health",
-	"tik-extractor":    "http://localhost:5555/health",
-	"insta-downloader": "http://localhost:5003/health",
-	"insta-extractor":  "http://localhost:8000/health",
-	"fb-downloader":    "http://localhost:5004/health",
-	"fb-extractor":     "http://localhost:8002/health",
-	"tw-downloader":    "http://localhost:5005/health",
-	"tw-extractor":     "http://localhost:8003/health",
-	"uni-downloader":   "http://localhost:5006/health",
-	"uni-extractor":    "http://localhost:8004/health",
-	"edge-tts":         "http://localhost:8500/health",
-	"video-render":     "http://localhost:8501/health",
-	"deepgram":         "http://localhost:8502/health",
-	"translate":        "http://localhost:8503/health",
-	"upload":           "http://localhost:8504/health",
-	"caption":          "http://localhost:8505/health",
-}
-
-// services to check health via TCP port (no /health endpoint)
-// format: name → "addr|docker_container|version_cmd"
-var tcpServices = map[string]tcpServiceConfig{
-	"nginx": {Addr: "localhost:80"},
-	"gost":  {Addr: "localhost:1111"},
-}
+// Service catalog — populated at agent startup by InitServices() from
+// docker-compose.yml. Adding/removing a service in compose is enough.
+var (
+	serviceEndpoints = map[string]string{}            // HTTP /health
+	tcpServices      = map[string]tcpServiceConfig{}  // TCP port check (nginx, gost)
+	discoveredAll    = []string{}                     // union, for restart whitelist
+)
 
 type tcpServiceConfig struct {
 	Addr string
+}
+
+// InitServices populates the service catalog from docker-compose.yml.
+// Call once at agent startup. On parse error, falls back to legacy hardcoded
+// catalog so the agent never starts with zero services.
+func InitServices(composePath string) error {
+	http, tcp, all, err := DiscoverServicesFromCompose(composePath)
+	if err != nil {
+		// Fallback so agent stays useful even if compose file moved/broken.
+		serviceEndpoints, tcpServices = legacyHardcoded()
+		discoveredAll = collectKeys(serviceEndpoints, tcpServices)
+		return err
+	}
+	serviceEndpoints = http
+	tcpServices = tcp
+	discoveredAll = all
+	return nil
+}
+
+// DiscoveredServices returns the union of all known service names
+// (HTTP + TCP). Used by control/api.go AllServices restart whitelist.
+func DiscoveredServices() []string {
+	out := make([]string, len(discoveredAll))
+	copy(out, discoveredAll)
+	return out
+}
+
+func collectKeys(http map[string]string, tcp map[string]tcpServiceConfig) []string {
+	out := make([]string, 0, len(http)+len(tcp))
+	for k := range http {
+		out = append(out, k)
+	}
+	for k := range tcp {
+		out = append(out, k)
+	}
+	return out
+}
+
+// legacyHardcoded — pre-discovery fallback. Kept short, only critical services.
+func legacyHardcoded() (map[string]string, map[string]tcpServiceConfig) {
+	return map[string]string{
+			"yt-downloader":    "http://localhost:5001/health",
+			"yt-extractor":     "http://localhost:8300/health",
+			"tik-downloader":   "http://localhost:5002/health",
+			"tik-extractor":    "http://localhost:5555/health",
+			"insta-downloader": "http://localhost:5003/health",
+			"insta-extractor":  "http://localhost:8000/health",
+			"fb-downloader":    "http://localhost:5004/health",
+			"fb-extractor":     "http://localhost:8002/health",
+			"tw-downloader":    "http://localhost:5005/health",
+			"tw-extractor":     "http://localhost:8003/health",
+			"uni-downloader":   "http://localhost:5006/health",
+			"uni-extractor":    "http://localhost:8004/health",
+			"edge-tts":         "http://localhost:8500/health",
+			"video-render":     "http://localhost:8501/health",
+			"deepgram":         "http://localhost:8502/health",
+			"translate":        "http://localhost:8503/health",
+			"upload":           "http://localhost:8504/health",
+			"caption":          "http://localhost:8505/health",
+		}, map[string]tcpServiceConfig{
+			"nginx": {Addr: "localhost:80"},
+			"gost":  {Addr: "localhost:1111"},
+		}
 }
 
 var healthClient = &http.Client{Timeout: 2 * time.Second}

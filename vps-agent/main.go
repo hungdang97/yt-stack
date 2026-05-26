@@ -11,6 +11,7 @@ import (
 	"vps-agent/control"
 	"vps-agent/deployer"
 	"vps-agent/heartbeat"
+	"vps-agent/metrics"
 )
 
 // waitForDNS waits until the domain resolves (A record exists)
@@ -96,7 +97,17 @@ func main() {
 	waitForDNS(downloadDomain)
 	log.Println("✓ DNS records verified")
 
-	// 4. Create deployer and Control API (start API early so dashboard can connect)
+	// 4. Discover services from docker-compose.yml so dashboard auto-lists
+	//    every service in the stack — no agent code change needed when adding one.
+	composePath := fmt.Sprintf("%s/docker-compose.yml", projectDir)
+	if err := metrics.InitServices(composePath); err != nil {
+		log.Printf("Warning: service discovery failed (%v) — falling back to legacy catalog", err)
+	} else {
+		log.Printf("✓ Discovered %d services from %s", len(metrics.DiscoveredServices()), composePath)
+	}
+	control.SetAllServices(metrics.DiscoveredServices())
+
+	// 5. Create deployer and Control API (start API early so dashboard can connect)
 	dep := deployer.NewDeployer(projectDir)
 	controlAPI := control.NewControlAPI(fetcher, dep, projectDir)
 	controlAPI.SetupRoutes()

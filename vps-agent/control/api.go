@@ -34,7 +34,9 @@ type BuildStatus struct {
 	Time    time.Time  `json:"time"`
 }
 
-// AllServices is the whitelist of restartable services
+// AllServices is the whitelist of restartable services.
+// Populated at agent startup by SetAllServices() from metrics.DiscoveredServices().
+// Falls back to a hardcoded core set if discovery fails.
 var AllServices = []string{
 	"yt-downloader", "yt-extractor",
 	"tik-downloader", "tik-extractor",
@@ -42,8 +44,15 @@ var AllServices = []string{
 	"fb-downloader", "fb-extractor",
 	"tw-downloader", "tw-extractor",
 	"uni-downloader", "uni-extractor",
-	"caption",
 	"nginx", "gost",
+}
+
+// SetAllServices replaces the whitelist at runtime. Call once at startup
+// after metrics.InitServices() to enable restart for every compose-defined service.
+func SetAllServices(services []string) {
+	if len(services) > 0 {
+		AllServices = services
+	}
 }
 
 type ControlAPI struct {
