@@ -2,6 +2,7 @@ package main
 
 import (
 	"encoding/json"
+	"fmt"
 	"strings"
 )
 
@@ -31,6 +32,12 @@ func ParseYouTubeJSON3(data []byte) (*Canonical, error) {
 
 	words := make([]Word, 0, 256)
 
+	// Manual YouTube subs duplicate events with different pPenId (text styling
+	// layers — colored highlights, karaoke overlay etc.) sharing same tStartMs
+	// and identical text content. Take the first event for each unique
+	// (tStartMs, dDurationMs) pair to avoid duplicate words in output.
+	seenEvents := make(map[string]bool, len(raw.Events))
+
 	for _, ev := range raw.Events {
 		if ev.TStartMs == nil || len(ev.Segs) == 0 {
 			continue
@@ -45,6 +52,18 @@ func ParseYouTubeJSON3(data []byte) (*Canonical, error) {
 		if !hasContent {
 			continue
 		}
+
+		// Dedup signature: tStartMs + dDurationMs. Two events with both
+		// fields equal are styling duplicates from manual subs.
+		dur := int64(0)
+		if ev.DDurationMs != nil {
+			dur = *ev.DDurationMs
+		}
+		sig := fmt.Sprintf("%d:%d", *ev.TStartMs, dur)
+		if seenEvents[sig] {
+			continue
+		}
+		seenEvents[sig] = true
 
 		eventStart := float64(*ev.TStartMs) / 1000.0
 
