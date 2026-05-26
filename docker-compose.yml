@@ -655,6 +655,39 @@ services:
     networks:
       - backend
 
+  # Caption service — raw transcript JSON (YT json3 / Deepgram) → cue list JSON
+  # Modes: source_only (no LLM), translation_only, dual. LLM via OpenRouter.
+  caption:
+    build:
+      context: ./caption
+      dockerfile: Dockerfile
+    image: caption:latest
+    container_name: caption
+    restart: always
+    ports:
+      - "8505:8505"
+    environment:
+      - OPENROUTER_API_KEY=${OPENROUTER_API_KEY:-}
+      - CAPTION_LLM_MODEL=${CAPTION_LLM_MODEL:-openai/gpt-4o-mini}
+      - CAPTION_TRANSLATE_MODE=${CAPTION_TRANSLATE_MODE:-1pass}
+      - CAPTION_RESTORE_PUNCT_THRESHOLD=${CAPTION_RESTORE_PUNCT_THRESHOLD:-0.05}
+      - CAPTION_CACHE_DIR=/data/cache
+    volumes:
+      - caption_cache:/data/cache
+    healthcheck:
+      test: [ "CMD", "wget", "-qO-", "http://localhost:8505/health" ]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 10s
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
+    networks:
+      - backend
+
   # Deepgram speech-to-text service — audio URL → utterances JSON
   deepgram:
     build:
@@ -788,3 +821,4 @@ volumes:
   uni_storage:
   letsencrypt:
   certbot_webroot:
+  caption_cache:
