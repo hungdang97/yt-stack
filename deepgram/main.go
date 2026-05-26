@@ -2,24 +2,9 @@
 //
 // GET /transcribe?url=<audio-url>
 //
-// Returns JSON:
-//
-//	{
-//	  "language": "en",
-//	  "duration": 25.93,
-//	  "utterances": [
-//	    {
-//	      "start": 0.48, "end": 1.6, "text": "Alright.",
-//	      "words": [
-//	        { "text": "Alright.", "start": 0.48, "end": 1.6 }
-//	      ]
-//	    }
-//	  ]
-//	}
-//
-// words[] dùng PunctuatedWord (sau smart_format), fallback raw word.
-// Empty → omit field. Caller chọn utterance-level (text) hoặc
-// word-level (words[]) tuỳ use case (karaoke, lip-sync, fine align...).
+// Returns RAW Deepgram Nova-3 response (full schema:
+// results.channels[].alternatives[].words[], metadata, utterances, etc.).
+// Caller feeds this directly into /api/caption for downstream chunking.
 package main
 
 import (
@@ -61,56 +46,6 @@ var apiKeys = []string{
 	"0409ecc2cb1cb6a8b2b59fb65a798f6f4ce32b6c",
 }
 
-// Deepgram payload — only the fields we consume.
-type (
-	deepgramResponse struct {
-		Metadata struct {
-			Duration float64 `json:"duration"`
-		} `json:"metadata"`
-		Results struct {
-			Channels []struct {
-				DetectedLanguage string `json:"detected_language"`
-			} `json:"channels"`
-			Utterances []dgUtterance `json:"utterances"`
-		} `json:"results"`
-	}
-	dgUtterance struct {
-		Start      float64  `json:"start"`
-		End        float64  `json:"end"`
-		Transcript string   `json:"transcript"`
-		Words      []dgWord `json:"words"`
-	}
-	// dgWord: từng từ trong utterance, có timestamp ms-precision.
-	// PunctuatedWord = phiên bản đã smart_format (viết hoa + dấu câu);
-	// rơi xuống Word raw nếu Deepgram không trả ra.
-	dgWord struct {
-		Word            string  `json:"word"`
-		PunctuatedWord  string  `json:"punctuated_word"`
-		Start           float64 `json:"start"`
-		End             float64 `json:"end"`
-		Confidence      float64 `json:"confidence"`
-	}
-)
-
-// Public response shape.
-type (
-	transcript struct {
-		Language   string      `json:"language"`
-		Duration   float64     `json:"duration"`
-		Utterances []utterance `json:"utterances"`
-	}
-	utterance struct {
-		Start float64 `json:"start"`
-		End   float64 `json:"end"`
-		Text  string  `json:"text"`
-		Words []word  `json:"words,omitempty"`
-	}
-	word struct {
-		Text  string  `json:"text"`
-		Start float64 `json:"start"`
-		End   float64 `json:"end"`
-	}
-)
 
 func main() {
 	addr := listenAddr
@@ -153,13 +88,13 @@ func handleTranscribe(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusBadRequest, "url is required")
 		return
 	}
-	dg, err := callDeepgram(audioURL)
+	raw, err := callDeepgramRaw(audioURL)
 	if err != nil {
 		writeError(w, http.StatusBadGateway, "deepgram: "+err.Error())
 		return
 	}
 	w.Header().Set("Content-Type", "application/json; charset=utf-8")
-	_ = json.NewEncoder(w).Encode(buildTranscript(dg))
+	_, _ = w.Write(raw)
 }
 
 // extractAudioURL returns the audio URL from `?url=...`. If the value was
@@ -180,52 +115,11 @@ func extractAudioURL(r *http.Request) string {
 	return raw[i+len("url="):]
 }
 
-// buildTranscript maps Deepgram's payload to our public shape.
-// Empty/whitespace utterances are skipped. Mỗi utterance kèm words[]
-// có timestamp ms-precision — caller chọn dùng utterance hoặc word-level.
-func buildTranscript(dg *deepgramResponse) transcript {
-	out := transcript{
-		Duration:   dg.Metadata.Duration,
-		Utterances: []utterance{},
-	}
-	if len(dg.Results.Channels) > 0 {
-		out.Language = dg.Results.Channels[0].DetectedLanguage
-	}
-	for _, u := range dg.Results.Utterances {
-		if strings.TrimSpace(u.Transcript) == "" {
-			continue
-		}
-		// Map words. Ưu tiên PunctuatedWord (đã smart_format) nếu có,
-		// fallback Word raw. Lọc word rỗng do an toàn.
-		words := make([]word, 0, len(u.Words))
-		for _, w := range u.Words {
-			text := w.PunctuatedWord
-			if text == "" {
-				text = w.Word
-			}
-			if strings.TrimSpace(text) == "" {
-				continue
-			}
-			words = append(words, word{
-				Text:  text,
-				Start: w.Start,
-				End:   w.End,
-			})
-		}
-		out.Utterances = append(out.Utterances, utterance{
-			Start: u.Start,
-			End:   u.End,
-			Text:  u.Transcript,
-			Words: words,
-		})
-	}
-	return out
-}
-
-// callDeepgram POSTs the audio URL to Deepgram, trying API keys in order.
-// Failover triggers only on auth/rate-limit/server errors; other 4xx (URL
-// problems, bad audio, etc.) aborts immediately to avoid burning keys.
-func callDeepgram(audioURL string) (*deepgramResponse, error) {
+// callDeepgramRaw POSTs the audio URL to Deepgram and returns the raw
+// response body bytes. Tries API keys in order; failover only on auth/
+// rate-limit/server errors. Other 4xx (URL problems, bad audio) abort
+// immediately so we don't burn keys on caller mistakes.
+func callDeepgramRaw(audioURL string) ([]byte, error) {
 	client := &http.Client{Timeout: httpTimeout}
 	body, _ := json.Marshal(map[string]string{"url": audioURL})
 
@@ -245,11 +139,7 @@ func callDeepgram(audioURL string) (*deepgramResponse, error) {
 		_ = resp.Body.Close()
 
 		if resp.StatusCode >= 200 && resp.StatusCode < 300 {
-			var dg deepgramResponse
-			if err := json.Unmarshal(respBody, &dg); err != nil {
-				return nil, fmt.Errorf("parse response: %w", err)
-			}
-			return &dg, nil
+			return respBody, nil
 		}
 
 		sErr := fmt.Errorf("status %d: %s", resp.StatusCode, snippet(respBody, 300))

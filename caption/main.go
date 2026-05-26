@@ -11,16 +11,14 @@ import (
 )
 
 func main() {
-	mode := flag.String("mode", "", "source_only | translation_only | dual")
 	sourceType := flag.String("source-type", "", "youtube | deepgram")
 	sourceLang := flag.String("source-lang", "", "ISO lang code, e.g. vi, en")
-	targetLang := flag.String("target-lang", "", "Required for translation_only/dual")
 	inputPath := flag.String("input", "", "Path to source data JSON file")
 	outputPath := flag.String("output", "-", "Output path or '-' for stdout")
 	flag.Parse()
 
-	if *mode != "" {
-		runCLI(*mode, *sourceType, *sourceLang, *targetLang, *inputPath, *outputPath)
+	if *sourceType != "" || *inputPath != "" {
+		runCLI(*sourceType, *sourceLang, *inputPath, *outputPath)
 		return
 	}
 
@@ -35,9 +33,9 @@ func main() {
 	}
 }
 
-func runCLI(mode, sourceType, sourceLang, targetLang, inputPath, outputPath string) {
-	if mode == "" || sourceType == "" || sourceLang == "" || inputPath == "" {
-		fmt.Fprintln(os.Stderr, "Usage: caption-service -mode=<m> -source-type=<t> -source-lang=<l> -input=<file> [-target-lang=<l>] [-output=<file>]")
+func runCLI(sourceType, sourceLang, inputPath, outputPath string) {
+	if sourceType == "" || sourceLang == "" || inputPath == "" {
+		fmt.Fprintln(os.Stderr, "Usage: caption -source-type=<t> -source-lang=<l> -input=<file> [-output=<file>]")
 		os.Exit(2)
 	}
 
@@ -47,11 +45,9 @@ func runCLI(mode, sourceType, sourceLang, targetLang, inputPath, outputPath stri
 	}
 
 	req := CaptionRequest{
-		Mode:       mode,
 		SourceType: sourceType,
 		SourceData: raw,
 		SourceLang: sourceLang,
-		TargetLang: targetLang,
 	}
 
 	result, err := process(req)
@@ -94,13 +90,12 @@ func handleCaption(w http.ResponseWriter, r *http.Request) {
 	json.NewEncoder(w).Encode(result)
 }
 
-// process is the single entry point used by both HTTP and CLI.
-func process(req CaptionRequest) (*CueList, error) {
-	if req.Mode == "" || req.SourceType == "" || req.SourceLang == "" || len(req.SourceData) == 0 {
-		return nil, fmt.Errorf("missing required: mode, source_type, source_lang, source_data")
-	}
-	if (req.Mode == "translation_only" || req.Mode == "dual") && req.TargetLang == "" {
-		return nil, fmt.Errorf("target_lang required for mode %s", req.Mode)
+// process: raw source → canonical → chunker → utterance format.
+// Punctuation restoration is best-effort (only runs if OPENROUTER_API_KEY is set
+// and source has < threshold ratio of punctuated words).
+func process(req CaptionRequest) (*Transcript, error) {
+	if req.SourceType == "" || req.SourceLang == "" || len(req.SourceData) == 0 {
+		return nil, fmt.Errorf("missing required: source_type, source_lang, source_data")
 	}
 
 	canonical, err := adaptSource(req.SourceType, req.SourceData)
@@ -112,8 +107,7 @@ func process(req CaptionRequest) (*CueList, error) {
 		return nil, fmt.Errorf("validate canonical: %v", err)
 	}
 
-	// Auto-restore punctuation when source lacks it AND LLM is configured.
-	// Safe to call always: noop when source already has punctuation OR no API key.
+	// Optional: punctuation restoration for no-punct sources (e.g. YT auto-sub VN).
 	llm := NewLLMClient()
 	if llm.APIKey != "" {
 		if _, err := MaybeRestorePunctuation(canonical, llm); err != nil {
@@ -122,17 +116,7 @@ func process(req CaptionRequest) (*CueList, error) {
 	}
 
 	rules := GetRules(req.SourceLang, req.Rules)
-
-	switch req.Mode {
-	case "source_only":
-		return BuildSourceOnly(canonical, rules, req.SourceLang), nil
-	case "translation_only":
-		return BuildTranslationOnly(canonical, rules, llm, req.SourceLang, req.TargetLang)
-	case "dual":
-		return BuildDual(canonical, rules, llm, req.SourceLang, req.TargetLang)
-	default:
-		return nil, fmt.Errorf("unknown mode: %s", req.Mode)
-	}
+	return BuildUtterances(canonical, rules, req.SourceLang), nil
 }
 
 func adaptSource(sourceType string, rawData []byte) (*Canonical, error) {
