@@ -23,7 +23,7 @@ func BuildSourceOnly(canonical *Canonical, rules Rules, sourceLang string) *CueL
 
 	for i, b := range bounds {
 		chunk := canonical.Words[b[0]:b[1]]
-		text := wrapToLines(joinWords(chunk), rules.MaxCharsPerLine)
+		text := wrapToLines(joinWords(chunk), rules.MaxCharsPerLine, rules.MaxLines)
 
 		cue := Cue{
 			Idx:   i,
@@ -90,7 +90,7 @@ func BuildTranslationOnly(canonical *Canonical, rules Rules, llm *LLMClient,
 		for j, part := range parts {
 			t0 := sentStart + (sentEnd-sentStart)*float64(j)/float64(len(parts))
 			t1 := sentStart + (sentEnd-sentStart)*float64(j+1)/float64(len(parts))
-			text := wrapToLines(part, rules.MaxCharsPerLine)
+			text := wrapToLines(part, rules.MaxCharsPerLine, rules.MaxLines)
 
 			cue := Cue{
 				Idx:   len(cues),
@@ -185,7 +185,7 @@ func BuildDual(canonical *Canonical, rules Rules, llm *LLMClient,
 	for i, b := range bounds {
 		chunk := canonical.Words[b[0]:b[1]]
 		kind := classifyKind(chunk)
-		srcText := wrapToLines(srcTexts[i], rules.MaxCharsPerLine)
+		srcText := wrapToLines(srcTexts[i], rules.MaxCharsPerLine, rules.MaxLines)
 
 		lines := []Line{
 			{
@@ -195,7 +195,7 @@ func BuildDual(canonical *Canonical, rules Rules, llm *LLMClient,
 			},
 		}
 		if kind == "speech" && translations[i] != "" {
-			tgtText := wrapToLines(translations[i], rules.MaxCharsPerLine)
+			tgtText := wrapToLines(translations[i], rules.MaxCharsPerLine, rules.MaxLines)
 			lines = append(lines, Line{
 				Role: "translation", Lang: targetLang, Text: tgtText,
 				CharCount: runeLen(stripNewlines(tgtText)),
@@ -333,11 +333,20 @@ func detectSentences(words []Word) [][2]int {
 	return bounds
 }
 
-func wrapToLines(text string, maxChars int) string {
+// wrapToLines word-wraps text into at most maxLines lines of maxChars each.
+// If the greedy wrap produces more than maxLines, excess lines are merged into
+// the last allowed line (accepts char overflow there — caller flags it).
+// max_lines is HARD: result always has ≤ maxLines lines.
+func wrapToLines(text string, maxChars, maxLines int) string {
 	words := strings.Fields(text)
 	if len(words) == 0 {
 		return text
 	}
+	if maxLines <= 1 {
+		// Single-line mode: never wrap.
+		return strings.Join(words, " ")
+	}
+
 	lines := []string{}
 	current := ""
 	for _, w := range words {
@@ -356,6 +365,14 @@ func wrapToLines(text string, maxChars int) string {
 	if current != "" {
 		lines = append(lines, current)
 	}
+
+	// HARD enforce max_lines: merge any excess into the last allowed line.
+	// This may push the last line over maxChars — quality.flags will catch it.
+	if len(lines) > maxLines {
+		merged := strings.Join(lines[maxLines-1:], " ")
+		lines = append(lines[:maxLines-1], merged)
+	}
+
 	return strings.Join(lines, "\n")
 }
 
