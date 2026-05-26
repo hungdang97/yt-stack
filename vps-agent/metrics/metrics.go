@@ -98,6 +98,7 @@ var serviceEndpoints = map[string]string{
 	"deepgram":         "http://localhost:8502/health",
 	"translate":        "http://localhost:8503/health",
 	"upload":           "http://localhost:8504/health",
+	"caption":          "http://localhost:8505/health",
 }
 
 // services to check health via TCP port (no /health endpoint)
