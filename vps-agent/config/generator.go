@@ -14,7 +14,7 @@ func GenerateConfig(serverIP string) map[string]interface{} {
 		"server_ip": serverIP,
 		"name":      subdomain,
 		"subdomain": subdomain,
-		"email":     "admin@ytconvert.org",
+		"email":     "admin@y2mp3.co",
 		"port":      5001,
 
 		// Proxy Credentials (random)

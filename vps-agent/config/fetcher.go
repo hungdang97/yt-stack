@@ -140,8 +140,8 @@ func (f *ConfigFetcher) GenerateEnvFile(config map[string]interface{}, envPath s
 	fmt.Fprintf(file, "SERVER_NAME=%v\n", config["name"])
 
 	// Domain Structure
-	// Read from Hub's "domain" field (defaults to first Cloudflare domain or ytconvert.org)
-	baseDomain := "ytconvert.org" // Default fallback
+	// Read from Hub's "domain" field (defaults to first Cloudflare domain or y2mp3.co)
+	baseDomain := "y2mp3.co" // Default fallback
 	if domain, ok := config["domain"]; ok && domain != nil && domain != "" {
 		baseDomain = fmt.Sprintf("%v", domain)
 	}
