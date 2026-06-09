@@ -40,12 +40,17 @@ func main() {
 		projectDir = "/opt/yt-stack"
 	}
 
+	domainOverride := os.Getenv("DOMAIN")
+
 	log.Println("=== VPS Agent Starting ===")
 	log.Printf("Hub URL: %s", hubURL)
+	if domainOverride != "" {
+		log.Printf("Domain: %s", domainOverride)
+	}
 	log.Printf("Project Dir: %s", projectDir)
 
 	// 1. Create config fetcher
-	fetcher := config.NewConfigFetcher(hubURL)
+	fetcher := config.NewConfigFetcher(hubURL, domainOverride)
 	serverIP := fetcher.GetServerIP()
 	log.Printf("Detected Server IP: %s", serverIP)
 

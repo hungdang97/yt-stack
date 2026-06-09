@@ -13,14 +13,16 @@ import (
 )
 
 type ConfigFetcher struct {
-	hubURL   string
-	serverIP string
+	hubURL         string
+	serverIP       string
+	domainOverride string
 }
 
-func NewConfigFetcher(hubURL string) *ConfigFetcher {
+func NewConfigFetcher(hubURL string, domainOverride string) *ConfigFetcher {
 	return &ConfigFetcher{
-		hubURL:   hubURL,
-		serverIP: detectServerIP(),
+		hubURL:         hubURL,
+		serverIP:       detectServerIP(),
+		domainOverride: domainOverride,
 	}
 }
 
@@ -76,6 +78,11 @@ func (f *ConfigFetcher) RegisterWithHub(existingConfig map[string]interface{}) (
 	} else {
 		// Generate new config
 		config = GenerateConfig(f.serverIP)
+	}
+
+	// Apply domain override from DOMAIN env (takes priority)
+	if f.domainOverride != "" {
+		config["domain"] = f.domainOverride
 	}
 
 	// Register with Hub
