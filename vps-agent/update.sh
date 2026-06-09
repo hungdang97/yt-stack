@@ -10,10 +10,8 @@ AGENT_DIR="$PROJECT_DIR/vps-agent"
 # 1. Pull latest code
 echo "[1/3] Pulling latest code..."
 cd $PROJECT_DIR
-if ! git pull origin main; then
-    echo "ERROR: git pull failed"
-    exit 1
-fi
+git fetch origin main
+git reset --hard origin/main
 
 # 2. Rebuild agent binary
 echo "[2/3] Rebuilding agent..."
