@@ -248,7 +248,7 @@ services:
       - "8300:8300" # Expose for external access
     environment:
       - PYTHONUNBUFFERED=1
-      - MONGO_URI=mongodb://admin:iloveyouhacker1234567890987654321@mongo.metaconvert.net:27017/cookie?authSource=admin&replicaSet=rs0&tls=true
+      - MONGO_URI=mongodb://admin:1S3uea0yRF9RHApturU5NaomwE16MQbx@mongo.ytmp3.gg:27017/cookie?authSource=admin&replicaSet=rs0&tls=true
     depends_on:
       gost:
         condition: service_started
@@ -303,7 +303,7 @@ services:
       - HUB_TOKEN=${HUB_TOKEN}
       - CLEANUP_INTERVAL=*/5 * * * *
       - MAX_JOB_AGE_MIN=15
-      - MONGO_URI=mongodb://admin:iloveyouhacker1234567890987654321@mongo.metaconvert.net:27017/cookie?authSource=admin&replicaSet=rs0&tls=true
+      - MONGO_URI=mongodb://admin:1S3uea0yRF9RHApturU5NaomwE16MQbx@mongo.ytmp3.gg:27017/cookie?authSource=admin&replicaSet=rs0&tls=true
       - MONGO_DB=cookie
       - WARP_USER=${WARP_USER}
       - WARP_PASS=${WARP_PASS}
@@ -374,7 +374,7 @@ services:
       - HUB_TOKEN=${HUB_TOKEN}
       - CLEANUP_INTERVAL=*/5 * * * *
       - MAX_JOB_AGE_MIN=15
-      - MONGO_URI=mongodb://admin:iloveyouhacker1234567890987654321@mongo.metaconvert.net:27017/cookie?authSource=admin&replicaSet=rs0&tls=true
+      - MONGO_URI=mongodb://admin:1S3uea0yRF9RHApturU5NaomwE16MQbx@mongo.ytmp3.gg:27017/cookie?authSource=admin&replicaSet=rs0&tls=true
       - MONGO_DB=cookie
       - WARP_USER=${WARP_USER}
       - WARP_PASS=${WARP_PASS}

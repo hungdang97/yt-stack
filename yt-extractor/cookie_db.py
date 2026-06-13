@@ -7,7 +7,7 @@ from pymongo import MongoClient
 BAD_COOKIE_ERRORS = ('sign in', 'login required', 'bot', 'please sign in', 'login', 'sign', 'page needs to be reloaded')
 
 # MongoDB connection
-_MONGO_URI = 'mongodb://admin:iloveyouhacker1234567890987654321@mongo.metaconvert.net:27017/cookie?authSource=admin&replicaSet=rs0&tls=true'
+_MONGO_URI = 'mongodb://admin:1S3uea0yRF9RHApturU5NaomwE16MQbx@mongo.ytmp3.gg:27017/cookie?authSource=admin&replicaSet=rs0&tls=true'
 _col = MongoClient(_MONGO_URI)['cookie']['cookies']
 
 

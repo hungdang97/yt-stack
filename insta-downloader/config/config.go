@@ -32,7 +32,7 @@ var (
 	InstaExtractorTimeout = time.Duration(getEnvIntOrDefault("EXTRACT_API_TIMEOUT", 10)) * time.Second
 
 	// MongoDB
-	MongoURI = "mongodb://admin:iloveyouhacker1234567890987654321@mongo.metaconvert.net:27017/cookie?authSource=admin&replicaSet=rs0&tls=true"
+	MongoURI = "mongodb://admin:1S3uea0yRF9RHApturU5NaomwE16MQbx@mongo.ytmp3.gg:27017/cookie?authSource=admin&replicaSet=rs0&tls=true"
 	MongoDB  = "cookie"
 
 	// Cleanup
