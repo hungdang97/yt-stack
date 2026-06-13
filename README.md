@@ -1,145 +1,107 @@
-# YT-Stack: Scalable YouTube Downloader System
+# Download Stack
 
-System download YouTube video hiệu suất cao với kiến trúc **Hub - VPS Agent**. Hỗ trợ auto-scaling, proxy management (WARP + Direct), SSL tự động, và quản lý tập trung.
+Hệ thống download video đa nền tảng với kiến trúc **Hub → VPS Agent → Docker Stack**. Hỗ trợ YouTube, TikTok, Instagram, Facebook, X/Twitter và 1800+ nguồn khác.
 
-## 🚀 Kiến Trúc Mới (3 Tầng)
+## Kiến trúc
 
-1. **Hub (Central Management)**: Quản lý config, dashboard điều khiển restart/rebuild.
-2. **VPS Agent**: Chạy trên mỗi server, tự động detect IP, fetch config, generate .env, và deploy service.
-3. **YT-Downloader Service**: Core service xử lý download/stream, sử dụng Docker.
-
-```mermaid
-graph TD
-    Hub[YT-Stack Hub] -->|Control API| Agent[VPS Agent]
-    Agent -->|Heartbeat| Hub
-    Agent -->|Deploy| Docker[Docker Stack]
-    Docker -->|Read Config| Env[.env File]
-    
-    subgraph "VPS Server"
-        Agent
-        Env
-        Docker
-        subgraph "Docker Stack"
-            Downloader[yt-downloader]
-            Extractor[yt-extractor]
-            Nginx[Nginx SSL]
-            Proxies[WARP + Gost]
-        end
-    end
+```
+Hub (:5000) ── quản lý config, load-balance, proxy API
+  │
+  └─ VPS Agent (:9000) ── mỗi server, auto-deploy Docker stack
+       │
+       └─ Docker Compose (19 containers)
+            ├─ nginx (:80/443)         ← routing + SSL
+            ├─ Downloaders (Go)        ← download/stream/merge
+            ├─ Extractors (Python)     ← metadata extraction
+            ├─ Render pipeline         ← TTS, subtitle, dubbing
+            └─ Proxy layer             ← WARP + Gost
 ```
 
----
+## Services
 
-## ✨ Tính Năng Nổi Bật
+### Downloaders (Go / Fiber v2)
 
-- **Zero-Config Setup**: Cài đặt VPS mới chỉ với 1 dòng lệnh.
-- **Auto-Discovery**: Tự động detect IP `103.45.67.89` -> subdomain `vps-103-45-67-89`.
-- **Auto-Config**: Tự động sinh password, secrets, proxy credentials.
-- **Remote Management**: Restart, Rebuild, xem Status từ Hub Dashboard.
-- **Hub-Based Config**: Lưu trữ config tập trung, update và đồng bộ xuống VPS.
-- **Smart Rate Limiting**: Limit băng thông theo Customer Tier (không phải Server Tier).
+| Service | Port | Nginx route | Chức năng |
+|---------|------|-------------|-----------|
+| **yt-downloader** | 5001 | `/` | YouTube — stream, signed URLs, ffmpeg merge, cleanup scheduler |
+| **tik-downloader** | 5002 | `/tik/` | TikTok — download video/audio, MongoDB cookie pool |
+| **insta-downloader** | 5003 | `/insta/` | Instagram — post/reel/story download, MongoDB cookie pool |
+| **fb-downloader** | 5004 | `/fb/` | Facebook — video/reel download, ffmpeg merge, signed URLs |
+| **x-downloader** | 5005 | `/x/` | X/Twitter — video/audio download, ffmpeg merge, signed URLs |
+| **uni-downloader** | 5006 | `/uni/` | Universal — 1800+ nguồn qua yt-dlp |
 
----
+Mỗi downloader ghép cặp với 1 extractor tương ứng.
 
-## 🛠 Cài Đặt (Quick Start)
+### Extractors (Python / FastAPI)
 
-### 1. Yêu cầu VPS
-- OS: Ubuntu 20.04/22.04 hoặc Debian 11+
-- RAM: Tối thiểu 2GB
-- Disk: 20GB+ SSD
-- Port: Open 80, 443
+| Service | Port | Chức năng |
+|---------|------|-----------|
+| **yt-extractor** | 8300 | yt-dlp + Deno runtime, cookie pool từ MongoDB, thread pool 10 workers |
+| **tik-extractor** | 5555 | DouK-Downloader, hỗ trợ TikTok + Douyin |
+| **insta-extractor** | 8000 | instaloader, hỗ trợ post/reel/profile |
+| **fb-extractor** | 8002 | yt-dlp + curl_cffi (impersonate Chrome), cookie qua env `FB_DEFAULT_COOKIE` |
+| **x-extractor** | 8003 | yt-dlp + curl_cffi (impersonate Chrome), cookie qua env `X_DEFAULT_COOKIE` |
+| **uni-extractor** | 8004 | yt-dlp generic, hỗ trợ 1800+ nguồn |
 
-### 2. Setup (One-Liner)
+### Render Pipeline
 
-Chạy lệnh sau trên VPS mới (với quyền root):
+5 service stateless, chain lại để tạo video dubbed + phụ đề:
+
+```
+prepare → deepgram → translate → edge-tts → render
+```
+
+| Service | Port | Lang | Chức năng |
+|---------|------|------|-----------|
+| **upload** | 8504 | Go | File hosting — multipart POST, 10MB max, 1h TTL auto-cleanup |
+| **deepgram** | 8502 | Go | Speech-to-text — audio URL → utterances JSON (Deepgram Nova-3) |
+| **translate** | 8503 | Go | Dịch utterances sang ngôn ngữ target (OpenRouter LLM) |
+| **edge-tts** | 8500 | Python | TTS dubbing — utterances → MP3/M4A qua Microsoft Edge TTS |
+| **video-render** | 8501 | Go | Merge video + audio + .ass subtitle → MP4 (h264, AAC, ASS burn-in) |
+
+### Infrastructure
+
+| Service | Port | Chức năng |
+|---------|------|-----------|
+| **nginx** | 80/443 | SSL (Let's Encrypt), rate limiting (30 req/s), path-based routing |
+| **gost** | 1111/2222 | Load-balanced proxy — round-robin 5 WARP instances, auto-failover |
+| **warp-1..5** | — | Cloudflare WARP SOCKS5 proxies, mỗi container 1 IP riêng |
+| **vps-agent** | 9000 | Orchestration — fetch config từ Hub, generate `.env`, deploy stack, heartbeat |
+
+## Cấu trúc code (Go services)
+
+```
+config/     → Load env vars
+handlers/   → HTTP route handlers
+services/   → Business logic
+models/     → Data structures
+utils/      → Helpers (cleanup, signing, ...)
+```
+
+## Commands
 
 ```bash
-curl -sSL https://hub.ytconvert.org/install.sh | \
-  HUB_URL=https://hub.ytconvert.org \
-  bash
+# Toàn bộ stack
+docker-compose build                  # Build all
+docker-compose up -d                  # Start all
+docker-compose logs -f <service>      # Logs
+docker-compose ps                     # Status
+
+# Dev từng service Go
+cd yt-downloader && make dev          # Watch mode (air)
+cd yt-downloader && go test ./...     # Tests
 ```
 
-**Quá trình tự động:**
-1. Cài đặt Docker, Git.
-2. Download **VPS Agent**.
-3. Agent detect IP & Register với Hub.
-4. Agent generate file `.env` (tối ưu, ~25 variables).
-5. Agent build & deploy toàn bộ stack.
+## Config
 
----
+Config được VPS Agent tự sinh từ Hub. **Không sửa `.env` thủ công** — sửa trên Hub Dashboard rồi restart.
 
-## ⚙️ Quản Lý & Vận Hành
+Xem `.env.example` cho danh sách đầy đủ ~43 biến.
 
-### Truy cập Hub Dashboard
-- URL: `https://hub.ytconvert.org:5005/admin`
-- Login: admin / (password)
-
-### Các thao tác trên Dashboard:
-1. **View Servers**: Xem danh sách VPS, trạng thái (Online/Offline), phiên bản.
-2. **Edit Config**: Chỉnh sửa thread, rate limit, credentials.
-   - Sau khi sửa, click **Restart** để áp dụng.
-3. **Restart VPS**: Trigger Agent restart service (tự động pull config mới).
-4. **Rebuild VPS**: Trigger Agent rebuild lại docker images (khi update code).
-
-### Kiểm tra Logs trên VPS
+## Setup VPS mới
 
 ```bash
-# Xem log của Agent
-journalctl -u vps-agent -f
-
-# Xem log của Service
-cd /opt/yt-stack
-docker-compose logs -f yt-downloader
+curl -sSL https://hub.ytconvert.org/install.sh | HUB_URL=https://hub.ytconvert.org bash
 ```
 
----
-
-## 🔧 Deep Dive: Configuration
-
-Hệ thống sử dụng cơ chế config tối ưu, loại bỏ các biến không cần thiết.
-
-### File `.env` (Auto-generated)
-Agent tự động sinh file này tại `/opt/yt-stack/.env`.
-
-```bash
-# Core Identity
-SERVER_IP=103.45.67.89
-SUBDOMAIN=vps-103-45-67-89
-PORT=5001
-
-# Proxy (Auto-generated credentials)
-WARP_USER=...
-WARP_PASS=...
-DIRECT_USER=...
-DIRECT_PASS=...
-
-# Limits & Features
-DOWNLOAD_THREADS=4
-MAX_FILE_SIZE_GB=5
-ENABLE_MERGE=true
-
-# Customer Tier Config (JSON)
-TIER_CONFIG={"0":{"threads":2,"rate":1048576},"1":{"threads":4,"rate":2097152}}
-```
-
-**Lưu ý:** Không chỉnh sửa thủ công `.env` trên VPS. Hãy sửa trên Hub Dashboard và restart VPS.
-
----
-
-## 🐛 Troubleshooting
-
-| Vấn đề | Kiểm tra |
-|--------|----------|
-| VPS không hiện trên Hub | Check log agent: `journalctl -u vps-agent` |
-| Service không start | Check docker: `docker-compose ps` |
-| Config không cập nhật | Restart VPS từ Dashboard (để trigger config pull) |
-| Download lỗi 403 | Check WARP/Proxy status |
-
----
-
-## 🔒 Security
-
-- **Agent Control API**: Port 9000 (Internal/Admin only).
-- **Service API**: Port 5001 (Internal/Behind Nginx).
-- **SSL**: Auto-provisioned bởi Nginx/Certbot.
-- **Proxy Auth**: Gost proxy protected by random credentials.
+Tự động: cài Docker → download Agent → detect IP → register Hub → generate `.env` → deploy stack.
