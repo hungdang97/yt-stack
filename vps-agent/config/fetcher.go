@@ -197,12 +197,42 @@ func (f *ConfigFetcher) GenerateEnvFile(config map[string]interface{}, envPath s
 	fmt.Fprintf(file, "# === Tier Config ===\n")
 	fmt.Fprintf(file, "TIER_CONFIG='%v'\n", config["tier_config"])
 
+	// Mongo Cookie Pool (Hub inject từ env của Hub)
+	fmt.Fprintf(file, "\n# === Mongo Cookie Pool ===\n")
+	fmt.Fprintf(file, "MONGO_URI=%s\n", strVal(config["mongo_uri"]))
+	fmt.Fprintf(file, "MONGO_DB=%s\n", strValOr(config["mongo_db"], "cookie"))
+
+	// Hub Auth (token chia sẻ giữa Hub và downloader)
+	fmt.Fprintf(file, "\n# === Hub Auth ===\n")
+	fmt.Fprintf(file, "HUB_TOKEN=%s\n", strVal(config["hub_token"]))
+
+	// Platform Cookies
+	fmt.Fprintf(file, "\n# === Platform Cookies ===\n")
+	fmt.Fprintf(file, "FB_DEFAULT_COOKIE=%s\n", strVal(config["fb_default_cookie"]))
+	fmt.Fprintf(file, "X_DEFAULT_COOKIE=%s\n", strVal(config["x_default_cookie"]))
+
 	log.Printf("[Agent] Generated .env file: %s", envPath)
 	return nil
 }
 
 func (f *ConfigFetcher) GetServerIP() string {
 	return f.serverIP
+}
+
+// strVal safely converts interface{} to string ("" if nil).
+func strVal(v interface{}) string {
+	if v == nil {
+		return ""
+	}
+	return fmt.Sprintf("%v", v)
+}
+
+// strValOr returns string value or default if empty/nil.
+func strValOr(v interface{}, def string) string {
+	if s := strVal(v); s != "" {
+		return s
+	}
+	return def
 }
 
 // formatInt safely formats interface{} as int string
