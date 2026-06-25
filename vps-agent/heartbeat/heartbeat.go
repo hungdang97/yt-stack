@@ -59,8 +59,8 @@ func (h *Heartbeat) ping() {
 	defer resp.Body.Close()
 
 	if resp.StatusCode == 200 {
-		// Only log periodically or on change to avoid noise
-		// log.Println("[Heartbeat] Ping successful")
+		log.Printf("[Heartbeat] Ping OK — CPU: %.1f%%, RAM: %.1f%%, Disk: %.1f%%, Services: %d",
+			m.CPUUsage, m.RAMUsage, m.DiskUsage, len(m.Services))
 	} else {
 		log.Printf("[Heartbeat] Ping failed with status: %d", resp.StatusCode)
 	}
