@@ -46,7 +46,7 @@ var (
 	HubToken            = getEnvOrDefault("HUB_TOKEN", "1234567890987654321234567890987654321")
 
 	// MongoDB
-	MongoURI = getEnvOrDefault("MONGO_URI", "mongodb://admin:iloveyouhacker1234567890987654321@88.198.32.133:27017/cookie?authSource=admin")
+	MongoURI = getEnvOrDefault("MONGO_URI", "mongodb://localhost:27017/cookie")
 	MongoDB  = getEnvOrDefault("MONGO_DB", "cookie")
 
 	// Download
