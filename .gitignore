@@ -62,3 +62,11 @@ venv/
 
 # Deno binary (downloaded during Docker build)
 yt-extractor/bin/deno
+
+# Backup files (may contain secrets)
+*.bak
+*.bak.*
+*.backup
+# Local test helpers
+local/
+make_3warp.py
