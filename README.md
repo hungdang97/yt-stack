@@ -1,145 +1,75 @@
-# YT-Stack: Scalable YouTube Downloader System
+# yt-stack — Multi-platform Video Downloader Stack
 
-System download YouTube video hiệu suất cao với kiến trúc **Hub - VPS Agent**. Hỗ trợ auto-scaling, proxy management (WARP + Direct), SSL tự động, và quản lý tập trung.
+Stack tải video đa nền tảng (**YouTube, TikTok, Instagram, Facebook, X/Twitter, Universal**)
+chạy bằng Docker, theo kiến trúc **Hub ⇄ VPS Agent**. Mỗi VPS chạy 6 cặp
+downloader (Go) + extractor (Python), một pool **WARP + gost** (IP sạch Cloudflare),
+và **nginx** (reverse proxy + SSL tự động).
 
-## 🚀 Kiến Trúc Mới (3 Tầng)
-
-1. **Hub (Central Management)**: Quản lý config, dashboard điều khiển restart/rebuild.
-2. **VPS Agent**: Chạy trên mỗi server, tự động detect IP, fetch config, generate .env, và deploy service.
-3. **YT-Downloader Service**: Core service xử lý download/stream, sử dụng Docker.
-
-```mermaid
-graph TD
-    Hub[YT-Stack Hub] -->|Control API| Agent[VPS Agent]
-    Agent -->|Heartbeat| Hub
-    Agent -->|Deploy| Docker[Docker Stack]
-    Docker -->|Read Config| Env[.env File]
-    
-    subgraph "VPS Server"
-        Agent
-        Env
-        Docker
-        subgraph "Docker Stack"
-            Downloader[yt-downloader]
-            Extractor[yt-extractor]
-            Nginx[Nginx SSL]
-            Proxies[WARP + Gost]
-        end
-    end
+## Kiến trúc
 ```
+Client → Hub (/api/download) → chọn VPS → nginx(VPS) → downloader → extractor → gost → WARP → Internet
+                                  ▲ register / heartbeat / control
+                              vps-agent (mỗi VPS)
+```
+- **Hub** (repo `yt-downloader-hub`): load balancer + dashboard + registry, inject config cho agent.
+- **vps-agent**: detect IP → đăng ký Hub → sinh `.env` → `docker compose up` toàn stack.
 
----
+## Mô hình PORT (quan trọng)
+Chỉ **2 cổng** mở ra ngoài trên VPS (+1 cho agent). Mọi service khác chỉ chạy
+trong **docker network**, KHÔNG publish ra host → **không trùng cổng với service khác**.
 
-## ✨ Tính Năng Nổi Bật
+| Cổng | Dùng cho | Public? |
+|------|----------|---------|
+| `80` / `443` | nginx (entry + SSL Let's Encrypt) | ✅ public |
+| `9000` | vps-agent control API | chỉ mở cho IP Hub |
+| 5001-5006, 8300, 5555, 8000, 8002, 8003, 8004, 1111, 2223 | downloader/extractor/gost | ❌ nội bộ docker, KHÔNG ra host |
 
-- **Zero-Config Setup**: Cài đặt VPS mới chỉ với 1 dòng lệnh.
-- **Auto-Discovery**: Tự động detect IP `103.45.67.89` -> subdomain `vps-103-45-67-89`.
-- **Auto-Config**: Tự động sinh password, secrets, proxy credentials.
-- **Remote Management**: Restart, Rebuild, xem Status từ Hub Dashboard.
-- **Hub-Based Config**: Lưu trữ config tập trung, update và đồng bộ xuống VPS.
-- **Smart Rate Limiting**: Limit băng thông theo Customer Tier (không phải Server Tier).
+→ Downloader gọi extractor/proxy qua tên service (`yt-extractor:8300`, `gost:1111`),
+không qua cổng host. nginx route theo prefix: `/`→yt, `/tik`,`/insta`,`/fb`,`/x`,`/uni`.
 
----
+## Yêu cầu VPS
+- Ubuntu 20.04/22.04 hoặc Debian 11+, quyền root.
+- RAM ≥ 8GB nếu chạy đủ 30 WARP (giảm WARP nếu VPS nhỏ).
+- **Cổng 80/443 phải trống** (nginx chạy trong docker — đừng cài nginx host song song).
+- DNS: `<subdomain>.<domain>` trỏ về IP VPS (Hub tự tạo nếu đã cấu hình Cloudflare).
 
-## 🛠 Cài Đặt (Quick Start)
-
-### 1. Yêu cầu VPS
-- OS: Ubuntu 20.04/22.04 hoặc Debian 11+
-- RAM: Tối thiểu 2GB
-- Disk: 20GB+ SSD
-- Port: Open 80, 443
-
-### 2. Setup (One-Liner)
-
-Chạy lệnh sau trên VPS mới (với quyền root):
-
+## Cài đặt (1 lệnh, trên VPS)
 ```bash
-curl -sSL https://hub.ytconvert.org/install.sh | \
-  HUB_URL=https://hub.ytconvert.org \
+curl -sSL https://<hub-domain>/downloads/install.sh | \
+  HUB_URL=https://<hub-domain> \
+  GIT_TOKEN=<github_token_đọc_repo> \
   bash
 ```
+- `GIT_TOKEN`: token GitHub có quyền **đọc** repo này (vì repo private).
+- Tùy chọn override: `GIT_REPO`, `GIT_BRANCH` (mặc định `main`), `PROJECT_DIR`.
 
-**Quá trình tự động:**
-1. Cài đặt Docker, Git.
-2. Download **VPS Agent**.
-3. Agent detect IP & Register với Hub.
-4. Agent generate file `.env` (tối ưu, ~25 variables).
-5. Agent build & deploy toàn bộ stack.
+Agent sẽ: cài Docker/Go → clone repo → đăng ký Hub → Hub trả config (đã inject
+Mongo/HUB_TOKEN/cookie) → sinh `.env` → build & deploy.
 
----
+## Cấu hình `.env`
+Xem `.env.example` để biết toàn bộ biến. Trên VPS file `.env` **do agent tự sinh**
+— đừng sửa tay (sẽ bị ghi đè khi deploy lại). Muốn đổi giá trị global
+(Mongo, HUB_TOKEN, cookie, email) thì sửa **env của Hub** rồi để agent nhận lại.
 
-## ⚙️ Quản Lý & Vận Hành
+Các biến chính: `BASE_DOMAIN`/`DOWNLOAD_SUBDOMAIN`, `WARP_*`, `SIGNED_URL_SECRET`,
+`MONGO_URI`/`MONGO_DB` (cookie pool), `HUB_TOKEN`, `FB/X_DEFAULT_COOKIE`, `TIER_CONFIG`.
 
-### Truy cập Hub Dashboard
-- URL: `https://hub.ytconvert.org:5005/admin`
-- Login: admin / (password)
-
-### Các thao tác trên Dashboard:
-1. **View Servers**: Xem danh sách VPS, trạng thái (Online/Offline), phiên bản.
-2. **Edit Config**: Chỉnh sửa thread, rate limit, credentials.
-   - Sau khi sửa, click **Restart** để áp dụng.
-3. **Restart VPS**: Trigger Agent restart service (tự động pull config mới).
-4. **Rebuild VPS**: Trigger Agent rebuild lại docker images (khi update code).
-
-### Kiểm tra Logs trên VPS
-
+## Vận hành
 ```bash
-# Xem log của Agent
-journalctl -u vps-agent -f
-
-# Xem log của Service
 cd /opt/yt-stack
-docker-compose logs -f yt-downloader
+docker compose ps
+docker compose logs -f yt-downloader
+journalctl -u vps-agent -f        # log agent
 ```
+Restart/Rebuild/Update từ **Hub Dashboard** (gọi agent control API :9000).
 
----
-
-## 🔧 Deep Dive: Configuration
-
-Hệ thống sử dụng cơ chế config tối ưu, loại bỏ các biến không cần thiết.
-
-### File `.env` (Auto-generated)
-Agent tự động sinh file này tại `/opt/yt-stack/.env`.
-
+## Chạy thử ít WARP (VPS nhỏ)
+Dùng `docker-compose.3warp.yml` (3 WARP thay vì 30):
 ```bash
-# Core Identity
-SERVER_IP=103.45.67.89
-SUBDOMAIN=vps-103-45-67-89
-PORT=5001
-
-# Proxy (Auto-generated credentials)
-WARP_USER=...
-WARP_PASS=...
-DIRECT_USER=...
-DIRECT_PASS=...
-
-# Limits & Features
-DOWNLOAD_THREADS=4
-MAX_FILE_SIZE_GB=5
-ENABLE_MERGE=true
-
-# Customer Tier Config (JSON)
-TIER_CONFIG={"0":{"threads":2,"rate":1048576},"1":{"threads":4,"rate":2097152}}
+docker compose -f docker-compose.3warp.yml up -d --build
 ```
 
-**Lưu ý:** Không chỉnh sửa thủ công `.env` trên VPS. Hãy sửa trên Hub Dashboard và restart VPS.
-
----
-
-## 🐛 Troubleshooting
-
-| Vấn đề | Kiểm tra |
-|--------|----------|
-| VPS không hiện trên Hub | Check log agent: `journalctl -u vps-agent` |
-| Service không start | Check docker: `docker-compose ps` |
-| Config không cập nhật | Restart VPS từ Dashboard (để trigger config pull) |
-| Download lỗi 403 | Check WARP/Proxy status |
-
----
-
-## 🔒 Security
-
-- **Agent Control API**: Port 9000 (Internal/Admin only).
-- **Service API**: Port 5001 (Internal/Behind Nginx).
-- **SSL**: Auto-provisioned bởi Nginx/Certbot.
-- **Proxy Auth**: Gost proxy protected by random credentials.
+## Bảo mật
+- Firewall: chỉ mở `80/443` công khai; `9000` chỉ cho IP Hub; chặn phần còn lại.
+- Đổi `HUB_TOKEN`, `SIGNED_URL_SECRET`, mật khẩu Mongo khỏi giá trị mặc định.
+- `.env` chứa secret → đã `.gitignore`, không commit.
