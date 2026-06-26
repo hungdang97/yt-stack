@@ -884,9 +884,6 @@ services:
         condition: service_healthy
       warp-30:
         condition: service_healthy
-    ports:
-      - "1111:1111" # WARP proxy (public, load balanced)
-      - "2223:2223" # Direct proxy (avoid SSH on 2222)
     environment:
       - WARP_USER=${WARP_USER}
       - WARP_PASS=${WARP_PASS}
@@ -906,8 +903,6 @@ services:
     image: yt-downloader:latest
     container_name: yt-downloader
     restart: always
-    ports:
-      - "5001:5001"
     env_file:
       - .env # Load all ~30 config variables
     volumes:
@@ -938,8 +933,6 @@ services:
     image: yt-extractor:latest
     container_name: yt-extractor
     restart: always
-    ports:
-      - "8300:8300" # Expose for external access
     environment:
       - PYTHONUNBUFFERED=1
       - MONGO_URI=${MONGO_URI}
@@ -962,8 +955,6 @@ services:
       dockerfile: Dockerfile.api
     container_name: tik-extractor
     restart: unless-stopped
-    ports:
-      - "5555:5555" # Expose TikTok API
     volumes:
       - tik_volume:/app/Volume
     logging:
@@ -983,8 +974,6 @@ services:
     image: tik-downloader:latest
     container_name: tik-downloader
     restart: always
-    ports:
-      - "5002:5002"
     environment:
       - PORT=5002
       - STORAGE_DIR=./storage
@@ -1028,8 +1017,6 @@ services:
     image: insta-extractor:latest
     container_name: insta-extractor
     restart: always
-    ports:
-      - "8000:8000"
     healthcheck:
       test: [ "CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8000/health')" ]
       interval: 30s
@@ -1053,8 +1040,6 @@ services:
     image: insta-downloader:latest
     container_name: insta-downloader
     restart: always
-    ports:
-      - "5003:5003"
     environment:
       - PORT=5003
       - STORAGE_DIR=./storage
@@ -1099,8 +1084,6 @@ services:
     image: fb-extractor:latest
     container_name: fb-extractor
     restart: always
-    ports:
-      - "8002:8002"
     healthcheck:
       test: [ "CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8002/health')" ]
       interval: 30s
@@ -1124,8 +1107,6 @@ services:
     image: fb-downloader:latest
     container_name: fb-downloader
     restart: always
-    ports:
-      - "5004:5004"
     environment:
       - PORT=5004
       - STORAGE_DIR=./storage
@@ -1168,8 +1149,6 @@ services:
     image: tw-extractor:latest
     container_name: tw-extractor
     restart: always
-    ports:
-      - "8003:8003"
     healthcheck:
       test: [ "CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8003/health')" ]
       interval: 30s
@@ -1193,8 +1172,6 @@ services:
     image: tw-downloader:latest
     container_name: tw-downloader
     restart: always
-    ports:
-      - "5005:5005"
     environment:
       - PORT=5005
       - STORAGE_DIR=./storage
@@ -1237,8 +1214,6 @@ services:
     image: uni-extractor:latest
     container_name: uni-extractor
     restart: always
-    ports:
-      - "8004:8004"
     healthcheck:
       test: [ "CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8004/health')" ]
       interval: 30s
@@ -1262,8 +1237,6 @@ services:
     image: uni-downloader:latest
     container_name: uni-downloader
     restart: always
-    ports:
-      - "5006:5006"
     environment:
       - PORT=5006
       - STORAGE_DIR=./storage
@@ -1297,8 +1270,31 @@ services:
     networks:
       - backend
 
-  # Nginx: disabled — using host nginx as reverse proxy
-  # See /etc/nginx/sites-enabled/ for vhost config
+  # Nginx reverse proxy + auto SSL (Let's Encrypt). Cổng PUBLIC duy nhất (80/443).
+  nginx:
+    build:
+      context: ./nginx
+    image: yt-nginx:latest
+    container_name: nginx
+    restart: always
+    ports:
+      - "80:80"
+      - "443:443"
+    environment:
+      - DOWNLOAD_DOMAIN=${DOWNLOAD_SUBDOMAIN}.${BASE_DOMAIN}
+      - EMAIL=${EMAIL}
+    volumes:
+      - letsencrypt:/etc/letsencrypt
+      - certbot_webroot:/var/www/certbot
+    depends_on:
+      - yt-downloader
+      - tik-downloader
+      - insta-downloader
+      - fb-downloader
+      - tw-downloader
+      - uni-downloader
+    networks:
+      - backend
 
 networks:
   backend:
@@ -1342,3 +1338,5 @@ volumes:
   fb_storage:
   tw_storage:
   uni_storage:
+  letsencrypt:
+  certbot_webroot:
