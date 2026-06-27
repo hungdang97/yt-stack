@@ -6,6 +6,7 @@ services:
   warp-1:
     image: caomingjun/warp:latest
     container_name: warp-1
+    mem_limit: 256m
     restart: always
     device_cgroup_rules:
       - 'c 10:200 rwm'
@@ -33,6 +34,7 @@ services:
   warp-2:
     image: caomingjun/warp:latest
     container_name: warp-2
+    mem_limit: 256m
     restart: always
     device_cgroup_rules:
       - 'c 10:200 rwm'
@@ -60,6 +62,7 @@ services:
   warp-3:
     image: caomingjun/warp:latest
     container_name: warp-3
+    mem_limit: 256m
     restart: always
     device_cgroup_rules:
       - 'c 10:200 rwm'
@@ -87,6 +90,7 @@ services:
   warp-4:
     image: caomingjun/warp:latest
     container_name: warp-4
+    mem_limit: 256m
     restart: always
     device_cgroup_rules:
       - 'c 10:200 rwm'
@@ -114,6 +118,7 @@ services:
   warp-5:
     image: caomingjun/warp:latest
     container_name: warp-5
+    mem_limit: 256m
     restart: always
     device_cgroup_rules:
       - 'c 10:200 rwm'
@@ -141,6 +146,7 @@ services:
   warp-6:
     image: caomingjun/warp:latest
     container_name: warp-6
+    mem_limit: 256m
     restart: always
     device_cgroup_rules:
       - 'c 10:200 rwm'
@@ -168,6 +174,7 @@ services:
   warp-7:
     image: caomingjun/warp:latest
     container_name: warp-7
+    mem_limit: 256m
     restart: always
     device_cgroup_rules:
       - 'c 10:200 rwm'
@@ -195,6 +202,7 @@ services:
   warp-8:
     image: caomingjun/warp:latest
     container_name: warp-8
+    mem_limit: 256m
     restart: always
     device_cgroup_rules:
       - 'c 10:200 rwm'
@@ -222,6 +230,7 @@ services:
   warp-9:
     image: caomingjun/warp:latest
     container_name: warp-9
+    mem_limit: 256m
     restart: always
     device_cgroup_rules:
       - 'c 10:200 rwm'
@@ -249,6 +258,7 @@ services:
   warp-10:
     image: caomingjun/warp:latest
     container_name: warp-10
+    mem_limit: 256m
     restart: always
     device_cgroup_rules:
       - 'c 10:200 rwm'
@@ -273,545 +283,545 @@ services:
     networks:
       - backend
 
-  warp-11:
-    image: caomingjun/warp:latest
-    container_name: warp-11
-    restart: always
-    device_cgroup_rules:
-      - 'c 10:200 rwm'
-    cap_add:
-      - NET_ADMIN
-      - MKNOD
-      - AUDIT_WRITE
-    sysctls:
-      - net.ipv6.conf.all.disable_ipv6=0
-      - net.ipv4.conf.all.src_valid_mark=1
-    volumes:
-      - warp_data_11:/var/lib/cloudflare-warp
-    environment:
-      - WARP_SLEEP=2
-      - GOST_ARGS=-L :40000
-    healthcheck:
-      test: [ "CMD", "curl", "-fsS", "--max-time", "10", "--socks5", "127.0.0.1:40000", "https://www.cloudflare.com/cdn-cgi/trace" ]
-      interval: 30s
-      timeout: 15s
-      retries: 3
-      start_period: 40s
-    networks:
-      - backend
-
-  warp-12:
-    image: caomingjun/warp:latest
-    container_name: warp-12
-    restart: always
-    device_cgroup_rules:
-      - 'c 10:200 rwm'
-    cap_add:
-      - NET_ADMIN
-      - MKNOD
-      - AUDIT_WRITE
-    sysctls:
-      - net.ipv6.conf.all.disable_ipv6=0
-      - net.ipv4.conf.all.src_valid_mark=1
-    volumes:
-      - warp_data_12:/var/lib/cloudflare-warp
-    environment:
-      - WARP_SLEEP=2
-      - GOST_ARGS=-L :40000
-    healthcheck:
-      test: [ "CMD", "curl", "-fsS", "--max-time", "10", "--socks5", "127.0.0.1:40000", "https://www.cloudflare.com/cdn-cgi/trace" ]
-      interval: 30s
-      timeout: 15s
-      retries: 3
-      start_period: 40s
-    networks:
-      - backend
-
-  warp-13:
-    image: caomingjun/warp:latest
-    container_name: warp-13
-    restart: always
-    device_cgroup_rules:
-      - 'c 10:200 rwm'
-    cap_add:
-      - NET_ADMIN
-      - MKNOD
-      - AUDIT_WRITE
-    sysctls:
-      - net.ipv6.conf.all.disable_ipv6=0
-      - net.ipv4.conf.all.src_valid_mark=1
-    volumes:
-      - warp_data_13:/var/lib/cloudflare-warp
-    environment:
-      - WARP_SLEEP=2
-      - GOST_ARGS=-L :40000
-    healthcheck:
-      test: [ "CMD", "curl", "-fsS", "--max-time", "10", "--socks5", "127.0.0.1:40000", "https://www.cloudflare.com/cdn-cgi/trace" ]
-      interval: 30s
-      timeout: 15s
-      retries: 3
-      start_period: 40s
-    networks:
-      - backend
-
-  warp-14:
-    image: caomingjun/warp:latest
-    container_name: warp-14
-    restart: always
-    device_cgroup_rules:
-      - 'c 10:200 rwm'
-    cap_add:
-      - NET_ADMIN
-      - MKNOD
-      - AUDIT_WRITE
-    sysctls:
-      - net.ipv6.conf.all.disable_ipv6=0
-      - net.ipv4.conf.all.src_valid_mark=1
-    volumes:
-      - warp_data_14:/var/lib/cloudflare-warp
-    environment:
-      - WARP_SLEEP=2
-      - GOST_ARGS=-L :40000
-    healthcheck:
-      test: [ "CMD", "curl", "-fsS", "--max-time", "10", "--socks5", "127.0.0.1:40000", "https://www.cloudflare.com/cdn-cgi/trace" ]
-      interval: 30s
-      timeout: 15s
-      retries: 3
-      start_period: 40s
-    networks:
-      - backend
-
-  warp-15:
-    image: caomingjun/warp:latest
-    container_name: warp-15
-    restart: always
-    device_cgroup_rules:
-      - 'c 10:200 rwm'
-    cap_add:
-      - NET_ADMIN
-      - MKNOD
-      - AUDIT_WRITE
-    sysctls:
-      - net.ipv6.conf.all.disable_ipv6=0
-      - net.ipv4.conf.all.src_valid_mark=1
-    volumes:
-      - warp_data_15:/var/lib/cloudflare-warp
-    environment:
-      - WARP_SLEEP=2
-      - GOST_ARGS=-L :40000
-    healthcheck:
-      test: [ "CMD", "curl", "-fsS", "--max-time", "10", "--socks5", "127.0.0.1:40000", "https://www.cloudflare.com/cdn-cgi/trace" ]
-      interval: 30s
-      timeout: 15s
-      retries: 3
-      start_period: 40s
-    networks:
-      - backend
-
-  warp-16:
-    image: caomingjun/warp:latest
-    container_name: warp-16
-    restart: always
-    device_cgroup_rules:
-      - 'c 10:200 rwm'
-    cap_add:
-      - NET_ADMIN
-      - MKNOD
-      - AUDIT_WRITE
-    sysctls:
-      - net.ipv6.conf.all.disable_ipv6=0
-      - net.ipv4.conf.all.src_valid_mark=1
-    volumes:
-      - warp_data_16:/var/lib/cloudflare-warp
-    environment:
-      - WARP_SLEEP=2
-      - GOST_ARGS=-L :40000
-    healthcheck:
-      test: [ "CMD", "curl", "-fsS", "--max-time", "10", "--socks5", "127.0.0.1:40000", "https://www.cloudflare.com/cdn-cgi/trace" ]
-      interval: 30s
-      timeout: 15s
-      retries: 3
-      start_period: 40s
-    networks:
-      - backend
-
-  warp-17:
-    image: caomingjun/warp:latest
-    container_name: warp-17
-    restart: always
-    device_cgroup_rules:
-      - 'c 10:200 rwm'
-    cap_add:
-      - NET_ADMIN
-      - MKNOD
-      - AUDIT_WRITE
-    sysctls:
-      - net.ipv6.conf.all.disable_ipv6=0
-      - net.ipv4.conf.all.src_valid_mark=1
-    volumes:
-      - warp_data_17:/var/lib/cloudflare-warp
-    environment:
-      - WARP_SLEEP=2
-      - GOST_ARGS=-L :40000
-    healthcheck:
-      test: [ "CMD", "curl", "-fsS", "--max-time", "10", "--socks5", "127.0.0.1:40000", "https://www.cloudflare.com/cdn-cgi/trace" ]
-      interval: 30s
-      timeout: 15s
-      retries: 3
-      start_period: 40s
-    networks:
-      - backend
-
-  warp-18:
-    image: caomingjun/warp:latest
-    container_name: warp-18
-    restart: always
-    device_cgroup_rules:
-      - 'c 10:200 rwm'
-    cap_add:
-      - NET_ADMIN
-      - MKNOD
-      - AUDIT_WRITE
-    sysctls:
-      - net.ipv6.conf.all.disable_ipv6=0
-      - net.ipv4.conf.all.src_valid_mark=1
-    volumes:
-      - warp_data_18:/var/lib/cloudflare-warp
-    environment:
-      - WARP_SLEEP=2
-      - GOST_ARGS=-L :40000
-    healthcheck:
-      test: [ "CMD", "curl", "-fsS", "--max-time", "10", "--socks5", "127.0.0.1:40000", "https://www.cloudflare.com/cdn-cgi/trace" ]
-      interval: 30s
-      timeout: 15s
-      retries: 3
-      start_period: 40s
-    networks:
-      - backend
-
-  warp-19:
-    image: caomingjun/warp:latest
-    container_name: warp-19
-    restart: always
-    device_cgroup_rules:
-      - 'c 10:200 rwm'
-    cap_add:
-      - NET_ADMIN
-      - MKNOD
-      - AUDIT_WRITE
-    sysctls:
-      - net.ipv6.conf.all.disable_ipv6=0
-      - net.ipv4.conf.all.src_valid_mark=1
-    volumes:
-      - warp_data_19:/var/lib/cloudflare-warp
-    environment:
-      - WARP_SLEEP=2
-      - GOST_ARGS=-L :40000
-    healthcheck:
-      test: [ "CMD", "curl", "-fsS", "--max-time", "10", "--socks5", "127.0.0.1:40000", "https://www.cloudflare.com/cdn-cgi/trace" ]
-      interval: 30s
-      timeout: 15s
-      retries: 3
-      start_period: 40s
-    networks:
-      - backend
-
-  warp-20:
-    image: caomingjun/warp:latest
-    container_name: warp-20
-    restart: always
-    device_cgroup_rules:
-      - 'c 10:200 rwm'
-    cap_add:
-      - NET_ADMIN
-      - MKNOD
-      - AUDIT_WRITE
-    sysctls:
-      - net.ipv6.conf.all.disable_ipv6=0
-      - net.ipv4.conf.all.src_valid_mark=1
-    volumes:
-      - warp_data_20:/var/lib/cloudflare-warp
-    environment:
-      - WARP_SLEEP=2
-      - GOST_ARGS=-L :40000
-    healthcheck:
-      test: [ "CMD", "curl", "-fsS", "--max-time", "10", "--socks5", "127.0.0.1:40000", "https://www.cloudflare.com/cdn-cgi/trace" ]
-      interval: 30s
-      timeout: 15s
-      retries: 3
-      start_period: 40s
-    networks:
-      - backend
-
-  warp-21:
-    image: caomingjun/warp:latest
-    container_name: warp-21
-    restart: always
-    device_cgroup_rules:
-      - 'c 10:200 rwm'
-    cap_add:
-      - NET_ADMIN
-      - MKNOD
-      - AUDIT_WRITE
-    sysctls:
-      - net.ipv6.conf.all.disable_ipv6=0
-      - net.ipv4.conf.all.src_valid_mark=1
-    volumes:
-      - warp_data_21:/var/lib/cloudflare-warp
-    environment:
-      - WARP_SLEEP=2
-      - GOST_ARGS=-L :40000
-    healthcheck:
-      test: [ "CMD", "curl", "-fsS", "--max-time", "10", "--socks5", "127.0.0.1:40000", "https://www.cloudflare.com/cdn-cgi/trace" ]
-      interval: 30s
-      timeout: 15s
-      retries: 3
-      start_period: 40s
-    networks:
-      - backend
-
-  warp-22:
-    image: caomingjun/warp:latest
-    container_name: warp-22
-    restart: always
-    device_cgroup_rules:
-      - 'c 10:200 rwm'
-    cap_add:
-      - NET_ADMIN
-      - MKNOD
-      - AUDIT_WRITE
-    sysctls:
-      - net.ipv6.conf.all.disable_ipv6=0
-      - net.ipv4.conf.all.src_valid_mark=1
-    volumes:
-      - warp_data_22:/var/lib/cloudflare-warp
-    environment:
-      - WARP_SLEEP=2
-      - GOST_ARGS=-L :40000
-    healthcheck:
-      test: [ "CMD", "curl", "-fsS", "--max-time", "10", "--socks5", "127.0.0.1:40000", "https://www.cloudflare.com/cdn-cgi/trace" ]
-      interval: 30s
-      timeout: 15s
-      retries: 3
-      start_period: 40s
-    networks:
-      - backend
-
-  warp-23:
-    image: caomingjun/warp:latest
-    container_name: warp-23
-    restart: always
-    device_cgroup_rules:
-      - 'c 10:200 rwm'
-    cap_add:
-      - NET_ADMIN
-      - MKNOD
-      - AUDIT_WRITE
-    sysctls:
-      - net.ipv6.conf.all.disable_ipv6=0
-      - net.ipv4.conf.all.src_valid_mark=1
-    volumes:
-      - warp_data_23:/var/lib/cloudflare-warp
-    environment:
-      - WARP_SLEEP=2
-      - GOST_ARGS=-L :40000
-    healthcheck:
-      test: [ "CMD", "curl", "-fsS", "--max-time", "10", "--socks5", "127.0.0.1:40000", "https://www.cloudflare.com/cdn-cgi/trace" ]
-      interval: 30s
-      timeout: 15s
-      retries: 3
-      start_period: 40s
-    networks:
-      - backend
-
-  warp-24:
-    image: caomingjun/warp:latest
-    container_name: warp-24
-    restart: always
-    device_cgroup_rules:
-      - 'c 10:200 rwm'
-    cap_add:
-      - NET_ADMIN
-      - MKNOD
-      - AUDIT_WRITE
-    sysctls:
-      - net.ipv6.conf.all.disable_ipv6=0
-      - net.ipv4.conf.all.src_valid_mark=1
-    volumes:
-      - warp_data_24:/var/lib/cloudflare-warp
-    environment:
-      - WARP_SLEEP=2
-      - GOST_ARGS=-L :40000
-    healthcheck:
-      test: [ "CMD", "curl", "-fsS", "--max-time", "10", "--socks5", "127.0.0.1:40000", "https://www.cloudflare.com/cdn-cgi/trace" ]
-      interval: 30s
-      timeout: 15s
-      retries: 3
-      start_period: 40s
-    networks:
-      - backend
-
-  warp-25:
-    image: caomingjun/warp:latest
-    container_name: warp-25
-    restart: always
-    device_cgroup_rules:
-      - 'c 10:200 rwm'
-    cap_add:
-      - NET_ADMIN
-      - MKNOD
-      - AUDIT_WRITE
-    sysctls:
-      - net.ipv6.conf.all.disable_ipv6=0
-      - net.ipv4.conf.all.src_valid_mark=1
-    volumes:
-      - warp_data_25:/var/lib/cloudflare-warp
-    environment:
-      - WARP_SLEEP=2
-      - GOST_ARGS=-L :40000
-    healthcheck:
-      test: [ "CMD", "curl", "-fsS", "--max-time", "10", "--socks5", "127.0.0.1:40000", "https://www.cloudflare.com/cdn-cgi/trace" ]
-      interval: 30s
-      timeout: 15s
-      retries: 3
-      start_period: 40s
-    networks:
-      - backend
-
-  warp-26:
-    image: caomingjun/warp:latest
-    container_name: warp-26
-    restart: always
-    device_cgroup_rules:
-      - 'c 10:200 rwm'
-    cap_add:
-      - NET_ADMIN
-      - MKNOD
-      - AUDIT_WRITE
-    sysctls:
-      - net.ipv6.conf.all.disable_ipv6=0
-      - net.ipv4.conf.all.src_valid_mark=1
-    volumes:
-      - warp_data_26:/var/lib/cloudflare-warp
-    environment:
-      - WARP_SLEEP=2
-      - GOST_ARGS=-L :40000
-    healthcheck:
-      test: [ "CMD", "curl", "-fsS", "--max-time", "10", "--socks5", "127.0.0.1:40000", "https://www.cloudflare.com/cdn-cgi/trace" ]
-      interval: 30s
-      timeout: 15s
-      retries: 3
-      start_period: 40s
-    networks:
-      - backend
-
-  warp-27:
-    image: caomingjun/warp:latest
-    container_name: warp-27
-    restart: always
-    device_cgroup_rules:
-      - 'c 10:200 rwm'
-    cap_add:
-      - NET_ADMIN
-      - MKNOD
-      - AUDIT_WRITE
-    sysctls:
-      - net.ipv6.conf.all.disable_ipv6=0
-      - net.ipv4.conf.all.src_valid_mark=1
-    volumes:
-      - warp_data_27:/var/lib/cloudflare-warp
-    environment:
-      - WARP_SLEEP=2
-      - GOST_ARGS=-L :40000
-    healthcheck:
-      test: [ "CMD", "curl", "-fsS", "--max-time", "10", "--socks5", "127.0.0.1:40000", "https://www.cloudflare.com/cdn-cgi/trace" ]
-      interval: 30s
-      timeout: 15s
-      retries: 3
-      start_period: 40s
-    networks:
-      - backend
-
-  warp-28:
-    image: caomingjun/warp:latest
-    container_name: warp-28
-    restart: always
-    device_cgroup_rules:
-      - 'c 10:200 rwm'
-    cap_add:
-      - NET_ADMIN
-      - MKNOD
-      - AUDIT_WRITE
-    sysctls:
-      - net.ipv6.conf.all.disable_ipv6=0
-      - net.ipv4.conf.all.src_valid_mark=1
-    volumes:
-      - warp_data_28:/var/lib/cloudflare-warp
-    environment:
-      - WARP_SLEEP=2
-      - GOST_ARGS=-L :40000
-    healthcheck:
-      test: [ "CMD", "curl", "-fsS", "--max-time", "10", "--socks5", "127.0.0.1:40000", "https://www.cloudflare.com/cdn-cgi/trace" ]
-      interval: 30s
-      timeout: 15s
-      retries: 3
-      start_period: 40s
-    networks:
-      - backend
-
-  warp-29:
-    image: caomingjun/warp:latest
-    container_name: warp-29
-    restart: always
-    device_cgroup_rules:
-      - 'c 10:200 rwm'
-    cap_add:
-      - NET_ADMIN
-      - MKNOD
-      - AUDIT_WRITE
-    sysctls:
-      - net.ipv6.conf.all.disable_ipv6=0
-      - net.ipv4.conf.all.src_valid_mark=1
-    volumes:
-      - warp_data_29:/var/lib/cloudflare-warp
-    environment:
-      - WARP_SLEEP=2
-      - GOST_ARGS=-L :40000
-    healthcheck:
-      test: [ "CMD", "curl", "-fsS", "--max-time", "10", "--socks5", "127.0.0.1:40000", "https://www.cloudflare.com/cdn-cgi/trace" ]
-      interval: 30s
-      timeout: 15s
-      retries: 3
-      start_period: 40s
-    networks:
-      - backend
-
-  warp-30:
-    image: caomingjun/warp:latest
-    container_name: warp-30
-    restart: always
-    device_cgroup_rules:
-      - 'c 10:200 rwm'
-    cap_add:
-      - NET_ADMIN
-      - MKNOD
-      - AUDIT_WRITE
-    sysctls:
-      - net.ipv6.conf.all.disable_ipv6=0
-      - net.ipv4.conf.all.src_valid_mark=1
-    volumes:
-      - warp_data_30:/var/lib/cloudflare-warp
-    environment:
-      - WARP_SLEEP=2
-      - GOST_ARGS=-L :40000
-    healthcheck:
-      test: [ "CMD", "curl", "-fsS", "--max-time", "10", "--socks5", "127.0.0.1:40000", "https://www.cloudflare.com/cdn-cgi/trace" ]
-      interval: 30s
-      timeout: 15s
-      retries: 3
-      start_period: 40s
-    networks:
-      - backend
+#  warp-11:
+#    image: caomingjun/warp:latest
+#    container_name: warp-11
+#    restart: always
+#    device_cgroup_rules:
+#      - 'c 10:200 rwm'
+#    cap_add:
+#      - NET_ADMIN
+#      - MKNOD
+#      - AUDIT_WRITE
+#    sysctls:
+#      - net.ipv6.conf.all.disable_ipv6=0
+#      - net.ipv4.conf.all.src_valid_mark=1
+#    volumes:
+#      - warp_data_11:/var/lib/cloudflare-warp
+#    environment:
+#      - WARP_SLEEP=2
+#      - GOST_ARGS=-L :40000
+#    healthcheck:
+#      test: [ "CMD", "curl", "-fsS", "--max-time", "10", "--socks5", "127.0.0.1:40000", "https://www.cloudflare.com/cdn-cgi/trace" ]
+#      interval: 30s
+#      timeout: 15s
+#      retries: 3
+#      start_period: 40s
+#    networks:
+#      - backend
+#
+#  warp-12:
+#    image: caomingjun/warp:latest
+#    container_name: warp-12
+#    restart: always
+#    device_cgroup_rules:
+#      - 'c 10:200 rwm'
+#    cap_add:
+#      - NET_ADMIN
+#      - MKNOD
+#      - AUDIT_WRITE
+#    sysctls:
+#      - net.ipv6.conf.all.disable_ipv6=0
+#      - net.ipv4.conf.all.src_valid_mark=1
+#    volumes:
+#      - warp_data_12:/var/lib/cloudflare-warp
+#    environment:
+#      - WARP_SLEEP=2
+#      - GOST_ARGS=-L :40000
+#    healthcheck:
+#      test: [ "CMD", "curl", "-fsS", "--max-time", "10", "--socks5", "127.0.0.1:40000", "https://www.cloudflare.com/cdn-cgi/trace" ]
+#      interval: 30s
+#      timeout: 15s
+#      retries: 3
+#      start_period: 40s
+#    networks:
+#      - backend
+#
+#  warp-13:
+#    image: caomingjun/warp:latest
+#    container_name: warp-13
+#    restart: always
+#    device_cgroup_rules:
+#      - 'c 10:200 rwm'
+#    cap_add:
+#      - NET_ADMIN
+#      - MKNOD
+#      - AUDIT_WRITE
+#    sysctls:
+#      - net.ipv6.conf.all.disable_ipv6=0
+#      - net.ipv4.conf.all.src_valid_mark=1
+#    volumes:
+#      - warp_data_13:/var/lib/cloudflare-warp
+#    environment:
+#      - WARP_SLEEP=2
+#      - GOST_ARGS=-L :40000
+#    healthcheck:
+#      test: [ "CMD", "curl", "-fsS", "--max-time", "10", "--socks5", "127.0.0.1:40000", "https://www.cloudflare.com/cdn-cgi/trace" ]
+#      interval: 30s
+#      timeout: 15s
+#      retries: 3
+#      start_period: 40s
+#    networks:
+#      - backend
+#
+#  warp-14:
+#    image: caomingjun/warp:latest
+#    container_name: warp-14
+#    restart: always
+#    device_cgroup_rules:
+#      - 'c 10:200 rwm'
+#    cap_add:
+#      - NET_ADMIN
+#      - MKNOD
+#      - AUDIT_WRITE
+#    sysctls:
+#      - net.ipv6.conf.all.disable_ipv6=0
+#      - net.ipv4.conf.all.src_valid_mark=1
+#    volumes:
+#      - warp_data_14:/var/lib/cloudflare-warp
+#    environment:
+#      - WARP_SLEEP=2
+#      - GOST_ARGS=-L :40000
+#    healthcheck:
+#      test: [ "CMD", "curl", "-fsS", "--max-time", "10", "--socks5", "127.0.0.1:40000", "https://www.cloudflare.com/cdn-cgi/trace" ]
+#      interval: 30s
+#      timeout: 15s
+#      retries: 3
+#      start_period: 40s
+#    networks:
+#      - backend
+#
+#  warp-15:
+#    image: caomingjun/warp:latest
+#    container_name: warp-15
+#    restart: always
+#    device_cgroup_rules:
+#      - 'c 10:200 rwm'
+#    cap_add:
+#      - NET_ADMIN
+#      - MKNOD
+#      - AUDIT_WRITE
+#    sysctls:
+#      - net.ipv6.conf.all.disable_ipv6=0
+#      - net.ipv4.conf.all.src_valid_mark=1
+#    volumes:
+#      - warp_data_15:/var/lib/cloudflare-warp
+#    environment:
+#      - WARP_SLEEP=2
+#      - GOST_ARGS=-L :40000
+#    healthcheck:
+#      test: [ "CMD", "curl", "-fsS", "--max-time", "10", "--socks5", "127.0.0.1:40000", "https://www.cloudflare.com/cdn-cgi/trace" ]
+#      interval: 30s
+#      timeout: 15s
+#      retries: 3
+#      start_period: 40s
+#    networks:
+#      - backend
+#
+#  warp-16:
+#    image: caomingjun/warp:latest
+#    container_name: warp-16
+#    restart: always
+#    device_cgroup_rules:
+#      - 'c 10:200 rwm'
+#    cap_add:
+#      - NET_ADMIN
+#      - MKNOD
+#      - AUDIT_WRITE
+#    sysctls:
+#      - net.ipv6.conf.all.disable_ipv6=0
+#      - net.ipv4.conf.all.src_valid_mark=1
+#    volumes:
+#      - warp_data_16:/var/lib/cloudflare-warp
+#    environment:
+#      - WARP_SLEEP=2
+#      - GOST_ARGS=-L :40000
+#    healthcheck:
+#      test: [ "CMD", "curl", "-fsS", "--max-time", "10", "--socks5", "127.0.0.1:40000", "https://www.cloudflare.com/cdn-cgi/trace" ]
+#      interval: 30s
+#      timeout: 15s
+#      retries: 3
+#      start_period: 40s
+#    networks:
+#      - backend
+#
+#  warp-17:
+#    image: caomingjun/warp:latest
+#    container_name: warp-17
+#    restart: always
+#    device_cgroup_rules:
+#      - 'c 10:200 rwm'
+#    cap_add:
+#      - NET_ADMIN
+#      - MKNOD
+#      - AUDIT_WRITE
+#    sysctls:
+#      - net.ipv6.conf.all.disable_ipv6=0
+#      - net.ipv4.conf.all.src_valid_mark=1
+#    volumes:
+#      - warp_data_17:/var/lib/cloudflare-warp
+#    environment:
+#      - WARP_SLEEP=2
+#      - GOST_ARGS=-L :40000
+#    healthcheck:
+#      test: [ "CMD", "curl", "-fsS", "--max-time", "10", "--socks5", "127.0.0.1:40000", "https://www.cloudflare.com/cdn-cgi/trace" ]
+#      interval: 30s
+#      timeout: 15s
+#      retries: 3
+#      start_period: 40s
+#    networks:
+#      - backend
+#
+#  warp-18:
+#    image: caomingjun/warp:latest
+#    container_name: warp-18
+#    restart: always
+#    device_cgroup_rules:
+#      - 'c 10:200 rwm'
+#    cap_add:
+#      - NET_ADMIN
+#      - MKNOD
+#      - AUDIT_WRITE
+#    sysctls:
+#      - net.ipv6.conf.all.disable_ipv6=0
+#      - net.ipv4.conf.all.src_valid_mark=1
+#    volumes:
+#      - warp_data_18:/var/lib/cloudflare-warp
+#    environment:
+#      - WARP_SLEEP=2
+#      - GOST_ARGS=-L :40000
+#    healthcheck:
+#      test: [ "CMD", "curl", "-fsS", "--max-time", "10", "--socks5", "127.0.0.1:40000", "https://www.cloudflare.com/cdn-cgi/trace" ]
+#      interval: 30s
+#      timeout: 15s
+#      retries: 3
+#      start_period: 40s
+#    networks:
+#      - backend
+#
+#  warp-19:
+#    image: caomingjun/warp:latest
+#    container_name: warp-19
+#    restart: always
+#    device_cgroup_rules:
+#      - 'c 10:200 rwm'
+#    cap_add:
+#      - NET_ADMIN
+#      - MKNOD
+#      - AUDIT_WRITE
+#    sysctls:
+#      - net.ipv6.conf.all.disable_ipv6=0
+#      - net.ipv4.conf.all.src_valid_mark=1
+#    volumes:
+#      - warp_data_19:/var/lib/cloudflare-warp
+#    environment:
+#      - WARP_SLEEP=2
+#      - GOST_ARGS=-L :40000
+#    healthcheck:
+#      test: [ "CMD", "curl", "-fsS", "--max-time", "10", "--socks5", "127.0.0.1:40000", "https://www.cloudflare.com/cdn-cgi/trace" ]
+#      interval: 30s
+#      timeout: 15s
+#      retries: 3
+#      start_period: 40s
+#    networks:
+#      - backend
+#
+#  warp-20:
+#    image: caomingjun/warp:latest
+#    container_name: warp-20
+#    restart: always
+#    device_cgroup_rules:
+#      - 'c 10:200 rwm'
+#    cap_add:
+#      - NET_ADMIN
+#      - MKNOD
+#      - AUDIT_WRITE
+#    sysctls:
+#      - net.ipv6.conf.all.disable_ipv6=0
+#      - net.ipv4.conf.all.src_valid_mark=1
+#    volumes:
+#      - warp_data_20:/var/lib/cloudflare-warp
+#    environment:
+#      - WARP_SLEEP=2
+#      - GOST_ARGS=-L :40000
+#    healthcheck:
+#      test: [ "CMD", "curl", "-fsS", "--max-time", "10", "--socks5", "127.0.0.1:40000", "https://www.cloudflare.com/cdn-cgi/trace" ]
+#      interval: 30s
+#      timeout: 15s
+#      retries: 3
+#      start_period: 40s
+#    networks:
+#      - backend
+#
+#  warp-21:
+#    image: caomingjun/warp:latest
+#    container_name: warp-21
+#    restart: always
+#    device_cgroup_rules:
+#      - 'c 10:200 rwm'
+#    cap_add:
+#      - NET_ADMIN
+#      - MKNOD
+#      - AUDIT_WRITE
+#    sysctls:
+#      - net.ipv6.conf.all.disable_ipv6=0
+#      - net.ipv4.conf.all.src_valid_mark=1
+#    volumes:
+#      - warp_data_21:/var/lib/cloudflare-warp
+#    environment:
+#      - WARP_SLEEP=2
+#      - GOST_ARGS=-L :40000
+#    healthcheck:
+#      test: [ "CMD", "curl", "-fsS", "--max-time", "10", "--socks5", "127.0.0.1:40000", "https://www.cloudflare.com/cdn-cgi/trace" ]
+#      interval: 30s
+#      timeout: 15s
+#      retries: 3
+#      start_period: 40s
+#    networks:
+#      - backend
+#
+#  warp-22:
+#    image: caomingjun/warp:latest
+#    container_name: warp-22
+#    restart: always
+#    device_cgroup_rules:
+#      - 'c 10:200 rwm'
+#    cap_add:
+#      - NET_ADMIN
+#      - MKNOD
+#      - AUDIT_WRITE
+#    sysctls:
+#      - net.ipv6.conf.all.disable_ipv6=0
+#      - net.ipv4.conf.all.src_valid_mark=1
+#    volumes:
+#      - warp_data_22:/var/lib/cloudflare-warp
+#    environment:
+#      - WARP_SLEEP=2
+#      - GOST_ARGS=-L :40000
+#    healthcheck:
+#      test: [ "CMD", "curl", "-fsS", "--max-time", "10", "--socks5", "127.0.0.1:40000", "https://www.cloudflare.com/cdn-cgi/trace" ]
+#      interval: 30s
+#      timeout: 15s
+#      retries: 3
+#      start_period: 40s
+#    networks:
+#      - backend
+#
+#  warp-23:
+#    image: caomingjun/warp:latest
+#    container_name: warp-23
+#    restart: always
+#    device_cgroup_rules:
+#      - 'c 10:200 rwm'
+#    cap_add:
+#      - NET_ADMIN
+#      - MKNOD
+#      - AUDIT_WRITE
+#    sysctls:
+#      - net.ipv6.conf.all.disable_ipv6=0
+#      - net.ipv4.conf.all.src_valid_mark=1
+#    volumes:
+#      - warp_data_23:/var/lib/cloudflare-warp
+#    environment:
+#      - WARP_SLEEP=2
+#      - GOST_ARGS=-L :40000
+#    healthcheck:
+#      test: [ "CMD", "curl", "-fsS", "--max-time", "10", "--socks5", "127.0.0.1:40000", "https://www.cloudflare.com/cdn-cgi/trace" ]
+#      interval: 30s
+#      timeout: 15s
+#      retries: 3
+#      start_period: 40s
+#    networks:
+#      - backend
+#
+#  warp-24:
+#    image: caomingjun/warp:latest
+#    container_name: warp-24
+#    restart: always
+#    device_cgroup_rules:
+#      - 'c 10:200 rwm'
+#    cap_add:
+#      - NET_ADMIN
+#      - MKNOD
+#      - AUDIT_WRITE
+#    sysctls:
+#      - net.ipv6.conf.all.disable_ipv6=0
+#      - net.ipv4.conf.all.src_valid_mark=1
+#    volumes:
+#      - warp_data_24:/var/lib/cloudflare-warp
+#    environment:
+#      - WARP_SLEEP=2
+#      - GOST_ARGS=-L :40000
+#    healthcheck:
+#      test: [ "CMD", "curl", "-fsS", "--max-time", "10", "--socks5", "127.0.0.1:40000", "https://www.cloudflare.com/cdn-cgi/trace" ]
+#      interval: 30s
+#      timeout: 15s
+#      retries: 3
+#      start_period: 40s
+#    networks:
+#      - backend
+#
+#  warp-25:
+#    image: caomingjun/warp:latest
+#    container_name: warp-25
+#    restart: always
+#    device_cgroup_rules:
+#      - 'c 10:200 rwm'
+#    cap_add:
+#      - NET_ADMIN
+#      - MKNOD
+#      - AUDIT_WRITE
+#    sysctls:
+#      - net.ipv6.conf.all.disable_ipv6=0
+#      - net.ipv4.conf.all.src_valid_mark=1
+#    volumes:
+#      - warp_data_25:/var/lib/cloudflare-warp
+#    environment:
+#      - WARP_SLEEP=2
+#      - GOST_ARGS=-L :40000
+#    healthcheck:
+#      test: [ "CMD", "curl", "-fsS", "--max-time", "10", "--socks5", "127.0.0.1:40000", "https://www.cloudflare.com/cdn-cgi/trace" ]
+#      interval: 30s
+#      timeout: 15s
+#      retries: 3
+#      start_period: 40s
+#    networks:
+#      - backend
+#
+#  warp-26:
+#    image: caomingjun/warp:latest
+#    container_name: warp-26
+#    restart: always
+#    device_cgroup_rules:
+#      - 'c 10:200 rwm'
+#    cap_add:
+#      - NET_ADMIN
+#      - MKNOD
+#      - AUDIT_WRITE
+#    sysctls:
+#      - net.ipv6.conf.all.disable_ipv6=0
+#      - net.ipv4.conf.all.src_valid_mark=1
+#    volumes:
+#      - warp_data_26:/var/lib/cloudflare-warp
+#    environment:
+#      - WARP_SLEEP=2
+#      - GOST_ARGS=-L :40000
+#    healthcheck:
+#      test: [ "CMD", "curl", "-fsS", "--max-time", "10", "--socks5", "127.0.0.1:40000", "https://www.cloudflare.com/cdn-cgi/trace" ]
+#      interval: 30s
+#      timeout: 15s
+#      retries: 3
+#      start_period: 40s
+#    networks:
+#      - backend
+#
+#  warp-27:
+#    image: caomingjun/warp:latest
+#    container_name: warp-27
+#    restart: always
+#    device_cgroup_rules:
+#      - 'c 10:200 rwm'
+#    cap_add:
+#      - NET_ADMIN
+#      - MKNOD
+#      - AUDIT_WRITE
+#    sysctls:
+#      - net.ipv6.conf.all.disable_ipv6=0
+#      - net.ipv4.conf.all.src_valid_mark=1
+#    volumes:
+#      - warp_data_27:/var/lib/cloudflare-warp
+#    environment:
+#      - WARP_SLEEP=2
+#      - GOST_ARGS=-L :40000
+#    healthcheck:
+#      test: [ "CMD", "curl", "-fsS", "--max-time", "10", "--socks5", "127.0.0.1:40000", "https://www.cloudflare.com/cdn-cgi/trace" ]
+#      interval: 30s
+#      timeout: 15s
+#      retries: 3
+#      start_period: 40s
+#    networks:
+#      - backend
+#
+#  warp-28:
+#    image: caomingjun/warp:latest
+#    container_name: warp-28
+#    restart: always
+#    device_cgroup_rules:
+#      - 'c 10:200 rwm'
+#    cap_add:
+#      - NET_ADMIN
+#      - MKNOD
+#      - AUDIT_WRITE
+#    sysctls:
+#      - net.ipv6.conf.all.disable_ipv6=0
+#      - net.ipv4.conf.all.src_valid_mark=1
+#    volumes:
+#      - warp_data_28:/var/lib/cloudflare-warp
+#    environment:
+#      - WARP_SLEEP=2
+#      - GOST_ARGS=-L :40000
+#    healthcheck:
+#      test: [ "CMD", "curl", "-fsS", "--max-time", "10", "--socks5", "127.0.0.1:40000", "https://www.cloudflare.com/cdn-cgi/trace" ]
+#      interval: 30s
+#      timeout: 15s
+#      retries: 3
+#      start_period: 40s
+#    networks:
+#      - backend
+#
+#  warp-29:
+#    image: caomingjun/warp:latest
+#    container_name: warp-29
+#    restart: always
+#    device_cgroup_rules:
+#      - 'c 10:200 rwm'
+#    cap_add:
+#      - NET_ADMIN
+#      - MKNOD
+#      - AUDIT_WRITE
+#    sysctls:
+#      - net.ipv6.conf.all.disable_ipv6=0
+#      - net.ipv4.conf.all.src_valid_mark=1
+#    volumes:
+#      - warp_data_29:/var/lib/cloudflare-warp
+#    environment:
+#      - WARP_SLEEP=2
+#      - GOST_ARGS=-L :40000
+#    healthcheck:
+#      test: [ "CMD", "curl", "-fsS", "--max-time", "10", "--socks5", "127.0.0.1:40000", "https://www.cloudflare.com/cdn-cgi/trace" ]
+#      interval: 30s
+#      timeout: 15s
+#      retries: 3
+#      start_period: 40s
+#    networks:
+#      - backend
+#
+#  warp-30:
+#    image: caomingjun/warp:latest
+#    container_name: warp-30
+#    restart: always
+#    device_cgroup_rules:
+#      - 'c 10:200 rwm'
+#    cap_add:
+#      - NET_ADMIN
+#      - MKNOD
+#      - AUDIT_WRITE
+#    sysctls:
+#      - net.ipv6.conf.all.disable_ipv6=0
+#      - net.ipv4.conf.all.src_valid_mark=1
+#    volumes:
+#      - warp_data_30:/var/lib/cloudflare-warp
+#    environment:
+#      - WARP_SLEEP=2
+#      - GOST_ARGS=-L :40000
+#    healthcheck:
+#      test: [ "CMD", "curl", "-fsS", "--max-time", "10", "--socks5", "127.0.0.1:40000", "https://www.cloudflare.com/cdn-cgi/trace" ]
+#      interval: 30s
+#      timeout: 15s
+#      retries: 3
+#      start_period: 40s
+#    networks:
+#      - backend
 
   # ============================================================
   # Gost - Load balanced HTTP proxy across WARP pool
@@ -825,72 +835,72 @@ services:
     restart: always
     depends_on:
       warp-1:
-        condition: service_healthy
+        condition: service_started
       warp-2:
-        condition: service_healthy
+        condition: service_started
       warp-3:
-        condition: service_healthy
+        condition: service_started
       warp-4:
-        condition: service_healthy
+        condition: service_started
       warp-5:
-        condition: service_healthy
+        condition: service_started
       warp-6:
-        condition: service_healthy
+        condition: service_started
       warp-7:
-        condition: service_healthy
+        condition: service_started
       warp-8:
-        condition: service_healthy
+        condition: service_started
       warp-9:
-        condition: service_healthy
+        condition: service_started
       warp-10:
-        condition: service_healthy
-      warp-11:
-        condition: service_healthy
-      warp-12:
-        condition: service_healthy
-      warp-13:
-        condition: service_healthy
-      warp-14:
-        condition: service_healthy
-      warp-15:
-        condition: service_healthy
-      warp-16:
-        condition: service_healthy
-      warp-17:
-        condition: service_healthy
-      warp-18:
-        condition: service_healthy
-      warp-19:
-        condition: service_healthy
-      warp-20:
-        condition: service_healthy
-      warp-21:
-        condition: service_healthy
-      warp-22:
-        condition: service_healthy
-      warp-23:
-        condition: service_healthy
-      warp-24:
-        condition: service_healthy
-      warp-25:
-        condition: service_healthy
-      warp-26:
-        condition: service_healthy
-      warp-27:
-        condition: service_healthy
-      warp-28:
-        condition: service_healthy
-      warp-29:
-        condition: service_healthy
-      warp-30:
-        condition: service_healthy
+        condition: service_started
+#      warp-11:
+#        condition: service_healthy
+#      warp-12:
+#        condition: service_healthy
+#      warp-13:
+#        condition: service_healthy
+#      warp-14:
+#        condition: service_healthy
+#      warp-15:
+#        condition: service_healthy
+#      warp-16:
+#        condition: service_healthy
+#      warp-17:
+#        condition: service_healthy
+#      warp-18:
+#        condition: service_healthy
+#      warp-19:
+#        condition: service_healthy
+#      warp-20:
+#        condition: service_healthy
+#      warp-21:
+#        condition: service_healthy
+#      warp-22:
+#        condition: service_healthy
+#      warp-23:
+#        condition: service_healthy
+#      warp-24:
+#        condition: service_healthy
+#      warp-25:
+#        condition: service_healthy
+#      warp-26:
+#        condition: service_healthy
+#      warp-27:
+#        condition: service_healthy
+#      warp-28:
+#        condition: service_healthy
+#      warp-29:
+#        condition: service_healthy
+#      warp-30:
+#        condition: service_healthy
     environment:
       - WARP_USER=${WARP_USER}
       - WARP_PASS=${WARP_PASS}
       - DIRECT_USER=${DIRECT_USER}
       - DIRECT_PASS=${DIRECT_PASS}
     command: >
-      -L=http://${WARP_USER}:${WARP_PASS}@:1111?probeResist=code:400 -F=socks5://warp-1:40000?ip=warp-1:40000,warp-2:40000,warp-3:40000,warp-4:40000,warp-5:40000,warp-6:40000,warp-7:40000,warp-8:40000,warp-9:40000,warp-10:40000,warp-11:40000,warp-12:40000,warp-13:40000,warp-14:40000,warp-15:40000,warp-16:40000,warp-17:40000,warp-18:40000,warp-19:40000,warp-20:40000,warp-21:40000,warp-22:40000,warp-23:40000,warp-24:40000,warp-25:40000,warp-26:40000,warp-27:40000,warp-28:40000,warp-29:40000,warp-30:40000&strategy=round&max_fails=1&fail_timeout=180s -L=http://${DIRECT_USER}:${DIRECT_PASS}@:2223?probeResist=code:400 -F=socks5://warp-1:40000?ip=warp-1:40000,warp-2:40000,warp-3:40000,warp-4:40000,warp-5:40000,warp-6:40000,warp-7:40000,warp-8:40000,warp-9:40000,warp-10:40000,warp-11:40000,warp-12:40000,warp-13:40000,warp-14:40000,warp-15:40000,warp-16:40000,warp-17:40000,warp-18:40000,warp-19:40000,warp-20:40000,warp-21:40000,warp-22:40000,warp-23:40000,warp-24:40000,warp-25:40000,warp-26:40000,warp-27:40000,warp-28:40000,warp-29:40000,warp-30:40000,warp-31:40000,warp-32:40000,warp-33:40000,warp-34:40000,warp-35:40000,warp-36:40000,warp-37:40000,warp-38:40000,warp-39:40000,warp-40:40000,warp-41:40000,warp-42:40000,warp-43:40000,warp-44:40000,warp-45:40000,warp-46:40000,warp-47:40000,warp-48:40000,warp-49:40000,warp-50:40000,warp-51:40000,warp-52:40000,warp-53:40000,warp-54:40000,warp-55:40000,warp-56:40000,warp-57:40000,warp-58:40000,warp-59:40000,warp-60:40000,warp-61:40000,warp-62:40000,warp-63:40000,warp-64:40000,warp-65:40000,warp-66:40000,warp-67:40000,warp-68:40000,warp-69:40000,warp-70:40000,warp-71:40000,warp-72:40000,warp-73:40000,warp-74:40000,warp-75:40000,warp-76:40000,warp-77:40000,warp-78:40000,warp-79:40000,warp-80:40000,warp-81:40000,warp-82:40000,warp-83:40000,warp-84:40000,warp-85:40000,warp-86:40000,warp-87:40000,warp-88:40000,warp-89:40000,warp-90:40000,warp-91:40000,warp-92:40000,warp-93:40000,warp-94:40000,warp-95:40000,warp-96:40000,warp-97:40000,warp-98:40000,warp-99:40000,warp-100:40000&strategy=round&max_fails=1&fail_timeout=180s -L=http://${DIRECT_USER}:${DIRECT_PASS}@:2223?probeResist=code:400 -F=socks5://warp-1:40000?ip=warp-1:40000,warp-2:40000,warp-3:40000,warp-4:40000,warp-5:40000,warp-6:40000,warp-7:40000,warp-8:40000,warp-9:40000,warp-10:40000&strategy=round&max_fails=1&fail_timeout=180s -L=http://${DIRECT_USER}:${DIRECT_PASS}@:2223?probeResist=code:400
+      -L=http://${WARP_USER}:${WARP_PASS}@:1111?probeResist=code:400 -F=socks5://warp-1:40000?ip=warp-1:40000,warp-2:40000,warp-3:40000,warp-4:40000,warp-5:40000,warp-6:40000,warp-7:40000,warp-8:40000,warp-9:40000,warp-10:40000&strategy=round&max_fails=1&fail_timeout=180s -L=http://${DIRECT_USER}:${DIRECT_PASS}@:2223?probeResist=code:400 -F=socks5://warp-1:40000?ip=warp-1:40000,warp-2:40000,warp-3:40000,warp-4:40000,warp-5:40000,warp-6:40000,warp-7:40000,warp-8:40000,warp-9:40000,warp-10:40000&strategy=round&max_fails=1&fail_timeout=180s -L=http://${DIRECT_USER}:${DIRECT_PASS}@:2223?probeResist=code:400 -F=socks5://warp-1:40000?ip=warp-1:40000,warp-2:40000,warp-3:40000,warp-4:40000,warp-5:40000,warp-6:40000,warp-7:40000,warp-8:40000,warp-9:40000,warp-10:40000&strategy=round&max_fails=1&fail_timeout=180s -L=http://${DIRECT_USER}:${DIRECT_PASS}@:2223?probeResist=code:400
     networks:
       - backend
 
@@ -919,8 +929,8 @@ services:
     deploy:
       resources:
         limits:
-          # Limit to 8 CPU cores
-          cpus: '8'
+          # Limit to 4 CPU cores
+          cpus: '4'
     networks:
       - backend
 
@@ -1311,26 +1321,26 @@ volumes:
   warp_data_8:
   warp_data_9:
   warp_data_10:
-  warp_data_11:
-  warp_data_12:
-  warp_data_13:
-  warp_data_14:
-  warp_data_15:
-  warp_data_16:
-  warp_data_17:
-  warp_data_18:
-  warp_data_19:
-  warp_data_20:
-  warp_data_21:
-  warp_data_22:
-  warp_data_23:
-  warp_data_24:
-  warp_data_25:
-  warp_data_26:
-  warp_data_27:
-  warp_data_28:
-  warp_data_29:
-  warp_data_30:
+#  warp_data_11:
+#  warp_data_12:
+#  warp_data_13:
+#  warp_data_14:
+#  warp_data_15:
+#  warp_data_16:
+#  warp_data_17:
+#  warp_data_18:
+#  warp_data_19:
+#  warp_data_20:
+#  warp_data_21:
+#  warp_data_22:
+#  warp_data_23:
+#  warp_data_24:
+#  warp_data_25:
+#  warp_data_26:
+#  warp_data_27:
+#  warp_data_28:
+#  warp_data_29:
+#  warp_data_30:
   yt_storage:
   tik_volume:
   tik_storage:
