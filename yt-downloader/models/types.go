@@ -60,6 +60,30 @@ const (
 	StatusError     = "error"
 )
 
+// InfoRequest is the payload for the metadata/info endpoint
+// @Description Info request payload
+type InfoRequest struct {
+	URL     string `json:"url" example:"https://youtube.com/watch?v=dQw4w9WgXcQ"`
+	Premium bool   `json:"premium,omitempty" example:"false"`
+}
+
+// InfoResponse returns video metadata plus the available download options
+// (qualities, formats, audio languages) so the client can let the user choose
+// before creating a download job.
+// @Description Video info / available download options
+type InfoResponse struct {
+	VideoID                 string   `json:"videoId"`
+	Title                   string   `json:"title"`
+	Author                  string   `json:"author,omitempty"`
+	Duration                float64  `json:"duration"`
+	ThumbnailURL            string   `json:"thumbnailUrl,omitempty"`
+	AvailableQualities      []string `json:"availableQualities"`
+	AvailableAudioLanguages []string `json:"availableAudioLanguages,omitempty"`
+	VideoFormats            []string `json:"videoFormats"`
+	AudioFormats            []string `json:"audioFormats"`
+	AudioBitrates           []string `json:"audioBitrates"`
+}
+
 // StatusResponse is returned when checking job status
 // @Description Job status response
 type StatusResponse struct {

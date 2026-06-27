@@ -547,3 +547,36 @@ func isSameMimeType(a, b string) bool {
 	// "video/mp4; codecs=..." vs "video/mp4"
 	return strings.Split(a, ";")[0] == strings.Split(b, ";")[0]
 }
+
+// GetAvailableQualities returns the distinct video qualities present in the
+// extract data, sorted from highest to lowest (e.g. ["1080p","720p","360p"]).
+// Uses the same shorter-edge dimension logic as quality selection so the list
+// is consistent with what /api/download will accept.
+func GetAvailableQualities(data *models.ExtractResponse) []string {
+	if data == nil {
+		return []string{}
+	}
+
+	seen := make(map[int]bool)
+	var heights []int
+	for i := range data.VideoStreams {
+		dim := getQualityDimension(&data.VideoStreams[i])
+		if dim <= 0 || seen[dim] {
+			continue
+		}
+		seen[dim] = true
+		heights = append(heights, dim)
+	}
+
+	sort.Sort(sort.Reverse(sort.IntSlice(heights)))
+
+	qualities := make([]string, 0, len(heights))
+	for _, h := range heights {
+		if label, ok := config.HeightToQuality[h]; ok {
+			qualities = append(qualities, label)
+		} else {
+			qualities = append(qualities, fmt.Sprintf("%dp", h))
+		}
+	}
+	return qualities
+}
