@@ -14,7 +14,9 @@ func GenerateConfig(serverIP string) map[string]interface{} {
 		"server_ip": serverIP,
 		"name":      subdomain,
 		"subdomain": subdomain,
-		"email":     "admin@ytconvert.org",
+		// Email is filled by the Hub (from AGENT_EMAIL env, else derived from the
+		// assigned domain). Leave empty so no specific domain is baked in here.
+		"email": "",
 		"port":      5001,
 
 		// Proxy Credentials (random)

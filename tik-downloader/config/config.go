@@ -20,7 +20,7 @@ var (
 	Port = getEnvIntOrDefault("PORT", 5002)
 
 	// Domain
-	BaseDomain        = getEnvOrDefault("BASE_DOMAIN", "ytconvert.org")
+	BaseDomain        = getEnvOrDefault("BASE_DOMAIN", "localhost")
 	DownloadSubdomain = getEnvOrDefault("DOWNLOAD_SUBDOMAIN", "localhost")
 	PathPrefix        = getEnvOrDefault("PATH_PREFIX", "/tik")
 

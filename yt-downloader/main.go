@@ -23,12 +23,12 @@ import (
 // @termsOfService http://swagger.io/terms/
 
 // @contact.name API Support
-// @contact.email support@ytconvert.org
+// @contact.email support@example.com
 
 // @license.name MIT
 // @license.url https://opensource.org/licenses/MIT
 
-// @host api.ytconvert.org
+// @host api.example.com
 // @BasePath /
 // @schemes https http
 

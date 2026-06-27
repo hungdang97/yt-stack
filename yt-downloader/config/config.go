@@ -23,7 +23,7 @@ var (
 	ServerName = mustGetEnv("SERVER_NAME")
 
 	// Domain Components
-	BaseDomain        = mustGetEnv("BASE_DOMAIN")        // ytconvert.org
+	BaseDomain        = mustGetEnv("BASE_DOMAIN")        // e.g. example.com (required, injected via .env)
 	DownloadSubdomain = mustGetEnv("DOWNLOAD_SUBDOMAIN") // vps-103-45...
 
 	Email = mustGetEnv("EMAIL")

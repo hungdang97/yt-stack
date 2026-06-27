@@ -12,7 +12,7 @@ const docTemplate = `{
         "termsOfService": "http://swagger.io/terms/",
         "contact": {
             "name": "API Support",
-            "email": "support@ytconvert.org"
+            "email": "support@example.com"
         },
         "license": {
             "name": "MIT",
@@ -457,7 +457,7 @@ const docTemplate = `{
                 },
                 "statusUrl": {
                     "type": "string",
-                    "example": "https://api.ytconvert.org/api/status/V1StGXR8_Z5jdHi?token=xxx\u0026expires=xxx"
+                    "example": "https://api.example.com/api/status/V1StGXR8_Z5jdHi?token=xxx\u0026expires=xxx"
                 },
                 "title": {
                     "type": "string",
@@ -526,7 +526,7 @@ const docTemplate = `{
             "properties": {
                 "downloadUrl": {
                     "type": "string",
-                    "example": "https://api.ytconvert.org/files/abc123/output.mp4?token=xxx\u0026expires=123"
+                    "example": "https://api.example.com/files/abc123/output.mp4?token=xxx\u0026expires=123"
                 },
                 "duration": {
                     "type": "number",
@@ -598,7 +598,7 @@ const docTemplate = `{
 // SwaggerInfo holds exported Swagger Info so clients can modify it
 var SwaggerInfo = &swag.Spec{
 	Version:          "2.0.0",
-	Host:             "api.ytconvert.org",
+	Host:             "api.example.com",
 	BasePath:         "/",
 	Schemes:          []string{"https", "http"},
 	Title:            "YT Downloader API",

@@ -40,7 +40,7 @@ type TrimConfig struct {
 // DownloadResponse is returned when a job is created
 // @Description Response after creating a download job
 type DownloadResponse struct {
-	StatusURL                 string   `json:"statusUrl" example:"https://api.ytconvert.org/api/status/V1StGXR8_Z5jdHi?token=xxx&expires=xxx"`
+	StatusURL                 string   `json:"statusUrl" example:"https://api.example.com/api/status/V1StGXR8_Z5jdHi?token=xxx&expires=xxx"`
 	Title                     string   `json:"title" example:"Rick Astley - Never Gonna Give You Up"`
 	Duration                  float64  `json:"duration" example:"213.5"`
 	RequestedQuality          string   `json:"requestedQuality,omitempty" example:"1080p"`
@@ -67,7 +67,7 @@ type StatusResponse struct {
 	Progress    int     `json:"progress" example:"45"`
 	Title       string  `json:"title,omitempty" example:"Rick Astley - Never Gonna Give You Up"`
 	Duration    float64 `json:"duration,omitempty" example:"213.5"`
-	DownloadURL string  `json:"downloadUrl,omitempty" example:"https://api.ytconvert.org/files/abc123/output.mp4?token=xxx&expires=123"`
+	DownloadURL string  `json:"downloadUrl,omitempty" example:"https://api.example.com/files/abc123/output.mp4?token=xxx&expires=123"`
 	JobError    string  `json:"jobError,omitempty" example:"Download failed: connection timeout"`
 }
 

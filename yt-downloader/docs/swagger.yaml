@@ -70,7 +70,7 @@ definitions:
         example: 720p
         type: string
       statusUrl:
-        example: https://api.ytconvert.org/api/status/V1StGXR8_Z5jdHi?token=xxx&expires=xxx
+        example: https://api.example.com/api/status/V1StGXR8_Z5jdHi?token=xxx&expires=xxx
         type: string
       title:
         example: Rick Astley - Never Gonna Give You Up
@@ -123,7 +123,7 @@ definitions:
     description: Job status response
     properties:
       downloadUrl:
-        example: https://api.ytconvert.org/files/abc123/output.mp4?token=xxx&expires=123
+        example: https://api.example.com/files/abc123/output.mp4?token=xxx&expires=123
         type: string
       duration:
         example: 213.5
@@ -170,10 +170,10 @@ definitions:
       error:
         $ref: '#/definitions/utils.ErrorDetail'
     type: object
-host: api.ytconvert.org
+host: api.example.com
 info:
   contact:
-    email: support@ytconvert.org
+    email: support@example.com
     name: API Support
   description: API for downloading YouTube videos and audio
   license:

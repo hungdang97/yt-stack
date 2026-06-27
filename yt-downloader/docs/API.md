@@ -1,6 +1,6 @@
 # YT Downloader API
 
-Base URL: `https://api.ytconvert.org`
+Base URL: `https://api.example.com`
 
 ---
 
@@ -95,7 +95,7 @@ Create download job.
 
 ```json
 {
-  "statusUrl": "https://api.ytconvert.org/api/status/V1StGXR8_Z5jdHi?token=xxx&expires=xxx",
+  "statusUrl": "https://api.example.com/api/status/V1StGXR8_Z5jdHi?token=xxx&expires=xxx",
   "title": "Video Title",
   "duration": 213.5,
   "requestedQuality": "1080p",
@@ -175,7 +175,7 @@ Check job status.
   "progress": 100,
   "title": "Video Title",
   "duration": 213.5,
-  "downloadUrl": "https://api.ytconvert.org/files/xxx/output.mp4?token=xxx&expires=xxx"
+  "downloadUrl": "https://api.example.com/files/xxx/output.mp4?token=xxx&expires=xxx"
 }
 ```
 
