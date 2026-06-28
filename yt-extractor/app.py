@@ -6,6 +6,7 @@ from collections import deque
 from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
 import os
+import time
 import logging
 import tempfile
 import http.cookiejar
@@ -33,6 +34,53 @@ app = FastAPI()
 
 # Thread pool for blocking yt-dlp operations
 executor = ThreadPoolExecutor(max_workers=10)
+
+# ---- Extraction tuning (env-configurable) ----
+# YouTube player clients yt-dlp impersonates, in order. 'ios' first is fast and
+# usually skips the JS n-sig step; 'web' kept as a reliable fallback.
+PLAYER_CLIENTS = [c.strip() for c in os.environ.get("YT_PLAYER_CLIENT", "ios,web").split(",") if c.strip()]
+# Keep the deno JS runtime (needed by 'web' for n-sig). Set YT_USE_DENO=false to
+# drop it once 'ios' proves reliable on your setup (faster, no JS startup).
+USE_DENO = os.environ.get("YT_USE_DENO", "true").lower() in ("1", "true", "yes")
+
+# ---- In-memory metadata cache (videoId+premium -> extract result) ----
+# Stream URLs live ~6h; a short TTL makes repeat /api/info and the /api/download
+# that follows it near-instant, without serving stale links.
+EXTRACT_CACHE_TTL = int(os.environ.get("EXTRACT_CACHE_TTL", "300"))   # seconds; 0 disables
+EXTRACT_CACHE_MAX = int(os.environ.get("EXTRACT_CACHE_MAX", "1000"))  # max entries
+_extract_cache = {}   # key -> (expires_at, result)
+_cache_hits = 0
+_cache_misses = 0
+
+
+def _cache_key(video_id, premium):
+    return video_id + (":p" if premium else ":n")
+
+
+def cache_get(video_id, premium):
+    if EXTRACT_CACHE_TTL <= 0:
+        return None
+    item = _extract_cache.get(_cache_key(video_id, premium))
+    if not item:
+        return None
+    expires_at, result = item
+    if expires_at < time.time():
+        _extract_cache.pop(_cache_key(video_id, premium), None)
+        return None
+    return result
+
+
+def cache_set(video_id, premium, result):
+    if EXTRACT_CACHE_TTL <= 0:
+        return
+    now = time.time()
+    if len(_extract_cache) >= EXTRACT_CACHE_MAX:
+        # Drop expired entries first, then oldest if still over the cap.
+        for k in [k for k, (exp, _) in list(_extract_cache.items()) if exp < now]:
+            _extract_cache.pop(k, None)
+        while len(_extract_cache) >= EXTRACT_CACHE_MAX:
+            _extract_cache.pop(next(iter(_extract_cache)), None)
+    _extract_cache[_cache_key(video_id, premium)] = (now + EXTRACT_CACHE_TTL, result)
 
 
 class CookiePool:
@@ -170,12 +218,14 @@ def build_ydl_opts(cookie_file_path=None, proxy=None):
         'dump_single_json': True,
         'extractor_args': {
             'youtube': {
+                'player_client': PLAYER_CLIENTS,
                 'skip': ['hls', 'dash', 'translated_subs'],
             }
         },
-        # Deno JavaScript runtime (found via PATH)
-        'js_runtime': 'deno',
     }
+    # Deno JS runtime (found via PATH) — required by the 'web' client for n-sig.
+    if USE_DENO:
+        opts['js_runtime'] = 'deno'
     if cookie_file_path:
         opts['cookiefile'] = cookie_file_path
     if proxy:
@@ -202,8 +252,10 @@ def extract_sync(video_id: str, proxy: str, profile: str, cookies: str):
         # Build yt-dlp options with cookie file
         ydl_opts = build_ydl_opts(cookie_file.name, proxy)
 
+        t0 = time.time()
         with yt_dlp.YoutubeDL(ydl_opts) as ydl:
             info = ydl.extract_info(url, download=False)
+        logger.info(f"[{video_id}] yt-dlp extract_info: {(time.time() - t0) * 1000:.0f}ms (cookie)")
 
         result = map_yt_dlp_to_api(info)
 
@@ -239,8 +291,10 @@ def extract_no_cookie_sync(video_id: str, proxy: str):
     try:
         ydl_opts = build_ydl_opts(cookie_file_path=None, proxy=proxy)
 
+        t0 = time.time()
         with yt_dlp.YoutubeDL(ydl_opts) as ydl:
             info = ydl.extract_info(url, download=False)
+        logger.info(f"[{video_id}] yt-dlp extract_info: {(time.time() - t0) * 1000:.0f}ms (no-cookie)")
 
         result = map_yt_dlp_to_api(info)
 
@@ -315,7 +369,19 @@ async def _try_no_cookie_extract(video_id, proxy_url, attempt, total):
 @app.get('/api/youtube/video/{video_id}')
 async def extract(video_id: str, proxy: str = Query(None), premium: str = Query(None)):
     is_premium = premium == '1'
+    t_start = time.time()
     logger.info(f"[{video_id}] Extraction request received | proxy={proxy} | premium={is_premium}")
+
+    # Serve from cache when we extracted this video recently — big speed win for
+    # repeat / trending links, and for the /api/download that follows /api/info.
+    global _cache_hits, _cache_misses
+    cached = cache_get(video_id, is_premium)
+    if cached is not None:
+        _cache_hits += 1
+        logger.info(f"[{video_id}] cache HIT ({(time.time() - t_start) * 1000:.0f}ms)")
+        return cached
+    _cache_misses += 1
+
     proxy_url = build_proxy_url(proxy)
 
     last_error = None
@@ -344,6 +410,8 @@ async def extract(video_id: str, proxy: str = Query(None), premium: str = Query(
             result, error = await _try_no_cookie_extract(video_id, proxy_url, i, total)
 
         if result:
+            cache_set(video_id, is_premium, result)
+            logger.info(f"[{video_id}] extracted in {(time.time() - t_start) * 1000:.0f}ms (attempt {i}/{total})")
             return result
         last_error = error
 
@@ -353,7 +421,19 @@ async def extract(video_id: str, proxy: str = Query(None), premium: str = Query(
 
 @app.get('/health')
 async def health():
-    return {'status': 'UP', 'service': 'yt-extractor', 'version': '2.0.0'}
+    return {
+        'status': 'UP',
+        'service': 'yt-extractor',
+        'version': '2.0.0',
+        'cache': {
+            'ttl': EXTRACT_CACHE_TTL,
+            'size': len(_extract_cache),
+            'hits': _cache_hits,
+            'misses': _cache_misses,
+        },
+        'playerClients': PLAYER_CLIENTS,
+        'useDeno': USE_DENO,
+    }
 
 
 if __name__ == '__main__':

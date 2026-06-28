@@ -946,6 +946,11 @@ services:
     environment:
       - PYTHONUNBUFFERED=1
       - MONGO_URI=${MONGO_URI}
+      # Phase 1 speed tuning (optional; sensible defaults baked into code)
+      - EXTRACT_CACHE_TTL=${EXTRACT_CACHE_TTL:-300}   # metadata cache TTL (s); 0 disables
+      - EXTRACT_CACHE_MAX=${EXTRACT_CACHE_MAX:-1000}  # max cache entries
+      - YT_PLAYER_CLIENT=${YT_PLAYER_CLIENT:-ios,web} # yt-dlp clients, in order
+      - YT_USE_DENO=${YT_USE_DENO:-true}              # keep deno JS runtime (web n-sig)
     depends_on:
       gost:
         condition: service_started
