@@ -67,21 +67,39 @@ type InfoRequest struct {
 	Premium bool   `json:"premium,omitempty" example:"false"`
 }
 
-// InfoResponse returns video metadata plus the available download options
-// (qualities, formats, audio languages) so the client can let the user choose
-// before creating a download job.
-// @Description Video info / available download options
+// VideoOption is one selectable video quality with its estimated merged size.
+// (Used internally by services.GetVideoOptions.)
+type VideoOption struct {
+	Quality   string `json:"quality"`
+	SizeBytes int64  `json:"sizeBytes,omitempty"`
+}
+
+// InfoOption is one selectable download option in the unified, cross-platform
+// /api/info contract. It carries both the display info (label, size) and the
+// fields needed to build the /api/download request (type/format/quality/bitrate).
+// @Description A selectable download option
+type InfoOption struct {
+	Label     string `json:"label" example:"1080p (.mp4)"`
+	Type      string `json:"type" example:"video" enums:"video,audio"`
+	Format    string `json:"format" example:"mp4"`
+	Quality   string `json:"quality,omitempty" example:"1080p"`
+	Bitrate   string `json:"bitrate,omitempty" example:"320k"`
+	SizeBytes int64  `json:"sizeBytes,omitempty" example:"52428800"`
+}
+
+// InfoResponse is the unified video-info / options contract returned by every
+// platform's /api/info, so the client can render one generic chooser.
+// @Description Video info + available download options (unified across platforms)
 type InfoResponse struct {
-	VideoID                 string   `json:"videoId"`
-	Title                   string   `json:"title"`
-	Author                  string   `json:"author,omitempty"`
-	Duration                float64  `json:"duration"`
-	ThumbnailURL            string   `json:"thumbnailUrl,omitempty"`
-	AvailableQualities      []string `json:"availableQualities"`
-	AvailableAudioLanguages []string `json:"availableAudioLanguages,omitempty"`
-	VideoFormats            []string `json:"videoFormats"`
-	AudioFormats            []string `json:"audioFormats"`
-	AudioBitrates           []string `json:"audioBitrates"`
+	VideoID        string       `json:"videoId"`
+	Title          string       `json:"title"`
+	Author         string       `json:"author,omitempty"`
+	Duration       float64      `json:"duration"`
+	ThumbnailURL   string       `json:"thumbnailUrl,omitempty"`
+	Video          []InfoOption `json:"video"`
+	Audio          []InfoOption `json:"audio"`
+	Other          []InfoOption `json:"other"`
+	AudioLanguages []string     `json:"audioLanguages,omitempty"`
 }
 
 // StatusResponse is returned when checking job status

@@ -38,7 +38,10 @@ func HandleDownload(c *fiber.Ctx) error {
 		})
 	}
 
-	// Validate type
+	// Validate type — resolve output.type (Hub/FE shape) then fall back to type
+	if req.Output.Type != "" {
+		req.Type = req.Output.Type
+	}
 	if req.Type == "" {
 		req.Type = "video" // Default to video
 	}

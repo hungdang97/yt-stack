@@ -24,6 +24,35 @@ type DownloadResponse struct {
 	Thumbnail string  `json:"thumbnail,omitempty"`
 }
 
+// ============================================
+// INFO (unified /api/info contract, shared shape across platforms)
+// ============================================
+
+type InfoRequest struct {
+	URL string `json:"url"`
+}
+
+type InfoOption struct {
+	Label     string `json:"label"`
+	Type      string `json:"type"`
+	Format    string `json:"format"`
+	Quality   string `json:"quality,omitempty"`
+	Bitrate   string `json:"bitrate,omitempty"`
+	SizeBytes int64  `json:"sizeBytes,omitempty"`
+}
+
+type InfoResponse struct {
+	VideoID        string       `json:"videoId"`
+	Title          string       `json:"title"`
+	Author         string       `json:"author,omitempty"`
+	Duration       float64      `json:"duration"`
+	ThumbnailURL   string       `json:"thumbnailUrl,omitempty"`
+	Video          []InfoOption `json:"video"`
+	Audio          []InfoOption `json:"audio"`
+	Other          []InfoOption `json:"other"`
+	AudioLanguages []string     `json:"audioLanguages,omitempty"`
+}
+
 type StatusResponse struct {
 	Status      string  `json:"status"`
 	Progress    int     `json:"progress"`

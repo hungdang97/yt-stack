@@ -6,9 +6,16 @@ package models
 
 // DownloadRequest from client (via Hub)
 type DownloadRequest struct {
-	URL   string `json:"url"`
-	Type  string `json:"type"`  // "video" or "audio"
-	CTier int    `json:"ctier"` // Customer tier (injected by Hub)
+	URL    string       `json:"url"`
+	Type   string       `json:"type"` // "video" or "audio" (legacy/top-level)
+	Output OutputConfig `json:"output,omitempty"`
+	CTier  int          `json:"ctier"` // Customer tier (injected by Hub)
+}
+
+// OutputConfig mirrors the Hub/FE shape ({ output: { type, format } }).
+type OutputConfig struct {
+	Type   string `json:"type"`
+	Format string `json:"format,omitempty"`
 }
 
 // DownloadResponse returned to client
@@ -29,6 +36,35 @@ type StatusResponse struct {
 	Thumbnail   string  `json:"thumbnail,omitempty"`
 	DownloadURL string  `json:"downloadUrl,omitempty"`
 	Error       string  `json:"error,omitempty"`
+}
+
+// ============================================
+// INFO (unified /api/info contract, shared shape across platforms)
+// ============================================
+
+type InfoRequest struct {
+	URL string `json:"url"`
+}
+
+type InfoOption struct {
+	Label     string `json:"label"`
+	Type      string `json:"type"`
+	Format    string `json:"format"`
+	Quality   string `json:"quality,omitempty"`
+	Bitrate   string `json:"bitrate,omitempty"`
+	SizeBytes int64  `json:"sizeBytes,omitempty"`
+}
+
+type InfoResponse struct {
+	VideoID        string       `json:"videoId"`
+	Title          string       `json:"title"`
+	Author         string       `json:"author,omitempty"`
+	Duration       float64      `json:"duration"`
+	ThumbnailURL   string       `json:"thumbnailUrl,omitempty"`
+	Video          []InfoOption `json:"video"`
+	Audio          []InfoOption `json:"audio"`
+	Other          []InfoOption `json:"other"`
+	AudioLanguages []string     `json:"audioLanguages,omitempty"`
 }
 
 // ============================================

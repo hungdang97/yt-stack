@@ -580,3 +580,34 @@ func GetAvailableQualities(data *models.ExtractResponse) []string {
 	}
 	return qualities
 }
+
+// GetVideoOptions returns each available quality together with an estimated
+// output size (chosen video stream + best audio stream, mirroring what
+// /api/download actually downloads & merges). SizeBytes is 0 when the source
+// stream doesn't report a size.
+func GetVideoOptions(data *models.ExtractResponse) []models.VideoOption {
+	if data == nil {
+		return []models.VideoOption{}
+	}
+
+	// Best audio size is shared across all video qualities (same merge audio).
+	var audioSize int64
+	if a := SelectAudio(data, "", "windows", "mp4"); a != nil && a.Stream != nil {
+		audioSize = a.Stream.ContentLength
+	}
+
+	qualities := GetAvailableQualities(data)
+	opts := make([]models.VideoOption, 0, len(qualities))
+	for _, q := range qualities {
+		v := SelectVideo(data, q, "windows", "mp4")
+		if v == nil || v.Stream == nil {
+			continue
+		}
+		size := v.Stream.ContentLength
+		if size > 0 && audioSize > 0 {
+			size += audioSize
+		}
+		opts = append(opts, models.VideoOption{Quality: q, SizeBytes: size})
+	}
+	return opts
+}
