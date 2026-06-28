@@ -35,6 +35,7 @@ from ..models import (
 )
 from ..translation import _
 from .main_terminal import TikTok
+from ..stream_mapper import enrich_with_streams
 
 if TYPE_CHECKING:
     from ..config import Parameter
@@ -558,7 +559,12 @@ class APIServer(TikTok):
         async def handle_detail_tiktok(
             extract: DetailTikTok, token: str = Depends(token_dependency)
         ):
-            return await self.handle_detail(extract, True)
+            response = await self.handle_detail(extract, True)
+            # Add cross-platform videoStreams/audioStreams for the normalized
+            # (non-source) response so clients share one format-picker shape.
+            if not extract.source and isinstance(response.data, dict):
+                enrich_with_streams(response.data)
+            return response
 
         @self.server.post(
             "/tiktok/account",

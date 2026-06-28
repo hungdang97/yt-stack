@@ -11,6 +11,8 @@ import logging
 import tempfile
 import os
 
+from mapper import map_fb_response
+
 logger = logging.getLogger("fb-extractor")
 
 app = FastAPI(
@@ -98,100 +100,7 @@ def _extract(url: str, proxy: Optional[str] = None, cookie: Optional[str] = None
     if not info:
         raise Exception("yt-dlp returned empty result")
 
-    return _map_response(info)
-
-
-def _map_response(info: dict) -> dict:
-    media = []
-    entries = info.get("entries", [info])
-
-    for entry in entries:
-        is_video = entry.get("ext") in ("mp4", "webm") or bool(entry.get("formats"))
-        video_url = None
-        video_progressive_url = None
-        audio_url = None
-        display_url = None
-
-        if is_video:
-            formats = entry.get("formats", [])
-            if formats:
-                # Best progressive: has both video+audio
-                # Facebook labels these as "sd"/"hd" with quality ranking but no height
-                progressive = [f for f in formats
-                               if f.get("acodec") != "none" and f.get("vcodec") != "none"]
-                if progressive:
-                    best_prog = max(progressive, key=lambda f: (
-                        f.get("height") or 0, f.get("quality") or 0, f.get("tbr") or 0,
-                    ))
-                    video_progressive_url = best_prog.get("url")
-
-                # Best video (any, including video-only DASH)
-                video_formats = [f for f in formats if f.get("vcodec") != "none"]
-                if video_formats:
-                    best_video = max(video_formats, key=lambda f: (
-                        f.get("height") or 0, f.get("quality") or 0, f.get("tbr") or 0,
-                    ))
-                    video_url = best_video.get("url")
-
-                # Best audio-only (DASH)
-                audio_formats = [f for f in formats if f.get("acodec") != "none" and f.get("vcodec") == "none"]
-                if audio_formats:
-                    best_audio = max(audio_formats, key=lambda f: f.get("abr") or f.get("tbr") or 0)
-                    audio_url = best_audio.get("url")
-            else:
-                video_url = entry.get("url")
-
-            display_url = entry.get("thumbnail") or (entry.get("thumbnails") or [{}])[-1].get("url")
-        else:
-            display_url = entry.get("url") or entry.get("thumbnail")
-
-        media.append({
-            "is_video": is_video,
-            "video_url": video_url,
-            "video_progressive_url": video_progressive_url,
-            "audio_url": audio_url,
-            "display_url": display_url,
-        })
-
-    # Fallback if no entries parsed
-    if not media and info.get("url"):
-        is_video = info.get("ext") in ("mp4", "webm")
-        media.append({
-            "is_video": is_video,
-            "video_url": info.get("url") if is_video else None,
-            "video_progressive_url": None,
-            "audio_url": None,
-            "display_url": info.get("thumbnail") or info.get("url"),
-        })
-
-    is_video = any(m["is_video"] for m in media)
-    description = info.get("description") or ""
-
-    return {
-        "id": str(info.get("id") or ""),
-        "typename": "Reel" if "/reel/" in (info.get("webpage_url") or "") else "Video",
-        "title": info.get("title") or "",
-        "description": description,
-        "caption": description,
-        "hashtags": re.findall(r"#(\w+)", description),
-        "mentions": re.findall(r"@(\w+)", description),
-        "owner_username": info.get("uploader") or "",
-        "owner_id": info.get("uploader_id") or info.get("channel_id") or "",
-        "owner_url": info.get("uploader_url") or "",
-        "likes": info.get("like_count"),
-        "comments": info.get("comment_count"),
-        "shares": info.get("repost_count"),
-        "date_utc": info.get("upload_date"),
-        "timestamp": info.get("timestamp"),
-        "is_video": is_video,
-        "video_duration": info.get("duration"),
-        "video_view_count": info.get("view_count") if is_video else None,
-        "media_count": len(media),
-        "media": media,
-        "subtitles": list((info.get("subtitles") or {}).keys()),
-        "automatic_captions": list((info.get("automatic_captions") or {}).keys()),
-        "extractor": "yt-dlp",
-    }
+    return map_fb_response(info)
 
 
 # ============================================
