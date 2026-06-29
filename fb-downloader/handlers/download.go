@@ -79,24 +79,39 @@ func HandleDownload(c *fiber.Ctx) error {
 		})
 	}
 
-	// Pick video URL based on device
+	// Pick video URL based on requested quality and device
 	var videoURL, audioURL string
+	// Whether the downloaded video file already contains audio (progressive) and
+	// therefore only needs a remux instead of a separate audio merge.
+	useProgressive := needsProgressiveFormat(req.OS)
 
 	if req.Type == "video" {
-		if needsProgressiveFormat(req.OS) {
-			// iOS/macOS: use progressive (H.264 + audio in one file)
-			videoURL = postData.GetVideoProgressiveURL()
-			if videoURL == "" {
-				videoURL = postData.GetVideoURL()
+		if sel := postData.SelectVideoStream(req.Output.Quality, req.OS); sel != nil {
+			// Rich videoStreams available → honor the requested quality.
+			videoURL = sel.URL
+			useProgressive = !sel.VideoOnly
+			if sel.VideoOnly {
+				audioURL = postData.GetAudioURL()
 			}
+			fmt.Printf("[Facebook] Selected stream: quality=%s videoOnly=%v (requested=%q)\n",
+				sel.Quality, sel.VideoOnly, req.Output.Quality)
 		} else {
-			// Android/Windows/Linux: use best DASH video
-			videoURL = postData.GetVideoURL()
-			if videoURL == "" {
+			// Legacy fallback: best single rendition.
+			if needsProgressiveFormat(req.OS) {
+				// iOS/macOS: use progressive (H.264 + audio in one file)
 				videoURL = postData.GetVideoProgressiveURL()
+				if videoURL == "" {
+					videoURL = postData.GetVideoURL()
+				}
+			} else {
+				// Android/Windows/Linux: use best DASH video
+				videoURL = postData.GetVideoURL()
+				if videoURL == "" {
+					videoURL = postData.GetVideoProgressiveURL()
+				}
 			}
+			audioURL = postData.GetAudioURL()
 		}
-		audioURL = postData.GetAudioURL()
 
 		if videoURL == "" {
 			return c.Status(fiber.StatusNotFound).JSON(fiber.Map{
@@ -189,7 +204,6 @@ func HandleDownload(c *fiber.Ctx) error {
 	}
 
 	// Start background job
-	useProgressive := needsProgressiveFormat(req.OS)
 	go processJob(jobID, req.URL, req.Type, videoURL, audioURL, outputFilename, useProgressive)
 
 	// Return response

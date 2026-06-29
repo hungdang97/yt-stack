@@ -63,9 +63,23 @@ func HandleInfo(c *fiber.Ctx) error {
 
 	hasVideo := postData.GetVideoURL() != "" || postData.GetVideoProgressiveURL() != ""
 
-	video := make([]models.InfoOption, 0, 1)
+	video := make([]models.InfoOption, 0)
 	audio := make([]models.InfoOption, 0, 1)
-	if hasVideo {
+
+	// Prefer the rich videoStreams (multiple qualities, like YouTube). Fall back
+	// to the legacy single-option shape when the extractor didn't provide them.
+	if qopts := postData.VideoQualityOptions(); len(qopts) > 0 {
+		for _, q := range qopts {
+			video = append(video, models.InfoOption{
+				Label:     q.Quality + " (.mp4)",
+				Type:      "video",
+				Format:    "mp4",
+				Quality:   q.Quality,
+				SizeBytes: q.SizeBytes,
+			})
+		}
+		audio = append(audio, models.InfoOption{Label: "Audio (.mp3)", Type: "audio", Format: "mp3"})
+	} else if hasVideo {
 		video = append(video, models.InfoOption{Label: "Video (.mp4)", Type: "video", Format: "mp4"})
 		// Audio can be extracted from the video even if there's no separate audio URL.
 		audio = append(audio, models.InfoOption{Label: "Audio (.mp3)", Type: "audio", Format: "mp3"})

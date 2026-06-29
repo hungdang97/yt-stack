@@ -5,8 +5,9 @@ package models
 // ============================================
 
 type OutputConfig struct {
-	Type   string `json:"type"`
-	Format string `json:"format,omitempty"`
+	Type    string `json:"type"`
+	Format  string `json:"format,omitempty"`
+	Quality string `json:"quality,omitempty"`
 }
 
 type DownloadRequest struct {
@@ -105,6 +106,22 @@ type FbMediaItem struct {
 	DisplayURL          string `json:"display_url"`
 }
 
+// FbStream mirrors the YouTube-style stream shape emitted by fb-extractor's
+// mapper (videoStreams / audioStreams). Lets us expose multiple qualities.
+type FbStream struct {
+	URL       string  `json:"url"`
+	Quality   string  `json:"quality"`
+	Format    string  `json:"format"`
+	MimeType  string  `json:"mimeType"`
+	Bitrate   float64 `json:"bitrate"`
+	FileSize  int64   `json:"fileSize"`
+	Codec     string  `json:"codec"`
+	Width     int     `json:"width"`
+	Height    int     `json:"height"`
+	FPS       float64 `json:"fps"`
+	VideoOnly bool    `json:"videoOnly"`
+}
+
 type FbExtractResponse struct {
 	ID             string        `json:"id"`
 	Typename       string        `json:"typename"`
@@ -118,6 +135,8 @@ type FbExtractResponse struct {
 	VideoViewCount *int          `json:"video_view_count"`
 	MediaCount     int           `json:"media_count"`
 	Media          []FbMediaItem `json:"media"`
+	VideoStreams   []FbStream    `json:"videoStreams"`
+	AudioStreams   []FbStream    `json:"audioStreams"`
 }
 
 // GetVideoURL returns the best DASH video URL
