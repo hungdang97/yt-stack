@@ -25,7 +25,17 @@ func heightFromQuality(quality string) int {
 // VideoQualityOptions returns the distinct video qualities, best-first. Streams
 // from the extractor are already sorted best-first, so the first occurrence of
 // each quality label wins (dedupes multiple codecs at the same resolution).
+// SizeBytes estimates the merged output: video stream size plus the best audio
+// size for video-only (DASH) streams (progressive streams already include audio).
 func (r *FbExtractResponse) VideoQualityOptions() []FbVideoOption {
+	// Best (largest) audio size, shared across qualities for the merge estimate.
+	var audioSize int64
+	for i := range r.AudioStreams {
+		if r.AudioStreams[i].FileSize > audioSize {
+			audioSize = r.AudioStreams[i].FileSize
+		}
+	}
+
 	seen := make(map[string]bool)
 	out := make([]FbVideoOption, 0, len(r.VideoStreams))
 	for i := range r.VideoStreams {
@@ -37,7 +47,11 @@ func (r *FbExtractResponse) VideoQualityOptions() []FbVideoOption {
 			continue
 		}
 		seen[s.Quality] = true
-		out = append(out, FbVideoOption{Quality: s.Quality, SizeBytes: s.FileSize})
+		size := s.FileSize
+		if size > 0 && audioSize > 0 && s.VideoOnly {
+			size += audioSize
+		}
+		out = append(out, FbVideoOption{Quality: s.Quality, SizeBytes: size})
 	}
 	return out
 }

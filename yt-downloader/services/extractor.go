@@ -615,7 +615,9 @@ func GetVideoOptions(data *models.ExtractResponse) []models.VideoOption {
 			continue
 		}
 		size := v.Stream.ContentLength
-		if size > 0 && audioSize > 0 {
+		// Only add the separate audio track for video-only streams; muxed
+		// (progressive) streams already include audio, so adding it double-counts.
+		if size > 0 && audioSize > 0 && v.Stream.VideoOnly {
 			size += audioSize
 		}
 		opts = append(opts, models.VideoOption{Quality: q, SizeBytes: size})

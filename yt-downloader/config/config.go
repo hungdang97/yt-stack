@@ -90,7 +90,7 @@ var (
 var (
 	VideoFormats  = []string{"mp4", "webm", "mkv", "avi", "flv", "mov"}
 	AudioFormats  = []string{"mp3", "m4a", "wav", "opus", "flac", "ogg", "aac", "alac"}
-	Qualities     = []string{"2160p", "1440p", "1080p", "720p", "480p", "360p", "144p"}
+	Qualities     = []string{"2160p", "1440p", "1080p", "720p", "480p", "360p", "240p", "144p"}
 	AudioBitrates = []string{"64k", "128k", "192k", "320k"}
 	OSTypes       = []string{"ios", "android", "macos", "windows", "linux"}
 )
@@ -103,6 +103,7 @@ var QualityToHeight = map[string]int{
 	"720p":  720,
 	"480p":  480,
 	"360p":  360,
+	"240p":  240,
 	"144p":  144,
 }
 
@@ -114,6 +115,7 @@ var HeightToQuality = map[int]string{
 	720:  "720p",
 	480:  "480p",
 	360:  "360p",
+	240:  "240p",
 	144:  "144p",
 }
 

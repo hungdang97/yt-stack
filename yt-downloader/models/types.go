@@ -172,6 +172,7 @@ type Stream struct {
 	ContentLength int64   `json:"fileSize,omitempty"`
 	AudioTrackID  string  `json:"audioTrackId,omitempty"`
 	IsOriginal    bool    `json:"isOriginal,omitempty"`
+	VideoOnly     bool    `json:"videoOnly,omitempty"`
 	FPS           int     `json:"fps,omitempty"`
 }
 
