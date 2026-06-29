@@ -36,9 +36,13 @@ app = FastAPI()
 executor = ThreadPoolExecutor(max_workers=10)
 
 # ---- Extraction tuning (env-configurable) ----
-# YouTube player clients yt-dlp impersonates, in order. 'ios' first is fast and
-# usually skips the JS n-sig step; 'web' kept as a reliable fallback.
-PLAYER_CLIENTS = [c.strip() for c in os.environ.get("YT_PLAYER_CLIENT", "ios,web").split(",") if c.strip()]
+# Primary YouTube player client(s). 'mweb' needs a GVS PO token but returns full
+# video+audio and supports login cookies — used on the first (fast) attempt.
+PLAYER_CLIENTS = [c.strip() for c in os.environ.get("YT_PLAYER_CLIENT", "mweb").split(",") if c.strip()]
+# Fallback client(s) tried on a later attempt when the primary returns no/partial
+# streams. 'tv' needs NO PO token, so it survives a bgutil-pot outage or a
+# YouTube change that breaks the primary client.
+PLAYER_CLIENTS_FALLBACK = [c.strip() for c in os.environ.get("YT_PLAYER_CLIENT_FALLBACK", "tv").split(",") if c.strip()]
 # Keep the deno JS runtime (needed by 'web' for n-sig). Set YT_USE_DENO=false to
 # drop it once 'ios' proves reliable on your setup (faster, no JS startup).
 USE_DENO = os.environ.get("YT_USE_DENO", "true").lower() in ("1", "true", "yes")
@@ -206,8 +210,12 @@ def build_proxy_url(proxy):
     return proxy
 
 
-def build_ydl_opts(cookie_file_path=None, proxy=None):
-    """Build yt-dlp options with optional cookie file and proxy."""
+def build_ydl_opts(cookie_file_path=None, proxy=None, clients=None):
+    """Build yt-dlp options with optional cookie file and proxy.
+
+    `clients` overrides the player_client list for this call (used to fall back
+    from the primary client to a no-PO-token client on a later attempt).
+    """
     opts = {
         'quiet': True,
         'no_warnings': True,
@@ -217,7 +225,7 @@ def build_ydl_opts(cookie_file_path=None, proxy=None):
         'dump_single_json': True,
         'extractor_args': {
             'youtube': {
-                'player_client': PLAYER_CLIENTS,
+                'player_client': clients or PLAYER_CLIENTS,
                 'skip': ['hls', 'dash', 'translated_subs'],
             },
         },
@@ -240,7 +248,7 @@ def build_ydl_opts(cookie_file_path=None, proxy=None):
     return opts
 
 
-def extract_sync(video_id: str, proxy: str, profile: str, cookies: str):
+def extract_sync(video_id: str, proxy: str, profile: str, cookies: str, clients=None):
     """Blocking extraction - runs in thread pool."""
     url = f'https://www.youtube.com/watch?v={video_id}'
 
@@ -257,12 +265,12 @@ def extract_sync(video_id: str, proxy: str, profile: str, cookies: str):
         cookie_file.close()
 
         # Build yt-dlp options with cookie file
-        ydl_opts = build_ydl_opts(cookie_file.name, proxy)
+        ydl_opts = build_ydl_opts(cookie_file.name, proxy, clients)
 
         t0 = time.time()
         with yt_dlp.YoutubeDL(ydl_opts) as ydl:
             info = ydl.extract_info(url, download=False)
-        logger.info(f"[{video_id}] yt-dlp extract_info: {(time.time() - t0) * 1000:.0f}ms (cookie)")
+        logger.info(f"[{video_id}] yt-dlp extract_info: {(time.time() - t0) * 1000:.0f}ms (cookie, client={','.join(clients or PLAYER_CLIENTS)})")
 
         result = map_yt_dlp_to_api(info)
 
@@ -291,17 +299,17 @@ def extract_sync(video_id: str, proxy: str, profile: str, cookies: str):
                 pass
 
 
-def extract_no_cookie_sync(video_id: str, proxy: str):
+def extract_no_cookie_sync(video_id: str, proxy: str, clients=None):
     """Extraction without cookies - uses Cloudflare IP only. Runs in thread pool."""
     url = f'https://www.youtube.com/watch?v={video_id}'
 
     try:
-        ydl_opts = build_ydl_opts(cookie_file_path=None, proxy=proxy)
+        ydl_opts = build_ydl_opts(cookie_file_path=None, proxy=proxy, clients=clients)
 
         t0 = time.time()
         with yt_dlp.YoutubeDL(ydl_opts) as ydl:
             info = ydl.extract_info(url, download=False)
-        logger.info(f"[{video_id}] yt-dlp extract_info: {(time.time() - t0) * 1000:.0f}ms (no-cookie)")
+        logger.info(f"[{video_id}] yt-dlp extract_info: {(time.time() - t0) * 1000:.0f}ms (no-cookie, client={','.join(clients or PLAYER_CLIENTS)})")
 
         result = map_yt_dlp_to_api(info)
 
@@ -321,7 +329,7 @@ def extract_no_cookie_sync(video_id: str, proxy: str):
         return None, str(e)
 
 
-async def _try_cookie_extract(video_id, proxy_url, premium, attempt, total):
+async def _try_cookie_extract(video_id, proxy_url, premium, attempt, total, clients=None):
     """Try extraction with a cookie from pool. Returns (result, error)."""
     label = 'premium' if premium else 'normal'
     profile, cookies = await cookie_pool.get(premium=premium)
@@ -329,11 +337,12 @@ async def _try_cookie_extract(video_id, proxy_url, premium, attempt, total):
         logger.error(f"[{video_id}] No active {label} cookie available")
         return None, f"No active {label} cookie available"
 
-    logger.info(f"[{video_id}] Attempt {attempt}/{total} | Using {label} cookie: {profile}")
+    client_label = ','.join(clients or PLAYER_CLIENTS)
+    logger.info(f"[{video_id}] Attempt {attempt}/{total} | Using {label} cookie: {profile} | client={client_label}")
 
     loop = asyncio.get_event_loop()
     result, error = await loop.run_in_executor(
-        executor, extract_sync, video_id, proxy_url, profile, cookies
+        executor, extract_sync, video_id, proxy_url, profile, cookies, clients
     )
 
     if not error:
@@ -350,13 +359,14 @@ async def _try_cookie_extract(video_id, proxy_url, premium, attempt, total):
     return None, error
 
 
-async def _try_no_cookie_extract(video_id, proxy_url, attempt, total):
+async def _try_no_cookie_extract(video_id, proxy_url, attempt, total, clients=None):
     """Try extraction without cookies (Cloudflare IP only). Returns (result, error)."""
-    logger.info(f"[{video_id}] Attempt {attempt}/{total} | No cookie, Cloudflare IP only")
+    client_label = ','.join(clients or PLAYER_CLIENTS)
+    logger.info(f"[{video_id}] Attempt {attempt}/{total} | No cookie, Cloudflare IP only | client={client_label}")
 
     loop = asyncio.get_event_loop()
     result, error = await loop.run_in_executor(
-        executor, extract_no_cookie_sync, video_id, proxy_url
+        executor, extract_no_cookie_sync, video_id, proxy_url, clients
     )
 
     if not error:
@@ -394,27 +404,29 @@ async def extract(video_id: str, proxy: str = Query(None), premium: str = Query(
     last_error = None
     last_attempt = 0
 
-    # Build attempt plan:
-    # Premium:  premium cookie → premium cookie → normal cookie → normal cookie → no-cookie
-    # Normal:   normal cookie → normal cookie → no-cookie
+    # Build attempt plan. Each attempt alternates the player client: the primary
+    # (mweb) runs first (fast, needs PO token); if it fails we retry with the
+    # fallback (tv, no PO token) before giving up on that cookie tier.
+    # Premium:  premium/mweb → premium/tv → normal/mweb → normal/tv → no-cookie/tv
+    # Normal:   normal/mweb → normal/tv → no-cookie/tv
     attempts = []
     if is_premium:
-        attempts.append(('cookie', True))    # premium cookie
-        attempts.append(('cookie', True))    # premium cookie
-    attempts.append(('cookie', False))       # normal cookie
-    attempts.append(('cookie', False))       # normal cookie
+        attempts.append(('cookie', True, PLAYER_CLIENTS))           # premium + mweb
+        attempts.append(('cookie', True, PLAYER_CLIENTS_FALLBACK))  # premium + tv
+    attempts.append(('cookie', False, PLAYER_CLIENTS))              # normal + mweb
+    attempts.append(('cookie', False, PLAYER_CLIENTS_FALLBACK))     # normal + tv
     if proxy_url:
-        attempts.append(('no_cookie', False))  # Cloudflare IP only
+        attempts.append(('no_cookie', False, PLAYER_CLIENTS_FALLBACK))  # tv (no PO token)
 
     total = len(attempts)
 
-    for i, (method, use_premium) in enumerate(attempts, 1):
+    for i, (method, use_premium, clients) in enumerate(attempts, 1):
         last_attempt = i
 
         if method == 'cookie':
-            result, error = await _try_cookie_extract(video_id, proxy_url, use_premium, i, total)
+            result, error = await _try_cookie_extract(video_id, proxy_url, use_premium, i, total, clients)
         else:
-            result, error = await _try_no_cookie_extract(video_id, proxy_url, i, total)
+            result, error = await _try_no_cookie_extract(video_id, proxy_url, i, total, clients)
 
         if result:
             cache_set(video_id, is_premium, result)
@@ -439,6 +451,7 @@ async def health():
             'misses': _cache_misses,
         },
         'playerClients': PLAYER_CLIENTS,
+        'playerClientsFallback': PLAYER_CLIENTS_FALLBACK,
         'useDeno': USE_DENO,
     }
 

@@ -968,9 +968,10 @@ services:
       - PYTHONUNBUFFERED=1
       - MONGO_URI=${MONGO_URI}
       # Phase 1 speed tuning (optional; sensible defaults baked into code)
-      - EXTRACT_CACHE_TTL=${EXTRACT_CACHE_TTL:-300}   # metadata cache TTL (s); 0 disables
+      - EXTRACT_CACHE_TTL=${EXTRACT_CACHE_TTL:-1800}  # metadata cache TTL (s); 0 disables. URLs live ~6h
       - EXTRACT_CACHE_MAX=${EXTRACT_CACHE_MAX:-1000}  # max cache entries
-      - YT_PLAYER_CLIENT=${YT_PLAYER_CLIENT:-mweb,tv} # yt-dlp clients, in order (mweb+PO token recovers audio)
+      - YT_PLAYER_CLIENT=${YT_PLAYER_CLIENT:-mweb}    # primary client, 1 round-trip (mweb+PO token gives audio)
+      - YT_PLAYER_CLIENT_FALLBACK=${YT_PLAYER_CLIENT_FALLBACK:-tv} # retried only if primary fails (tv needs no PO token)
       - YT_USE_DENO=${YT_USE_DENO:-true}              # keep deno JS runtime (web n-sig)
       # Base URL of the bgutil PO Token provider (see bgutil-pot service)
       - BGUTIL_POT_BASE_URL=http://bgutil-pot:4416

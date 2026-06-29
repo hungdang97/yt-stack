@@ -15,29 +15,29 @@ import (
 )
 
 // Extract fetches video metadata via the Python extractor.
-// Fallback flow: WARP proxy → (on failure) direct VPS IP.
+// Fallback flow: direct VPS IP first (fast, no proxy round-trips), then the
+// Cloudflare WARP proxy if the direct IP is blocked/rate-limited. PO tokens let
+// datacenter IPs fetch audio formats, so the direct path usually succeeds.
 // Each layer still runs the extractor's own cookie/no-cookie retry plan.
 func Extract(videoID string, premium bool) (*models.ExtractResponse, error) {
-	// Attempt 1: via Cloudflare WARP proxy
-	result, err := extractFromAPI(videoID, config.ExtractAPIBase, config.WARPProxyURL, premium)
-	if err == nil && isValidExtractResponse(result) {
-		fmt.Printf("[%s] ✓ Extract success via Python (WARP) premium=%v\n", videoID, premium)
-		return result, nil
-	}
-	fmt.Printf("[%s] Extract via WARP failed (%v) — falling back to direct IP\n", videoID, err)
-
-	// Attempt 2: direct IP (no proxy). Empty proxy => extractor runs without a
-	// proxy, egressing via the container/VPS IP. Different IP than the (often
-	// flagged) WARP pool, and combined with PO tokens can recover audio formats.
-	result, err = extractFromAPI(videoID, config.ExtractAPIBase, "", premium)
+	// Attempt 1: direct IP (no proxy) — fastest path.
+	result, err := extractFromAPI(videoID, config.ExtractAPIBase, "", premium)
 	if err == nil && isValidExtractResponse(result) {
 		fmt.Printf("[%s] ✓ Extract success via Python (direct IP) premium=%v\n", videoID, premium)
 		return result, nil
 	}
+	fmt.Printf("[%s] Extract via direct IP failed (%v) — falling back to WARP proxy\n", videoID, err)
+
+	// Attempt 2: via Cloudflare WARP proxy (fresh IP when the VPS IP is limited).
+	result, err = extractFromAPI(videoID, config.ExtractAPIBase, config.WARPProxyURL, premium)
+	if err == nil && isValidExtractResponse(result) {
+		fmt.Printf("[%s] ✓ Extract success via Python (WARP) premium=%v\n", videoID, premium)
+		return result, nil
+	}
 
 	// Both paths failed
-	fmt.Printf("[%s] Extract failed on both WARP and direct IP: %v\n", videoID, err)
-	return nil, fmt.Errorf("extraction failed (WARP + direct): %w", err)
+	fmt.Printf("[%s] Extract failed on both direct IP and WARP: %v\n", videoID, err)
+	return nil, fmt.Errorf("extraction failed (direct + WARP): %w", err)
 }
 
 // isValidExtractResponse validates that the response has required data
