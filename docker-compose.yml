@@ -934,6 +934,27 @@ services:
     networks:
       - backend
 
+  # PO Token provider (bgutil) - generates Proof-of-Origin tokens so yt-dlp
+  # can fetch GVS (audio/video) formats from datacenter/WARP IPs.
+  # See: https://github.com/yt-dlp/yt-dlp/wiki/PO-Token-Guide
+  bgutil-pot:
+    image: brainicism/bgutil-ytdlp-pot-provider:latest
+    container_name: bgutil-pot
+    restart: always
+    healthcheck:
+      test: [ "CMD", "wget", "--no-verbose", "--tries=1", "-O", "/dev/null", "http://localhost:4416/ping" ]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 10s
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
+    networks:
+      - backend
+
   # YouTube Extractor Python service (Fallback layer)
   yt-extractor:
     platform: linux/amd64
@@ -949,10 +970,14 @@ services:
       # Phase 1 speed tuning (optional; sensible defaults baked into code)
       - EXTRACT_CACHE_TTL=${EXTRACT_CACHE_TTL:-300}   # metadata cache TTL (s); 0 disables
       - EXTRACT_CACHE_MAX=${EXTRACT_CACHE_MAX:-1000}  # max cache entries
-      - YT_PLAYER_CLIENT=${YT_PLAYER_CLIENT:-ios,web} # yt-dlp clients, in order
+      - YT_PLAYER_CLIENT=${YT_PLAYER_CLIENT:-mweb,tv} # yt-dlp clients, in order (mweb+PO token recovers audio)
       - YT_USE_DENO=${YT_USE_DENO:-true}              # keep deno JS runtime (web n-sig)
+      # Base URL of the bgutil PO Token provider (see bgutil-pot service)
+      - BGUTIL_POT_BASE_URL=http://bgutil-pot:4416
     depends_on:
       gost:
+        condition: service_started
+      bgutil-pot:
         condition: service_started
     healthcheck:
       test: [ "CMD", "wget", "--no-verbose", "--tries=1", "-O", "/dev/null", "http://localhost:8300/health" ]

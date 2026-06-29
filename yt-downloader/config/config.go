@@ -42,7 +42,7 @@ var (
 
 	// Derived Proxy URLs (constructed in code)
 	WARPProxyURL   = fmt.Sprintf("http://%s:%s@gost:1111", WARPUser, WARPPass)
-	DirectProxyURL = fmt.Sprintf("http://%s:%s@gost:2222", DirectUser, DirectPass)
+	DirectProxyURL = fmt.Sprintf("http://%s:%s@gost:2223", DirectUser, DirectPass)
 
 	// Storage & Download
 	StorageDir      = getEnvOrDefault("STORAGE_DIR", "./storage")

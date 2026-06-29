@@ -1,8 +1,9 @@
 fastapi
 uvicorn[standard]
 yt-dlp
-pymongo
 yt-dlp-ejs
+bgutil-ytdlp-pot-provider
+pymongo
 certifi
 brotli
 websockets

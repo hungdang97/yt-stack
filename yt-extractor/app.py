@@ -214,18 +214,25 @@ def build_ydl_opts(cookie_file_path=None, proxy=None):
         'skip_download': True,
         'extract_flat': True,
         'no_check_formats': True,
-        'formats': 'none',
         'dump_single_json': True,
         'extractor_args': {
             'youtube': {
                 'player_client': PLAYER_CLIENTS,
                 'skip': ['hls', 'dash', 'translated_subs'],
-            }
+            },
         },
     }
-    # Deno JS runtime (found via PATH) — required by the 'web' client for n-sig.
+    # Deno JS runtime (found via PATH) — required by web/mweb clients for n-sig.
     if USE_DENO:
         opts['js_runtime'] = 'deno'
+
+    # Point the bgutil PO Token provider plugin at the provider service so the
+    # mweb client can obtain a GVS PO Token (recovers audio formats on flagged IPs).
+    # https://github.com/yt-dlp/yt-dlp/wiki/PO-Token-Guide
+    pot_base_url = os.environ.get('BGUTIL_POT_BASE_URL')
+    if pot_base_url:
+        opts['extractor_args']['youtubepot-bgutilhttp'] = {'base_url': [pot_base_url]}
+
     if cookie_file_path:
         opts['cookiefile'] = cookie_file_path
     if proxy:

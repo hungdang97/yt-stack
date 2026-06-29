@@ -14,19 +14,30 @@ import (
 	"yt-downloader-go/utils"
 )
 
-// Extract fetches video metadata using Cloudflare proxy only
-// Python Extractor + Cloudflare Proxy (cookie pool + proxy)
+// Extract fetches video metadata via the Python extractor.
+// Fallback flow: WARP proxy → (on failure) direct VPS IP.
+// Each layer still runs the extractor's own cookie/no-cookie retry plan.
 func Extract(videoID string, premium bool) (*models.ExtractResponse, error) {
-	// Use Cloudflare Proxy only
+	// Attempt 1: via Cloudflare WARP proxy
 	result, err := extractFromAPI(videoID, config.ExtractAPIBase, config.WARPProxyURL, premium)
 	if err == nil && isValidExtractResponse(result) {
-		fmt.Printf("[%s] ✓ Extract success via Python (Cloudflare) premium=%v\n", videoID, premium)
+		fmt.Printf("[%s] ✓ Extract success via Python (WARP) premium=%v\n", videoID, premium)
+		return result, nil
+	}
+	fmt.Printf("[%s] Extract via WARP failed (%v) — falling back to direct IP\n", videoID, err)
+
+	// Attempt 2: direct IP (no proxy). Empty proxy => extractor runs without a
+	// proxy, egressing via the container/VPS IP. Different IP than the (often
+	// flagged) WARP pool, and combined with PO tokens can recover audio formats.
+	result, err = extractFromAPI(videoID, config.ExtractAPIBase, "", premium)
+	if err == nil && isValidExtractResponse(result) {
+		fmt.Printf("[%s] ✓ Extract success via Python (direct IP) premium=%v\n", videoID, premium)
 		return result, nil
 	}
 
-	// Extraction failed
-	fmt.Printf("[%s] Python+Cloudflare failed: %v\n", videoID, err)
-	return nil, fmt.Errorf("extraction failed: %w", err)
+	// Both paths failed
+	fmt.Printf("[%s] Extract failed on both WARP and direct IP: %v\n", videoID, err)
+	return nil, fmt.Errorf("extraction failed (WARP + direct): %w", err)
 }
 
 // isValidExtractResponse validates that the response has required data
