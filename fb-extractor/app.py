@@ -54,6 +54,53 @@ def _is_facebook_url(url: str) -> bool:
 # YT-DLP EXTRACTION
 # ============================================
 
+def _parse_cookie(raw: Optional[str]) -> Optional[dict]:
+    """Parse the cookie param into a {name: value} dict, or None when it's empty,
+    a placeholder/comment, or otherwise not a usable cookie.
+
+    Accepts: a JSON object, a cookie-header string ("c_user=..; xs=.."), or a
+    bare numeric user id. Anything else (e.g. the default
+    "# cookie Facebook thật (điền nếu cần)") is ignored so it can't break
+    extraction by being sent to Facebook as a junk `xs` cookie.
+    """
+    if not raw:
+        return None
+    val = urllib.parse.unquote(raw).strip()
+    if not val or val.startswith("#"):
+        return None
+    # JSON: an object {name: value}, or an array of cookie objects
+    # (the common "Cookie-Editor"/EditThisCookie browser export format).
+    try:
+        obj = json.loads(val)
+        if isinstance(obj, dict) and obj:
+            return {str(k): str(v) for k, v in obj.items()}
+        if isinstance(obj, list) and obj:
+            jar = {}
+            for c in obj:
+                if isinstance(c, dict) and c.get("name"):
+                    jar[str(c["name"])] = str(c.get("value", ""))
+            if jar:
+                return jar
+    except (json.JSONDecodeError, ValueError):
+        pass
+    # Cookie-header string: "name=value; name=value"
+    if "=" in val:
+        jar = {}
+        for part in val.split(";"):
+            part = part.strip()
+            if "=" in part:
+                k, v = part.split("=", 1)
+                k, v = k.strip(), v.strip()
+                if k and v:
+                    jar[k] = v
+        if jar:
+            return jar
+    # Bare numeric user id
+    if val.isdigit():
+        return {"c_user": val}
+    return None
+
+
 def _build_ydl_opts(proxy: Optional[str] = None, cookie: Optional[str] = None) -> tuple[dict, Optional[str]]:
     opts = {
         "quiet": True,
@@ -69,12 +116,8 @@ def _build_ydl_opts(proxy: Optional[str] = None, cookie: Optional[str] = None) -
         opts["proxy"] = proxy
 
     cookie_file = None
-    if cookie:
-        try:
-            cookies_dict = json.loads(urllib.parse.unquote(cookie))
-        except (json.JSONDecodeError, ValueError):
-            cookies_dict = {"c_user": cookie} if cookie.isdigit() else {"xs": cookie}
-
+    cookies_dict = _parse_cookie(cookie)
+    if cookies_dict:
         cookie_file = tempfile.NamedTemporaryFile(
             mode="w", suffix=".txt", delete=False, prefix="fb_cookie_"
         )

@@ -8,7 +8,35 @@ import (
 	"io"
 	"net/http"
 	"net/url"
+	"strings"
 )
+
+// validFbCookie drops placeholder/garbage cookie values so we never forward them
+// to the extractor (which would send a junk cookie to Facebook and get HTTP 400).
+// The default env value is a comment like "# cookie Facebook thật (điền nếu cần)".
+func validFbCookie(c string) string {
+	c = strings.TrimSpace(c)
+	if c == "" || strings.HasPrefix(c, "#") {
+		return ""
+	}
+	// Must look like a real cookie: JSON object/array, a name=value pair, or a bare id.
+	if strings.HasPrefix(c, "{") || strings.HasPrefix(c, "[") || strings.Contains(c, "=") || isAllDigits(c) {
+		return c
+	}
+	return ""
+}
+
+func isAllDigits(s string) bool {
+	if s == "" {
+		return false
+	}
+	for _, r := range s {
+		if r < '0' || r > '9' {
+			return false
+		}
+	}
+	return true
+}
 
 // Extract calls fb-extractor API to get post metadata
 func Extract(postURL string) (*models.FbExtractResponse, error) {
@@ -18,8 +46,8 @@ func Extract(postURL string) (*models.FbExtractResponse, error) {
 	if config.WARPProxyURL != "" {
 		params.Set("proxy", config.WARPProxyURL)
 	}
-	if config.FbDefaultCookie != "" {
-		params.Set("cookie", config.FbDefaultCookie)
+	if c := validFbCookie(config.FbDefaultCookie); c != "" {
+		params.Set("cookie", c)
 	}
 
 	fullURL := extractURL + "?" + params.Encode()
